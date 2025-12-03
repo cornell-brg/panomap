@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libtbb-dev
+
+      - name: Configure
+        run: cmake -S piru -B piru/build -DBUILD_TESTING=ON -DPIRU_FETCH_DOCTEST=ON -DPIRU_FETCH_TBB=OFF
+
+      - name: Build
+        run: cmake --build piru/build -- -j$(nproc)
+
+      - name: Test
+        run: ctest --test-dir piru/build --output-on-failure

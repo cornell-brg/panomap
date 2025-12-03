@@ -1,0 +1,86 @@
+cmake_minimum_required(VERSION 3.16)
+
+project(piru VERSION 0.0.1 LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type" FORCE)
+endif()
+
+# Optimization/debug defaults: RelWithDebInfo = O3 + debug info + frame pointers; Release = O3 only.
+if(MSVC)
+    set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "/O2 /Zi /Oy-" CACHE STRING "RelWithDebInfo flags" FORCE)
+    set(CMAKE_CXX_FLAGS_RELEASE "/O2" CACHE STRING "Release flags" FORCE)
+else()
+    set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O3 -g -fno-omit-frame-pointer" CACHE STRING "RelWithDebInfo flags" FORCE)
+    set(CMAKE_CXX_FLAGS_RELEASE "-O3" CACHE STRING "Release flags" FORCE)
+endif()
+
+option(PIRU_ENABLE_WARNINGS "Enable compiler warnings" ON)
+option(PIRU_USE_TBB "Enable oneTBB backend for concurrency" ON)
+option(PIRU_FETCH_TBB "Fetch oneTBB via FetchContent if not found" ON)
+option(PIRU_FETCH_DOCTEST "Fetch doctest during configure (for tests)" ON)
+
+set(PIRU_VERSION_STRING "${PROJECT_NAME} ${PROJECT_VERSION} (experimental scaffold)")
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/version.hpp.in
+    ${CMAKE_CURRENT_BINARY_DIR}/generated/version.hpp
+    @ONLY
+)
+
+set(PIRU_TBB_AVAILABLE OFF)
+if(PIRU_USE_TBB)
+    find_package(TBB QUIET)
+    if(NOT TBB_FOUND AND PIRU_FETCH_TBB)
+        include(FetchContent)
+        FetchContent_Declare(
+            TBB
+            GIT_REPOSITORY https://github.com/oneapi-src/oneTBB.git
+            GIT_TAG v2021.10.0
+        )
+        FetchContent_MakeAvailable(TBB)
+    endif()
+    if(TBB_FOUND OR TARGET TBB::tbb)
+        set(PIRU_TBB_AVAILABLE ON)
+    else()
+        message(FATAL_ERROR "oneTBB requested but not found. Set PIRU_FETCH_TBB=ON to fetch automatically.")
+    endif()
+endif()
+
+add_executable(piru
+    src/main.cpp
+    src/commands/index_vg.cpp
+    src/commands/index_dbg.cpp
+    src/commands/map.cpp
+    src/commands/eval.cpp
+    src/commands/mt_test.cpp
+    src/concurrency/executor.cpp
+    src/cli/parse.cpp
+    src/util/signal_handlers.cpp
+    src/util/timing.cpp
+)
+
+target_include_directories(piru PRIVATE include ${CMAKE_CURRENT_BINARY_DIR}/generated)
+
+if(PIRU_ENABLE_WARNINGS)
+    if(MSVC)
+        target_compile_options(piru PRIVATE /W4 /permissive-)
+    else()
+        target_compile_options(piru PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+endif()
+
+if(PIRU_TBB_AVAILABLE)
+    target_link_libraries(piru PRIVATE TBB::tbb)
+    target_compile_definitions(piru PRIVATE PIRU_USE_TBB)
+else()
+    message(STATUS "oneTBB not found; using serial concurrency backend.")
+endif()
+
+include(CTest)
+if(BUILD_TESTING)
+    add_subdirectory(tests)
+endif()

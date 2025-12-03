@@ -1,0 +1,67 @@
+# doctest setup and basic test target
+
+include(FetchContent)
+set(DOCTEST_AVAILABLE OFF)
+set(DOCTEST_DISCOVERY_CMAKE "")
+
+if(TARGET doctest::doctest)
+    set(DOCTEST_AVAILABLE ON)
+else()
+    find_package(doctest CONFIG QUIET)
+    if(doctest_FOUND)
+        set(DOCTEST_AVAILABLE ON)
+        if(EXISTS "${doctest_DIR}/doctest.cmake")
+            set(DOCTEST_DISCOVERY_CMAKE "${doctest_DIR}/doctest.cmake")
+        endif()
+    endif()
+endif()
+
+if(NOT DOCTEST_AVAILABLE AND PIRU_FETCH_DOCTEST)
+    FetchContent_Declare(
+        doctest
+        GIT_REPOSITORY https://github.com/doctest/doctest.git
+        GIT_TAG v2.4.12
+    )
+    FetchContent_MakeAvailable(doctest)
+    set(DOCTEST_AVAILABLE ON)
+    set(DOCTEST_DISCOVERY_CMAKE "${doctest_SOURCE_DIR}/scripts/cmake/doctest.cmake")
+    if(NOT TARGET doctest::doctest)
+        add_library(doctest::doctest INTERFACE IMPORTED)
+        target_include_directories(doctest::doctest INTERFACE ${doctest_SOURCE_DIR})
+    endif()
+endif()
+
+if(DOCTEST_AVAILABLE)
+    if(DOCTEST_DISCOVERY_CMAKE)
+        include(${DOCTEST_DISCOVERY_CMAKE})
+    endif()
+
+    add_executable(piru_tests
+        test_main.cpp
+        test_metrics.cpp
+    )
+
+    target_include_directories(piru_tests PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_BINARY_DIR}/generated
+    )
+
+    target_link_libraries(piru_tests PRIVATE doctest::doctest)
+
+    if(DOCTEST_DISCOVERY_CMAKE)
+        doctest_discover_tests(piru_tests
+            TEST_PREFIX unit.
+            WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+        )
+    else()
+        add_test(NAME piru_tests COMMAND piru_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+    endif()
+
+    add_custom_target(check
+        COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
+        DEPENDS piru_tests
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    )
+else()
+    message(STATUS "doctest not found (set PIRU_FETCH_DOCTEST=ON to fetch); skipping tests.")
+endif()

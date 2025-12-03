@@ -1,0 +1,17 @@
+# Build artifacts
+/build/
+/CMakeFiles/
+/CMakeCache.txt
+/cmake_install.cmake
+/Makefile
+
+# IDE/editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Generated tests output
+/Testing/
+/CTestTestfile.cmake
+/compile_commands.json

@@ -1,0 +1,10 @@
+#pragma once
+
+#include <string>
+
+#define PIRU_VERSION "@PROJECT_VERSION@"
+#define PIRU_VERSION_STRING "@PIRU_VERSION_STRING@"
+
+inline std::string piru_version() {
+    return PIRU_VERSION_STRING;
+}
