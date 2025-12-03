@@ -21,6 +21,7 @@ struct Option {
 
 struct ParseConfig {
     std::string usage;
+    std::vector<std::string> positional_help;
     std::vector<Option> options;
     std::function<void(const std::string&)> on_error;
 };

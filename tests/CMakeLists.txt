@@ -39,6 +39,7 @@ if(DOCTEST_AVAILABLE)
     add_executable(piru_tests
         test_main.cpp
         test_metrics.cpp
+        test_reads.cpp
     )
 
     target_include_directories(piru_tests PRIVATE

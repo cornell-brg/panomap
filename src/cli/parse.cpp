@@ -76,7 +76,14 @@ bool parse_args(const std::vector<std::string>& args, const ParseConfig& config,
 }
 
 void print_help(const ParseConfig& config, std::ostream& os) {
-    os << config.usage << "\n\nOptions:\n";
+    os << config.usage << "\n";
+    if (!config.positional_help.empty()) {
+        os << "\nRequired arguments:\n";
+        for (const auto& line : config.positional_help) {
+            os << "  " << line << "\n";
+        }
+    }
+    os << "\nOptions:\n";
     for (const auto& o : config.options) {
         std::ostringstream line;
         line << "  ";
