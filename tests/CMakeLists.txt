@@ -39,12 +39,18 @@ if(DOCTEST_AVAILABLE)
     add_executable(piru_tests
         test_main.cpp
         test_metrics.cpp
+        test_models.cpp
         test_reads.cpp
     )
 
     target_include_directories(piru_tests PRIVATE
         ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/src
         ${CMAKE_BINARY_DIR}/generated
+    )
+
+    target_sources(piru_tests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src/io/models/builtin_models.cpp
     )
 
     target_link_libraries(piru_tests PRIVATE doctest::doctest)

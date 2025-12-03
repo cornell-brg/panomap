@@ -5,8 +5,7 @@
 
 #include "cli/parse.hpp"
 #include "commands/eval.hpp"
-#include "commands/index_dbg.hpp"
-#include "commands/index_vg.hpp"
+#include "commands/index.hpp"
 #include "commands/map.hpp"
 #include "commands/mt_test.hpp"
 #include "util/metrics.hpp"
@@ -47,8 +46,7 @@ int main(int argc, char** argv) {
     const double cputime_0 = piru::cputime();
 
     const std::vector<Command> commands = {
-        {"index-vg", "Build vg-based index (stub).", handle_index_vg},
-        {"index-dbg", "Build de Bruijn graph index (stub).", handle_index_dbg},
+        {"index", "Build index (dbg default, --graph=vg for vg).", handle_index},
         {"map", "Map reads against an index (stub).", handle_map},
         {"eval", "Evaluate theoretical enrichment/depletion (stub).", handle_eval},
         {"mt-test", "Spawn parallel sleep tasks to test concurrency.", handle_mt_test},

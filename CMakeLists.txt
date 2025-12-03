@@ -25,10 +25,13 @@ option(PIRU_FETCH_TBB "Fetch oneTBB via FetchContent if not found" ON)
 option(PIRU_FETCH_DOCTEST "Fetch doctest during configure (for tests)" ON)
 find_package(ZLIB REQUIRED)
 
+set(PIRU_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
+file(MAKE_DIRECTORY ${PIRU_GENERATED_DIR})
+
 set(PIRU_VERSION_STRING "${PROJECT_NAME} ${PROJECT_VERSION} (experimental scaffold)")
 configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/include/version.hpp.in
-    ${CMAKE_CURRENT_BINARY_DIR}/generated/version.hpp
+    ${PIRU_GENERATED_DIR}/version.hpp
     @ONLY
 )
 
@@ -53,8 +56,7 @@ endif()
 
 add_executable(piru
     src/main.cpp
-    src/commands/index_vg.cpp
-    src/commands/index_dbg.cpp
+    src/commands/index.cpp
     src/commands/map.cpp
     src/commands/eval.cpp
     src/commands/mt_test.cpp
@@ -62,12 +64,13 @@ add_executable(piru
     src/io/reads/read_provider_factory.cpp
     src/io/reads/pod5_provider.cpp
     src/io/reads/slow5_provider.cpp
+    src/io/models/builtin_models.cpp
     src/cli/parse.cpp
     src/util/signal_handlers.cpp
     src/util/timing.cpp
 )
 
-target_include_directories(piru PRIVATE include ${CMAKE_CURRENT_BINARY_DIR}/generated)
+target_include_directories(piru PRIVATE include ${CMAKE_CURRENT_SOURCE_DIR}/src ${PIRU_GENERATED_DIR})
 
 if(PIRU_ENABLE_WARNINGS)
     if(MSVC)

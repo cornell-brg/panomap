@@ -1,3 +1,6 @@
 [submodule "third_party/slow5lib"]
 	path = third_party/slow5lib
 	url = https://github.com/hasindu2008/slow5lib
+[submodule "third_party/kmer_models"]
+	path = third_party/kmer_models
+	url = https://github.com/nanoporetech/kmer_models.git
