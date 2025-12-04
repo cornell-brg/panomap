@@ -47,6 +47,7 @@ if(DOCTEST_AVAILABLE)
         test_signal_events.cpp
         test_signal_normalizers.cpp
         test_signal_fuzzy_quantize.cpp
+        test_signal_alignment_quantize.cpp
     )
 
     target_include_directories(piru_tests PRIVATE
@@ -74,8 +75,10 @@ if(DOCTEST_AVAILABLE)
         ${CMAKE_SOURCE_DIR}/src/signal/normalizers/median_mad_normalizer.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/fuzzy_quantizers/fuzzy_quantizer_factory.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/fuzzy_quantizers/passthrough_fuzzy_quantizer.cpp
+        ${CMAKE_SOURCE_DIR}/src/signal/fuzzy_quantizers/rh2_fuzzy_quantizer.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/alignment_quantizers/alignment_quantizer_factory.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/alignment_quantizers/passthrough_alignment_quantizer.cpp
+        ${CMAKE_SOURCE_DIR}/src/signal/alignment_quantizers/int_alignment_quantizer.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/seed_extractors/seed_extractor_factory.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/seed_extractors/kmer_seed_extractor.cpp
     )
