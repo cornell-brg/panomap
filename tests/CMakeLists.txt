@@ -41,6 +41,7 @@ if(DOCTEST_AVAILABLE)
         test_metrics.cpp
         test_models.cpp
         test_graphs.cpp
+        test_results.cpp
         test_reads.cpp
     )
 
@@ -54,6 +55,8 @@ if(DOCTEST_AVAILABLE)
         ${CMAKE_SOURCE_DIR}/src/io/graphs/graph_loader_factory.cpp
         ${CMAKE_SOURCE_DIR}/src/io/graphs/gfa_loader.cpp
         ${CMAKE_SOURCE_DIR}/src/io/graphs/vg_loader.cpp
+        ${CMAKE_SOURCE_DIR}/src/io/results/gaf_writer.cpp
+        ${CMAKE_SOURCE_DIR}/src/io/results/result_writer_factory.cpp
         ${CMAKE_SOURCE_DIR}/src/io/models/builtin_models.cpp
     )
 

@@ -65,6 +65,8 @@ add_executable(piru
     src/io/graphs/graph_loader_factory.cpp
     src/io/graphs/gfa_loader.cpp
     src/io/graphs/vg_loader.cpp
+    src/io/results/gaf_writer.cpp
+    src/io/results/result_writer_factory.cpp
     src/io/reads/read_provider_factory.cpp
     src/io/reads/pod5_provider.cpp
     src/io/reads/slow5_provider.cpp
