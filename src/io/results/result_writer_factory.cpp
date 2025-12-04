@@ -3,6 +3,8 @@
 #include <algorithm>
 
 #include "io/results/gaf_writer.hpp"
+#include "io/results/gam_writer.hpp"
+#include "io/results/json_writer.hpp"
 #include "util/logging.hpp"
 
 namespace piru::io {
@@ -28,8 +30,10 @@ ResultWriterPtr make_result_writer(const std::string& path) {
         return std::make_unique<GafWriter>(path);
     }
     if (ext == "gam") {
-        LOG_ERROR("GAM writing not yet supported (" + path + ")");
-        return nullptr;
+        return std::make_unique<GamWriter>(path);
+    }
+    if (ext == "json") {
+        return std::make_unique<JsonWriter>(path);
     }
     LOG_ERROR("Unsupported result format for '" + path + "'");
     return nullptr;

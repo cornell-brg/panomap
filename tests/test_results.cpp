@@ -45,7 +45,28 @@ TEST_CASE("GAF writer writes basic record") {
           "read1\t100\t10\t90\t+\tchr1\t1000\t100\t180\t70\t80\t60\ttp:A:P");
 }
 
-TEST_CASE("Result writer factory rejects unsupported formats") {
-    auto writer = piru::io::make_result_writer("output.gam");
-    CHECK(writer == nullptr);
+TEST_CASE("Result writer factory produces json writer") {
+    piru::io::AlignmentResult r;
+    r.query_name = "q";
+    r.query_length = 10;
+    r.query_sequence = "ACGTACGTAA";
+    r.target_path = "t";
+    r.mappings.push_back({1, 0, false, {{4, 4, ""}}});
+
+    auto json_writer = piru::io::make_result_writer("output.json");
+    REQUIRE(json_writer != nullptr);
+    CHECK(json_writer->write(r));
+}
+
+TEST_CASE("Result writer factory produces gam writer") {
+    piru::io::AlignmentResult r;
+    r.query_name = "q";
+    r.query_length = 10;
+    r.query_sequence = "ACGTACGTAA";
+    r.target_path = "t";
+    r.mappings.push_back({1, 0, false, {{4, 4, ""}}});
+
+    auto gam_writer = piru::io::make_result_writer("output.gam");
+    REQUIRE(gam_writer != nullptr);
+    CHECK(gam_writer->write(r));
 }

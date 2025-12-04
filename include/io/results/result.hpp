@@ -14,6 +14,8 @@ struct AlignmentResult {
     std::uint64_t query_length{0};
     std::uint64_t query_start{0};
     std::uint64_t query_end{0};
+    std::string query_sequence;
+    std::string query_quality;
 
     char strand{'+'};  // '+' or '-'.
 
@@ -25,6 +27,21 @@ struct AlignmentResult {
     std::uint64_t matches{0};
     std::uint64_t alignment_block_length{0};
     int mapq{0};
+
+    struct Edit {
+        std::uint32_t from_length{0};
+        std::uint32_t to_length{0};
+        std::string sequence;
+    };
+
+    struct Mapping {
+        std::uint64_t node_id{0};
+        std::uint32_t offset{0};
+        bool is_reverse{false};
+        std::vector<Edit> edits;
+    };
+
+    std::vector<Mapping> mappings;
 
     // Optional tags already formatted as GAF-style strings (e.g., "tp:A:P").
     std::vector<std::string> optional_fields;

@@ -56,6 +56,9 @@ if(DOCTEST_AVAILABLE)
         ${CMAKE_SOURCE_DIR}/src/io/graphs/gfa_loader.cpp
         ${CMAKE_SOURCE_DIR}/src/io/graphs/vg_loader.cpp
         ${CMAKE_SOURCE_DIR}/src/io/results/gaf_writer.cpp
+        ${CMAKE_SOURCE_DIR}/src/io/results/gam_writer.cpp
+        ${CMAKE_SOURCE_DIR}/src/io/results/json_writer.cpp
+        ${CMAKE_SOURCE_DIR}/src/io/results/alignment_conversion.cpp
         ${CMAKE_SOURCE_DIR}/src/io/results/result_writer_factory.cpp
         ${CMAKE_SOURCE_DIR}/src/io/models/builtin_models.cpp
     )
