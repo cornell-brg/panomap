@@ -46,6 +46,7 @@ if(DOCTEST_AVAILABLE)
         test_signal_mocks.cpp
         test_signal_events.cpp
         test_signal_normalizers.cpp
+        test_signal_fuzzy_quantize.cpp
     )
 
     target_include_directories(piru_tests PRIVATE

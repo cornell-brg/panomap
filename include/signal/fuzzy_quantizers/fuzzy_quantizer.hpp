@@ -13,6 +13,10 @@ namespace piru::signal {
 struct FuzzyQuantizerConfig {
     std::string backend{"rawhash2"};
     std::string params;
+    float fine_min{-2.0f};
+    float fine_max{2.0f};
+    float fine_range{0.4f};
+    std::uint32_t qbits{4};
     bool operator==(const FuzzyQuantizerConfig& other) const = default;
 };
 

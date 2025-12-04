@@ -84,6 +84,7 @@ add_executable(piru
     src/signal/normalizers/median_mad_normalizer.cpp
     src/signal/fuzzy_quantizers/fuzzy_quantizer_factory.cpp
     src/signal/fuzzy_quantizers/passthrough_fuzzy_quantizer.cpp
+    src/signal/fuzzy_quantizers/rawhash2_fuzzy_quantizer.cpp
     src/signal/alignment_quantizers/alignment_quantizer_factory.cpp
     src/signal/alignment_quantizers/passthrough_alignment_quantizer.cpp
     src/signal/seed_extractors/seed_extractor_factory.cpp
