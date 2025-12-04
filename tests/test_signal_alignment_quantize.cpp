@@ -3,12 +3,13 @@
 #include "signal/alignment_quantizers/alignment_quantizer_factory.hpp"
 
 #include <doctest/doctest.h>
+#include <limits>
 
 using namespace piru::signal;
 
 TEST_CASE("Int16 alignment quantizer rounds and clamps") {
     NormalizedSignal norm;
-    norm.samples = {1.4f, -400.0f, 400.0f};
+    norm.samples = {1.4f, -40000.0f, 40000.0f};
 
     AlignmentQuantizerConfig cfg;
     cfg.backend = "int16";

@@ -13,6 +13,7 @@ namespace piru::signal {
 struct AlignmentQuantizerConfig {
     std::string backend{"int16"};
     std::string params;
+    int target_bits{16};  // Used for integer backends (8 or 16).
     bool operator==(const AlignmentQuantizerConfig& other) const = default;
 };
 
