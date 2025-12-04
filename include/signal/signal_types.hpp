@@ -19,6 +19,7 @@ struct SignalEvent {
     std::size_t start{0};
     std::size_t length{0};
     float mean{0.0f};
+    float stdv{0.0f};
 };
 
 struct EventSeries {

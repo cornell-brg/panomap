@@ -43,6 +43,9 @@ if(DOCTEST_AVAILABLE)
         test_graphs.cpp
         test_results.cpp
         test_reads.cpp
+        test_signal_mocks.cpp
+        test_signal_events.cpp
+        test_signal_normalizers.cpp
     )
 
     target_include_directories(piru_tests PRIVATE
@@ -61,6 +64,17 @@ if(DOCTEST_AVAILABLE)
         ${CMAKE_SOURCE_DIR}/src/io/results/alignment_conversion.cpp
         ${CMAKE_SOURCE_DIR}/src/io/results/result_writer_factory.cpp
         ${CMAKE_SOURCE_DIR}/src/io/models/builtin_models.cpp
+        ${CMAKE_SOURCE_DIR}/src/signal/event_detectors/event_detector_factory.cpp
+        ${CMAKE_SOURCE_DIR}/src/signal/event_detectors/passthrough_event_detector.cpp
+        ${CMAKE_SOURCE_DIR}/src/signal/event_detectors/scrappie_event_detector.cpp
+        ${CMAKE_SOURCE_DIR}/src/signal/normalizers/identity_normalizer.cpp
+        ${CMAKE_SOURCE_DIR}/src/signal/normalizers/normalizer_factory.cpp
+        ${CMAKE_SOURCE_DIR}/src/signal/fuzzy_quantizers/fuzzy_quantizer_factory.cpp
+        ${CMAKE_SOURCE_DIR}/src/signal/fuzzy_quantizers/passthrough_fuzzy_quantizer.cpp
+        ${CMAKE_SOURCE_DIR}/src/signal/alignment_quantizers/alignment_quantizer_factory.cpp
+        ${CMAKE_SOURCE_DIR}/src/signal/alignment_quantizers/passthrough_alignment_quantizer.cpp
+        ${CMAKE_SOURCE_DIR}/src/signal/seed_extractors/seed_extractor_factory.cpp
+        ${CMAKE_SOURCE_DIR}/src/signal/seed_extractors/kmer_seed_extractor.cpp
     )
 
     target_link_libraries(piru_tests PRIVATE doctest::doctest)

@@ -12,6 +12,15 @@ namespace piru::signal {
 
 struct EventDetectorConfig {
     std::string backend{"scrappie"};
+    int window_length1{3};
+    int window_length2{6};
+    float threshold1{1.4f};
+    float threshold2{9.0f};
+    float peak_height{0.2f};
+    int trim_start{200};
+    int trim_end{10};
+    int varseg_chunk{100};
+    float varseg_thresh{0.0f};
 };
 
 class EventDetector {

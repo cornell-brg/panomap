@@ -77,8 +77,11 @@ add_executable(piru
     src/cli/parse.cpp
     src/signal/event_detectors/event_detector_factory.cpp
     src/signal/event_detectors/passthrough_event_detector.cpp
+    src/signal/event_detectors/scrappie_event_detector.cpp
     src/signal/normalizers/normalizer_factory.cpp
     src/signal/normalizers/identity_normalizer.cpp
+    src/signal/normalizers/zscore_normalizer.cpp
+    src/signal/normalizers/median_mad_normalizer.cpp
     src/signal/fuzzy_quantizers/fuzzy_quantizer_factory.cpp
     src/signal/fuzzy_quantizers/passthrough_fuzzy_quantizer.cpp
     src/signal/alignment_quantizers/alignment_quantizer_factory.cpp
