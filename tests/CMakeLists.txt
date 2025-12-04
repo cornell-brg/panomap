@@ -40,6 +40,7 @@ if(DOCTEST_AVAILABLE)
         test_main.cpp
         test_metrics.cpp
         test_models.cpp
+        test_graphs.cpp
         test_reads.cpp
     )
 
@@ -50,10 +51,17 @@ if(DOCTEST_AVAILABLE)
     )
 
     target_sources(piru_tests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src/io/graphs/graph_loader_factory.cpp
+        ${CMAKE_SOURCE_DIR}/src/io/graphs/gfa_loader.cpp
+        ${CMAKE_SOURCE_DIR}/src/io/graphs/vg_loader.cpp
         ${CMAKE_SOURCE_DIR}/src/io/models/builtin_models.cpp
     )
 
     target_link_libraries(piru_tests PRIVATE doctest::doctest)
+    if(PIRU_LIBVGIO_AVAILABLE)
+        target_link_libraries(piru_tests PRIVATE VGio::vgio)
+        target_compile_definitions(piru_tests PRIVATE PIRU_HAS_LIBVGIO)
+    endif()
 
     if(DOCTEST_DISCOVERY_CMAKE)
         doctest_discover_tests(piru_tests

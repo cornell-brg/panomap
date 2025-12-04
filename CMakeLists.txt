@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 
 project(piru VERSION 0.0.1 LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -23,6 +23,7 @@ option(PIRU_ENABLE_WARNINGS "Enable compiler warnings" ON)
 option(PIRU_USE_TBB "Enable oneTBB backend for concurrency" ON)
 option(PIRU_FETCH_TBB "Fetch oneTBB via FetchContent if not found" ON)
 option(PIRU_FETCH_DOCTEST "Fetch doctest during configure (for tests)" ON)
+option(PIRU_ENABLE_LIBVGIO "Enable vg loading via libvgio" ON)
 find_package(ZLIB REQUIRED)
 
 set(PIRU_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
@@ -61,6 +62,9 @@ add_executable(piru
     src/commands/eval.cpp
     src/commands/mt_test.cpp
     src/concurrency/executor.cpp
+    src/io/graphs/graph_loader_factory.cpp
+    src/io/graphs/gfa_loader.cpp
+    src/io/graphs/vg_loader.cpp
     src/io/reads/read_provider_factory.cpp
     src/io/reads/pod5_provider.cpp
     src/io/reads/slow5_provider.cpp
@@ -94,6 +98,39 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/third_party/slow5lib/CMakeLists.txt)
     target_include_directories(piru PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/third_party/slow5lib/include)
 else()
     message(FATAL_ERROR "slow5lib submodule not present; required for read I/O.")
+endif()
+
+set(PIRU_LIBVGIO_AVAILABLE OFF)
+if(PIRU_ENABLE_LIBVGIO)
+    set(PIRU_LIBVGIO_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/libvgio")
+    if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/piru/third_party/libvgio/CMakeLists.txt)
+        # Support existing submodule path.
+        set(PIRU_LIBVGIO_DIR "${CMAKE_CURRENT_SOURCE_DIR}/piru/third_party/libvgio")
+    endif()
+
+    if(EXISTS ${PIRU_LIBVGIO_DIR}/CMakeLists.txt)
+        set(PIRU_LIBVGIO_CAN_BUILD ON)
+        find_package(PkgConfig QUIET)
+        if(PKG_CONFIG_FOUND)
+            pkg_check_modules(PIRU_JANSSON QUIET jansson)
+            pkg_check_modules(PIRU_HTSLIB QUIET htslib)
+            if(NOT PIRU_JANSSON_FOUND OR NOT PIRU_HTSLIB_FOUND)
+                set(PIRU_LIBVGIO_CAN_BUILD OFF)
+                message(WARNING "libvgio dependencies missing (jansson/htslib); set PIRU_ENABLE_LIBVGIO=OFF or install dependencies to enable vg loading.")
+            endif()
+        endif()
+
+        if(PIRU_LIBVGIO_CAN_BUILD)
+            add_subdirectory(${PIRU_LIBVGIO_DIR} libvgio)
+            target_link_libraries(piru PRIVATE VGio::vgio)
+            target_compile_definitions(piru PRIVATE PIRU_HAS_LIBVGIO)
+            set(PIRU_LIBVGIO_AVAILABLE ON)
+        endif()
+    else()
+        message(FATAL_ERROR "libvgio submodule not present; required for vg loading.")
+    endif()
+else()
+    message(STATUS "PIRU_ENABLE_LIBVGIO=OFF; vg loading disabled.")
 endif()
 
 include(CTest)

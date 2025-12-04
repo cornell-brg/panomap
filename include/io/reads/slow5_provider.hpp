@@ -9,7 +9,15 @@
 #include "io/reads/read_provider.hpp"
 
 #ifdef PIRU_HAS_SLOW5
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+#pragma GCC diagnostic ignored "-Wc++20-extensions"
+#endif
 #include <slow5/slow5.h>
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif
 #endif
 
 namespace piru::io {
