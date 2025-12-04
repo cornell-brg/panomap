@@ -69,6 +69,8 @@ if(DOCTEST_AVAILABLE)
         ${CMAKE_SOURCE_DIR}/src/signal/event_detectors/scrappie_event_detector.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/normalizers/identity_normalizer.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/normalizers/normalizer_factory.cpp
+        ${CMAKE_SOURCE_DIR}/src/signal/normalizers/zscore_normalizer.cpp
+        ${CMAKE_SOURCE_DIR}/src/signal/normalizers/median_mad_normalizer.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/fuzzy_quantizers/fuzzy_quantizer_factory.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/fuzzy_quantizers/passthrough_fuzzy_quantizer.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/alignment_quantizers/alignment_quantizer_factory.cpp

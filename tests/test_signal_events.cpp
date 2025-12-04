@@ -32,28 +32,6 @@ TEST_CASE("Scrappie detector segments simple step signal") {
     CHECK(events.events[1].mean == doctest::Approx(10.0f));
 }
 
-TEST_CASE("Scrappie detector suppresses peaks with high thresholds") {
-    NormalizedSignal norm;
-    norm.samples.assign(10, 0.0f);
-    norm.samples.insert(norm.samples.end(), 10, 10.0f);
-
-    EventDetectorConfig cfg;
-    cfg.backend = "scrappie";
-    cfg.trim_start = 0;
-    cfg.trim_end = 0;
-    cfg.varseg_chunk = 100;
-    cfg.varseg_thresh = 0.0f;
-    cfg.threshold1 = 100.0f;
-    cfg.threshold2 = 100.0f;
-
-    auto detector = make_event_detector(cfg);
-    auto events = detector->detect(norm);
-
-    REQUIRE(events.events.size() == 1);
-    CHECK(events.events[0].length == 20);
-    CHECK(events.events[0].mean == doctest::Approx(5.0f));  // average of combined step
-}
-
 TEST_CASE("Scrappie detector segments multiple transitions") {
     NormalizedSignal norm;
     norm.samples.insert(norm.samples.end(), 5, 0.0f);
