@@ -75,6 +75,16 @@ add_executable(piru
     src/io/reads/slow5_provider.cpp
     src/io/models/builtin_models.cpp
     src/cli/parse.cpp
+    src/signal/event_detectors/event_detector_factory.cpp
+    src/signal/event_detectors/passthrough_event_detector.cpp
+    src/signal/normalizers/normalizer_factory.cpp
+    src/signal/normalizers/identity_normalizer.cpp
+    src/signal/fuzzy_quantizers/fuzzy_quantizer_factory.cpp
+    src/signal/fuzzy_quantizers/passthrough_fuzzy_quantizer.cpp
+    src/signal/alignment_quantizers/alignment_quantizer_factory.cpp
+    src/signal/alignment_quantizers/passthrough_alignment_quantizer.cpp
+    src/signal/seed_extractors/seed_extractor_factory.cpp
+    src/signal/seed_extractors/kmer_seed_extractor.cpp
     src/util/signal_handlers.cpp
     src/util/timing.cpp
 )
