@@ -17,7 +17,8 @@ constexpr float kMadScale = 1.4826f;
 MedianMadNormalizer::MedianMadNormalizer(SignalNormalizerConfig config)
     : config_(std::move(config)) {}
 
-NormalizedSignal MedianMadNormalizer::normalize(const io::RawRead& read) const {
+NormalizedSignal MedianMadNormalizer::normalize(const io::RawRead& read, const EventSeries* events) const {
+    (void)events;  // Unused for now
     NormalizedSignal normalized;
     auto values = detail::to_picoamps(read);
     if (values.empty()) {

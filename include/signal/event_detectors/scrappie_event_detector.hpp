@@ -12,7 +12,7 @@ class ScrappieEventDetector : public EventDetector {
 public:
     explicit ScrappieEventDetector(EventDetectorConfig config);
 
-    EventSeries detect(const NormalizedSignal& signal) const override;
+    EventSeries detect(const io::RawRead& read) const override;
     const EventDetectorConfig& config() const override;
     std::string name() const override;
 

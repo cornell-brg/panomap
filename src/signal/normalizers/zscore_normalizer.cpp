@@ -10,7 +10,8 @@ namespace piru::signal {
 
 ZScoreNormalizer::ZScoreNormalizer(SignalNormalizerConfig config) : config_(std::move(config)) {}
 
-NormalizedSignal ZScoreNormalizer::normalize(const io::RawRead& read) const {
+NormalizedSignal ZScoreNormalizer::normalize(const io::RawRead& read, const EventSeries* events) const {
+    (void)events;  // Unused for now
     NormalizedSignal normalized;
     auto values = detail::to_picoamps(read);
     if (values.empty()) {

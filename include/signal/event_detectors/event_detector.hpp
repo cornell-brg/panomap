@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: MIT
-// Interface for detecting signal events from normalized reads.
+// Interface for detecting signal events from raw reads.
 
 #pragma once
 
 #include <memory>
 #include <string>
 
+#include "io/reads/read_provider.hpp"
 #include "signal/signal_types.hpp"
 
 namespace piru::signal {
@@ -27,7 +28,7 @@ class EventDetector {
 public:
     virtual ~EventDetector() = default;
 
-    virtual EventSeries detect(const NormalizedSignal& signal) const = 0;
+    virtual EventSeries detect(const io::RawRead& read) const = 0;
     virtual const EventDetectorConfig& config() const = 0;
     virtual std::string name() const = 0;
 };

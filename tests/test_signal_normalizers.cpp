@@ -14,7 +14,7 @@ TEST_CASE("Z-score normalizer scales to zero mean unit variance") {
     read.offset = 0.0f;
 
     auto normalizer = make_signal_normalizer(SignalNormalizerConfig{.backend = "zscore"});
-    auto normalized = normalizer->normalize(read);
+    auto normalized = normalizer->normalize(read, nullptr);
 
     REQUIRE(normalized.samples.size() == 3);
     const float mean =
@@ -30,7 +30,7 @@ TEST_CASE("Median-MAD normalizer centers at median and scales by MAD") {
     read.offset = 0.0f;
 
     auto normalizer = make_signal_normalizer(SignalNormalizerConfig{.backend = "median_mad"});
-    auto normalized = normalizer->normalize(read);
+    auto normalized = normalizer->normalize(read, nullptr);
 
     REQUIRE(normalized.samples.size() == 5);
     // Median is 0, MAD of deviations [0,0,10,0,0] is 0 so we clamp divisor to 1.

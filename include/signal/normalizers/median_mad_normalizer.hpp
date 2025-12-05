@@ -10,7 +10,7 @@ class MedianMadNormalizer : public SignalNormalizer {
 public:
     explicit MedianMadNormalizer(SignalNormalizerConfig config);
 
-    NormalizedSignal normalize(const io::RawRead& read) const override;
+    NormalizedSignal normalize(const io::RawRead& read, const EventSeries* events) const override;
     const SignalNormalizerConfig& config() const override;
     std::string name() const override;
 

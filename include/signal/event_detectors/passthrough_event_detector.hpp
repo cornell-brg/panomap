@@ -12,7 +12,7 @@ class PassthroughEventDetector : public EventDetector {
 public:
     explicit PassthroughEventDetector(EventDetectorConfig config);
 
-    EventSeries detect(const NormalizedSignal& signal) const override;
+    EventSeries detect(const io::RawRead& read) const override;
     const EventDetectorConfig& config() const override;
     std::string name() const override;
 

@@ -18,7 +18,7 @@ TEST_CASE("Identity normalizer copies raw signal to floats") {
     read.digitisation = 1.0f;
 
     auto normalizer = make_signal_normalizer(SignalNormalizerConfig{.backend = "identity"});
-    auto normalized = normalizer->normalize(read);
+    auto normalized = normalizer->normalize(read, nullptr);
 
     REQUIRE(normalized.samples.size() == 3);
     CHECK(normalized.samples[0] == doctest::Approx(1.0f));

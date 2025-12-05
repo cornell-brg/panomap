@@ -21,7 +21,7 @@ class SignalNormalizer {
 public:
     virtual ~SignalNormalizer() = default;
 
-    virtual NormalizedSignal normalize(const io::RawRead& read) const = 0;
+    virtual NormalizedSignal normalize(const io::RawRead& read, const EventSeries* events) const = 0;
     virtual const SignalNormalizerConfig& config() const = 0;
     virtual std::string name() const = 0;
 };

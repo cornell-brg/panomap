@@ -1,15 +1,20 @@
 // SPDX-License-Identifier: MIT
 
 #include "signal/event_detectors/event_detector_factory.hpp"
+#include "io/reads/read_provider.hpp"
 
 #include <doctest/doctest.h>
 
 using namespace piru::signal;
 
 TEST_CASE("Scrappie detector segments simple step signal") {
-    NormalizedSignal norm;
-    norm.samples.assign(10, 0.0f);
-    norm.samples.insert(norm.samples.end(), 10, 10.0f);
+    // Create a RawRead with signal that produces the desired picoamp values
+    piru::io::RawRead read;
+    read.raw_signal.assign(10, 0);
+    read.raw_signal.insert(read.raw_signal.end(), 10, 10);
+    read.range = 1.0f;
+    read.digitisation = 1.0f;
+    read.offset = 0.0f;
 
     EventDetectorConfig cfg;
     cfg.backend = "scrappie";
@@ -21,7 +26,7 @@ TEST_CASE("Scrappie detector segments simple step signal") {
     cfg.threshold2 = 1.0f;
 
     auto detector = make_event_detector(cfg);
-    auto events = detector->detect(norm);
+    auto events = detector->detect(read);
 
     REQUIRE(events.events.size() == 2);
     CHECK(events.events[0].start == 0);
@@ -33,10 +38,13 @@ TEST_CASE("Scrappie detector segments simple step signal") {
 }
 
 TEST_CASE("Scrappie detector segments multiple transitions") {
-    NormalizedSignal norm;
-    norm.samples.insert(norm.samples.end(), 5, 0.0f);
-    norm.samples.insert(norm.samples.end(), 5, 10.0f);
-    norm.samples.insert(norm.samples.end(), 5, -5.0f);
+    piru::io::RawRead read;
+    read.raw_signal.insert(read.raw_signal.end(), 5, 0);
+    read.raw_signal.insert(read.raw_signal.end(), 5, 10);
+    read.raw_signal.insert(read.raw_signal.end(), 5, -5);
+    read.range = 1.0f;
+    read.digitisation = 1.0f;
+    read.offset = 0.0f;
 
     EventDetectorConfig cfg;
     cfg.backend = "scrappie";
@@ -48,7 +56,7 @@ TEST_CASE("Scrappie detector segments multiple transitions") {
     cfg.threshold2 = 1.0f;
 
     auto detector = make_event_detector(cfg);
-    auto events = detector->detect(norm);
+    auto events = detector->detect(read);
 
     REQUIRE(events.events.size() == 3);
     CHECK(events.events[0].mean == doctest::Approx(0.0f));
@@ -60,13 +68,13 @@ TEST_CASE("Scrappie detector segments multiple transitions") {
 }
 
 TEST_CASE("Scrappie detector handles empty input") {
-    NormalizedSignal norm;
+    piru::io::RawRead read;
     EventDetectorConfig cfg;
     cfg.backend = "scrappie";
     cfg.trim_start = 0;
     cfg.trim_end = 0;
 
     auto detector = make_event_detector(cfg);
-    auto events = detector->detect(norm);
+    auto events = detector->detect(read);
     CHECK(events.events.empty());
 }

@@ -7,8 +7,8 @@ namespace piru::signal {
 PassthroughEventDetector::PassthroughEventDetector(EventDetectorConfig config)
     : config_(std::move(config)) {}
 
-EventSeries PassthroughEventDetector::detect(const NormalizedSignal& signal) const {
-    (void)signal;
+EventSeries PassthroughEventDetector::detect(const io::RawRead& read) const {
+    (void)read;
     return {};
 }
 

@@ -228,9 +228,16 @@ std::vector<SignalEvent> create_events(const std::vector<int>& peaks,
 ScrappieEventDetector::ScrappieEventDetector(EventDetectorConfig config)
     : config_(std::move(config)) {}
 
-EventSeries ScrappieEventDetector::detect(const NormalizedSignal& signal) const {
+EventSeries ScrappieEventDetector::detect(const io::RawRead& read) const {
     EventSeries series;
-    const auto& raw = signal.samples;
+
+    // Convert raw ADC values to picoamps
+    const float raw_unit = (read.digitisation == 0.0f) ? 1.0f : (read.range / read.digitisation);
+    std::vector<float> raw;
+    raw.reserve(read.raw_signal.size());
+    for (auto value : read.raw_signal) {
+        raw.push_back((static_cast<float>(value) + read.offset) * raw_unit);
+    }
 
     auto view = trim_raw_by_mad(raw, config_.varseg_chunk, config_.varseg_thresh);
     view.start = std::clamp(view.start + config_.trim_start, 0, static_cast<int>(raw.size()));

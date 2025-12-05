@@ -90,6 +90,7 @@ add_executable(piru
     src/signal/alignment_quantizers/int_alignment_quantizer.cpp
     src/signal/seed_extractors/seed_extractor_factory.cpp
     src/signal/seed_extractors/kmer_seed_extractor.cpp
+    src/mapping/batch_mapper.cpp
     src/util/signal_handlers.cpp
     src/util/timing.cpp
 )

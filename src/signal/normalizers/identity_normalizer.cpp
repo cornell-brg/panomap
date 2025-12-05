@@ -7,7 +7,8 @@ namespace piru::signal {
 IdentityNormalizer::IdentityNormalizer(SignalNormalizerConfig config)
     : config_(std::move(config)) {}
 
-NormalizedSignal IdentityNormalizer::normalize(const io::RawRead& read) const {
+NormalizedSignal IdentityNormalizer::normalize(const io::RawRead& read, const EventSeries* events) const {
+    (void)events;  // Unused for now
     NormalizedSignal normalized;
     normalized.samples.reserve(read.raw_signal.size());
     for (const auto value : read.raw_signal) {
