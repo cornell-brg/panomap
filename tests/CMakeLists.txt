@@ -49,15 +49,21 @@ if(DOCTEST_AVAILABLE)
         test_signal_fuzzy_quantize.cpp
         test_signal_alignment_quantize.cpp
         test_signal_seed_extractors.cpp
+        test_mapping_batch.cpp
     )
 
     target_include_directories(piru_tests PRIVATE
         ${CMAKE_SOURCE_DIR}/include
         ${CMAKE_SOURCE_DIR}/src
         ${CMAKE_BINARY_DIR}/generated
+        ${CMAKE_SOURCE_DIR}/third_party/slow5lib/include
     )
 
     target_sources(piru_tests PRIVATE
+        ${CMAKE_SOURCE_DIR}/src/concurrency/executor.cpp
+        ${CMAKE_SOURCE_DIR}/src/io/reads/read_provider_factory.cpp
+        ${CMAKE_SOURCE_DIR}/src/io/reads/slow5_provider.cpp
+        ${CMAKE_SOURCE_DIR}/src/io/reads/pod5_provider.cpp
         ${CMAKE_SOURCE_DIR}/src/io/graphs/graph_loader_factory.cpp
         ${CMAKE_SOURCE_DIR}/src/io/graphs/gfa_loader.cpp
         ${CMAKE_SOURCE_DIR}/src/io/graphs/vg_loader.cpp
@@ -82,9 +88,15 @@ if(DOCTEST_AVAILABLE)
         ${CMAKE_SOURCE_DIR}/src/signal/alignment_quantizers/int_alignment_quantizer.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/seed_extractors/seed_extractor_factory.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/seed_extractors/kmer_seed_extractor.cpp
+        ${CMAKE_SOURCE_DIR}/src/mapping/batch_mapper.cpp
     )
 
     target_link_libraries(piru_tests PRIVATE doctest::doctest)
+    if(PIRU_TBB_AVAILABLE)
+        target_link_libraries(piru_tests PRIVATE TBB::tbb)
+        target_compile_definitions(piru_tests PRIVATE PIRU_USE_TBB)
+    endif()
+    target_link_libraries(piru_tests PRIVATE slow5 ZLIB::ZLIB)
     if(PIRU_LIBVGIO_AVAILABLE)
         target_link_libraries(piru_tests PRIVATE VGio::vgio)
         target_compile_definitions(piru_tests PRIVATE PIRU_HAS_LIBVGIO)
