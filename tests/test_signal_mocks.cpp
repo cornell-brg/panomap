@@ -55,21 +55,3 @@ TEST_CASE("Passthrough alignment quantizer emits int16 payload") {
     CHECK((*vec_ptr)[0] == static_cast<std::int16_t>(5));
     CHECK((*vec_ptr)[1] == static_cast<std::int16_t>(-1));
 }
-
-TEST_CASE("K-mer seed extractor emits per-token seeds") {
-    FuzzyQuantizedSignal quantized;
-    quantized.tokens = {10, -4, 7};
-
-    auto extractor = make_seed_extractor(SeedExtractorConfig{.backend = "kmer", .k = 1});
-    auto seeds = extractor->extract(quantized, nullptr);
-
-    REQUIRE(seeds.seeds.size() == 3);
-    CHECK(seeds.seeds[0].hash == 10);
-    CHECK(seeds.seeds[0].position == 0);
-    CHECK(seeds.seeds[0].span == 1);
-    CHECK(seeds.seeds[1].hash == static_cast<std::uint64_t>(-4));
-    CHECK(seeds.seeds[1].position == 1);
-    CHECK(seeds.seeds[1].span == 1);
-    CHECK(seeds.seeds[2].hash == 7);
-    CHECK(seeds.seeds[2].position == 2);
-}

@@ -48,6 +48,7 @@ if(DOCTEST_AVAILABLE)
         test_signal_normalizers.cpp
         test_signal_fuzzy_quantize.cpp
         test_signal_alignment_quantize.cpp
+        test_signal_seed_extractors.cpp
     )
 
     target_include_directories(piru_tests PRIVATE

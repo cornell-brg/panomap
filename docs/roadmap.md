@@ -26,3 +26,6 @@ A living list of follow-on tasks mentioned in DEV plans and code comments. This 
 ## Tooling/CI
 - Consider adding tests around GAM output round-trips (vg view) when alignment data is richer.
 - Keep third-party deps (libvgio, slow5lib) in sync and documented.
+
+## Quantization (future)
+- Add custom alignment quantization formats beyond standard int types (e.g., custom fixed-point layouts or packed encodings) once baseline int8/int16 paths land.
