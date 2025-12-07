@@ -56,6 +56,11 @@ SuperbubbleResult chainSuperbubbles(const AlnGraph& graph, const SccResult& scc,
 // Assign chain IDs based on union-find representatives.
 std::vector<std::size_t> assignChainIds(const UnionFind& uf);
 
+// Assign approximate linear positions per chain using BFS/DFS propagation.
+std::vector<std::int64_t> assignLinearPositions(const AlnGraph& graph,
+                                                const std::vector<std::size_t>& chain_ids,
+                                                const SccResult& scc);
+
 SccResult computeScc(const AlnGraph& graph);
 
 }  // namespace piru::index

@@ -501,4 +501,77 @@ std::vector<std::size_t> assignChainIds(UnionFind uf) {
     return chain_id;
 }
 
+std::vector<std::int64_t> assignLinearPositions(const AlnGraph& graph,
+                                                const std::vector<std::size_t>& chain_ids,
+                                                const SccResult& scc) {
+    const std::size_t n = graph.nodeCount();
+    if (chain_ids.size() != n) return {};
+
+    // Build chain members
+    std::unordered_map<std::size_t, std::vector<std::size_t>> chain_members;
+    chain_members.reserve(n);
+    for (std::size_t v = 0; v < n; ++v) {
+        chain_members[chain_ids[v]].push_back(v);
+    }
+
+    // Initialize positions to -1 (unassigned)
+    std::vector<std::int64_t> positions(n, -1);
+    const std::int64_t root_offset =
+        static_cast<std::int64_t>(std::numeric_limits<std::int32_t>::max());
+
+    // For each chain, pick a deterministic root node and propagate distances
+    for (const auto& kv : chain_members) {
+        const auto& members = kv.second;
+        if (members.empty()) continue;
+
+        // Choose root: lowest (component_number, node_id) if available, else min node id
+        std::size_t root = members[0];
+        for (std::size_t v : members) {
+            bool better = false;
+            if (scc.components > 0) {
+                std::size_t cr = scc.component[root];
+                std::size_t cv = scc.component[v];
+                if (cv < cr || (cv == cr && v < root)) {
+                    better = true;
+                }
+            } else {
+                if (v < root) better = true;
+            }
+            if (better) root = v;
+        }
+
+        // DFS stack of pairs (node, distance)
+        std::vector<std::pair<std::size_t, std::int64_t>> stack;
+        stack.emplace_back(root, root_offset);
+
+        while (!stack.empty()) {
+            auto [v, dist] = stack.back();
+            stack.pop_back();
+
+            // Skip if already visited
+            if (positions[v] != -1) continue;
+            positions[v] = dist;
+
+            const std::int64_t vlen = static_cast<std::int64_t>(graph.node(v).sequence.size());
+
+            // Out-neighbors: v -> u, move forward by v length
+            for (const auto u : graph.outgoing(v)) {
+                if (chain_ids[u] != chain_ids[v]) continue;
+                if (positions[u] != -1) continue;
+                stack.emplace_back(u, dist + vlen);
+            }
+
+            // In-neighbors: u -> v, move backward by u length
+            for (const auto u : graph.incoming(v)) {
+                if (chain_ids[u] != chain_ids[v]) continue;
+                if (positions[u] != -1) continue;
+                const std::int64_t ulen = static_cast<std::int64_t>(graph.node(u).sequence.size());
+                stack.emplace_back(u, dist - ulen);
+            }
+        }
+    }
+
+    return positions;
+}
+
 }  // namespace piru::index
