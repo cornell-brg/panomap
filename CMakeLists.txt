@@ -124,11 +124,6 @@ endif()
 set(PIRU_LIBVGIO_AVAILABLE OFF)
 if(PIRU_ENABLE_LIBVGIO)
     set(PIRU_LIBVGIO_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/libvgio")
-    if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/piru/third_party/libvgio/CMakeLists.txt)
-        # Support existing submodule path.
-        set(PIRU_LIBVGIO_DIR "${CMAKE_CURRENT_SOURCE_DIR}/piru/third_party/libvgio")
-    endif()
-
     if(EXISTS ${PIRU_LIBVGIO_DIR}/CMakeLists.txt)
         set(PIRU_LIBVGIO_CAN_BUILD ON)
         find_package(PkgConfig QUIET)
