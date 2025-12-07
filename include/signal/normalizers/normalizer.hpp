@@ -15,6 +15,9 @@ namespace piru::signal {
 
 struct SignalNormalizerConfig {
     std::string backend{"zscore"};
+    bool clip_outliers{false};  // Enable outlier clipping to [clip_min, clip_max]
+    float clip_min{-3.0f};      // Minimum normalized value (if clipping enabled)
+    float clip_max{3.0f};       // Maximum normalized value (if clipping enabled)
 };
 
 class SignalNormalizer {

@@ -38,7 +38,15 @@ NormalizedSignal MedianMadNormalizer::normalize(const io::RawRead& read, const E
 
     normalized.samples.reserve(values.size());
     for (const auto v : values) {
-        normalized.samples.push_back((v - med) / mad);
+        float norm_value = (v - med) / mad;
+
+        // Apply outlier clipping if enabled
+        if (config_.clip_outliers) {
+            if (norm_value < config_.clip_min) norm_value = config_.clip_min;
+            if (norm_value > config_.clip_max) norm_value = config_.clip_max;
+        }
+
+        normalized.samples.push_back(norm_value);
     }
     normalized.sampling_rate_hz = read.sampling_rate_hz;
     return normalized;

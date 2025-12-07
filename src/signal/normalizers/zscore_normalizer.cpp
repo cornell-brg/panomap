@@ -32,7 +32,15 @@ NormalizedSignal ZScoreNormalizer::normalize(const io::RawRead& read, const Even
 
     normalized.samples.reserve(values.size());
     for (const auto v : values) {
-        normalized.samples.push_back(static_cast<float>((static_cast<double>(v) - mean) / stddev));
+        float z_score = static_cast<float>((static_cast<double>(v) - mean) / stddev);
+
+        // Apply outlier clipping if enabled
+        if (config_.clip_outliers) {
+            if (z_score < config_.clip_min) z_score = config_.clip_min;
+            if (z_score > config_.clip_max) z_score = config_.clip_max;
+        }
+
+        normalized.samples.push_back(z_score);
     }
     normalized.sampling_rate_hz = read.sampling_rate_hz;
     return normalized;
