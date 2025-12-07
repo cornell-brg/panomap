@@ -53,6 +53,9 @@ struct SuperbubbleResult {
 SuperbubbleResult chainSuperbubbles(const AlnGraph& graph, const SccResult& scc,
                                      const TipFoldingResult& tip_result);
 
+// Assign chain IDs based on union-find representatives.
+std::vector<std::size_t> assignChainIds(const UnionFind& uf);
+
 SccResult computeScc(const AlnGraph& graph);
 
 }  // namespace piru::index

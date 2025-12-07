@@ -8,6 +8,7 @@
 #include <stack>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -469,6 +470,35 @@ SuperbubbleResult chainSuperbubbles(const AlnGraph& graph,
     }
 
     return result;
+}
+
+std::vector<std::size_t> assignChainIds(UnionFind uf) {
+    const std::size_t n = uf.parent.size();
+
+    // Path compression: find representative for each node
+    std::vector<std::size_t> reps(n);
+    for (std::size_t i = 0; i < n; ++i) {
+        reps[i] = uf.find(i);
+    }
+
+    // Build sorted unique list of representatives (for deterministic chain ID assignment)
+    std::vector<std::size_t> unique_reps = reps;
+    std::sort(unique_reps.begin(), unique_reps.end());
+    unique_reps.erase(std::unique(unique_reps.begin(), unique_reps.end()), unique_reps.end());
+
+    // Map representative → chain ID (in sorted order)
+    std::unordered_map<std::size_t, std::size_t> rep_to_chain;
+    for (std::size_t cid = 0; cid < unique_reps.size(); ++cid) {
+        rep_to_chain[unique_reps[cid]] = cid;
+    }
+
+    // Assign chain ID to each node
+    std::vector<std::size_t> chain_id(n);
+    for (std::size_t i = 0; i < n; ++i) {
+        chain_id[i] = rep_to_chain[reps[i]];
+    }
+
+    return chain_id;
 }
 
 }  // namespace piru::index
