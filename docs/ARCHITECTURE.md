@@ -41,6 +41,10 @@
 
 ## Detailed Pipeline Breakdowns
 
+Status legend:
+- [x] implemented
+- [ ] not implemented / planned
+
 ### Index Pipeline (Internal Flow)
 
 ```
@@ -105,6 +109,13 @@ GraphStore SignalStore SeedStore
 ```
 
 **Current status:** Graph loading and model validation are implemented. Graph transformation, pseudo-linearization, squigglization, and index builder are planned.
+
+**Component status:**
+- [x] GraphLoader (GFA/vg)
+- [ ] Transform (ImportedGraph → AlnGraph)
+- [ ] Pseudo-Linearize (chain IDs, linear coords)
+- [ ] Squigglize & Index Builder
+- [ ] GraphStore / SignalStore / SeedStore backends + serialization
 
 **Pipeline stages:**
 1. **GraphLoader**: Parses GFA/vg files into ImportedGraph (bidirectional graph with nodes, edges, paths)
@@ -200,6 +211,18 @@ GraphStore SignalStore SeedStore
 ```
 
 **Current status:** Read parsing is implemented. Index loading, signal preprocessing, alignment core, and result writing are planned.
+
+**Component status:**
+- [x] Read parse (ReadProvider)
+- [x] Event detection
+- [x] Signal normalization
+- [x] Fuzzy quantization (seeding)
+- [x] Alignment quantization (scoring)
+- [x] Seed extraction
+- [ ] SeedStore lookup
+- [ ] Clustering/chaining
+- [ ] Alignment scoring
+- [ ] ResultWriter integration in map path
 
 **Mapping algorithm (planned):**
 1. **Signal preprocessing**:
