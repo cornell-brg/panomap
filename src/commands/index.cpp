@@ -13,6 +13,7 @@
 #include "index/transform_dbg.hpp"
 #include "io/graphs/graph.hpp"
 #include "io/graphs/graph_loader_factory.hpp"
+#include "io/index/serialization.hpp"
 #include "io/models/model_factory.hpp"
 #include "signal/alignment_quantizers/alignment_quantizer_factory.hpp"
 #include "signal/fuzzy_quantizers/fuzzy_quantizer_factory.hpp"
@@ -266,11 +267,40 @@ int handle_index(const std::vector<std::string>& args) {
     PIRU_PROFILE_STOP(profile, "seeds");
 
     // -------------------------------------------------------------------------
-    // Stage 5: Serialize Index (TODO)
+    // Stage 5: Serialize Index
     // -------------------------------------------------------------------------
 
     PIRU_PROFILE_START(profile, "serialize");
-    LOG_WARN("serialization not yet implemented (index stays in memory)");
+
+    // 1. Create the store objects from the pipeline results.
+    piru::index::AdjListGraphStore graph_store(std::move(aln_graph));
+    piru::index::VectorSignalStore signal_store(std::move(squiggle_result.alignment_signals));
+    // The seed_store is already created.
+
+    // 2. Populate the global metadata.
+    piru::io::index::IndexMetadata metadata;
+    metadata.graph_flavor = imported.flavor == piru::io::ImportedGraphFlavor::kDbg ? 1 : 2;
+    metadata.graph_k = graph_k;
+    metadata.pore_k = pore_k;
+    metadata.model_name = model->name();
+    metadata.fuzzy_quantizer = fuzzy_cfg.backend;
+    metadata.align_quantizer = align_cfg.backend;
+    metadata.source_path = graph_path;
+
+    // 3. Create the output directory.
+    if (!std::filesystem::exists(output_dir)) {
+        std::filesystem::create_directory(output_dir);
+    }
+
+    // 4. Write the components to disk.
+    std::filesystem::path dir_path(output_dir);
+    std::string basename = dir_path.filename().string();
+    
+    piru::io::index::write_graph(dir_path / (basename + ".graph"), graph_store, metadata);
+    piru::io::index::write_signals(dir_path / (basename + ".signals"), signal_store, 1.0f, 0.0f);
+    piru::io::index::write_seeds(dir_path / (basename + ".seeds"), seed_store);
+
+    LOG_INFO("index written to " + output_dir);
     PIRU_PROFILE_STOP(profile, "serialize");
 
     PIRU_PROFILE_STOP(profile, "index");

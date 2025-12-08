@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "cli/parse.hpp"
+#include "io/index/serialization.hpp"
 #include "io/reads/read_provider_factory.hpp"
 #include "mapping/batch_mapper.hpp"
 #include "util/logging.hpp"
@@ -16,10 +17,11 @@
 int handle_map(const std::vector<std::string>& args) {
     piru::cli::Parsed parsed;
     piru::cli::ParseConfig config;
-    config.usage = "Usage: piru map [options] <reads-path>";
+    config.usage = "Usage: piru map [options] --index <index-dir> <reads-path>";
     config.positional_help = {"<reads-path>       Input slow5/blow5 file or directory containing reads"};
     config.options = {
         {'h', "help", false, "Show help"},
+        {'i', "index", true, "Path to index directory"},
         {'t', "threads", true, "Worker threads (-1 = auto)"},
         {'p', "profile", false, "Emit timing profile (tree)"},
     };
@@ -33,12 +35,18 @@ int handle_map(const std::vector<std::string>& args) {
         piru::cli::print_help(config, std::cout);
         return 0;
     }
+    if (!parsed.values.count("index")) {
+        LOG_ERROR("map: missing required --index <index-dir>");
+        piru::cli::print_help(config, std::cerr);
+        return 1;
+    }
     if (parsed.positionals.size() != 1) {
-        std::cerr << "map: expected a reads file or directory\n";
+        LOG_ERROR("map: missing required <reads-path>");
         piru::cli::print_help(config, std::cerr);
         return 1;
     }
 
+    const std::string index_path = parsed.values.at("index");
     const bool profile = parsed.values.count("profile") > 0;
     const int num_threads = [&]() {
         auto it = parsed.values.find("threads");
@@ -51,6 +59,14 @@ int handle_map(const std::vector<std::string>& args) {
         }
     }();
     PIRU_PROFILE_START(profile, "map");
+
+    LOG_INFO("loading index from " + index_path);
+    auto loaded_index = piru::io::index::load_index(index_path);
+    if (!loaded_index.graph) {
+        LOG_ERROR("map: failed to load index from '" + index_path + "'");
+        return 1;
+    }
+    LOG_INFO("index loaded: " + std::to_string(loaded_index.graph->nodeCount()) + " nodes");
 
     const std::string reads_path = parsed.positionals[0];
     std::vector<std::filesystem::path> files;

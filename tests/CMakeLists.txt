@@ -52,6 +52,7 @@ if(DOCTEST_AVAILABLE)
         test_mapping_batch.cpp
         test_index_pipeline.cpp
         test_serialization.cpp
+        test_cli.cpp
     )
 
     target_include_directories(piru_tests PRIVATE
