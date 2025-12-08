@@ -93,6 +93,7 @@ add_executable(piru
     src/signal/seed_extractors/kmer_seed_extractor.cpp
     src/index/aln_graph.cpp
     src/index/transform_dbg.cpp
+    src/index/path_guided_transform.cpp
     src/index/pseudo_linearize.cpp
     src/index/squigglize.cpp
     src/index/seed_builder.cpp

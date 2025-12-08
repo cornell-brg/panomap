@@ -42,6 +42,7 @@ if(DOCTEST_AVAILABLE)
         test_models.cpp
         test_graphs.cpp
         test_aln_graph.cpp
+        test_path_guided_transform.cpp
         test_results.cpp
         test_reads.cpp
         test_signal_mocks.cpp
@@ -97,6 +98,7 @@ if(DOCTEST_AVAILABLE)
         ${CMAKE_SOURCE_DIR}/src/index/squigglize.cpp
         ${CMAKE_SOURCE_DIR}/src/index/seed_builder.cpp
         ${CMAKE_SOURCE_DIR}/src/index/transform_dbg.cpp
+        ${CMAKE_SOURCE_DIR}/src/index/path_guided_transform.cpp
         ${CMAKE_SOURCE_DIR}/src/index/pseudo_linearize.cpp
         ${CMAKE_SOURCE_DIR}/src/mapping/batch_mapper.cpp
     )
