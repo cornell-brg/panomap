@@ -2,13 +2,21 @@
 
 #include <filesystem>
 #include <iostream>
+#include <set>
 #include <string>
 #include <vector>
 
 #include "cli/parse.hpp"
+#include "index/pseudo_linearize.hpp"
+#include "index/seed_builder.hpp"
+#include "index/squigglize.hpp"
+#include "index/transform_dbg.hpp"
 #include "io/graphs/graph.hpp"
 #include "io/graphs/graph_loader_factory.hpp"
 #include "io/models/model_factory.hpp"
+#include "signal/alignment_quantizers/alignment_quantizer_factory.hpp"
+#include "signal/fuzzy_quantizers/fuzzy_quantizer_factory.hpp"
+#include "signal/seed_extractors/seed_extractor_factory.hpp"
 #include "util/logging.hpp"
 #include "util/timing.hpp"
 #include "version.hpp"
@@ -36,9 +44,14 @@ int handle_index(const std::vector<std::string>& args) {
     config.options = {
         {'h', "help", false, "Show help"},
         {'g', "graph", true, "Graph type: dbg (default) or vg"},
+        {'k', "graph-k", true, "DBG k-mer size (default: auto-detect from overlap)"},
         {'m', "model", true, "Pore model (builtin name: r9.4/r10.4 or model file path)"},
+        {'o', "output", true, "Output index directory (default: <graph-file>.piru)"},
         {'t', "threads", true, "Worker threads"},
         {'p', "profile", false, "Emit timing profile (tree)"},
+        {'\0', "seed-k", true, "Seed k-mer size (default: 10)"},
+        {'\0', "seed-stride", true, "Seed stride (default: 1)"},
+        {'\0', "seed-filter", true, "Keep least frequent seed fraction (default: 1.0)"},
     };
     config.on_error = [](const std::string&) { std::cerr << "index: invalid option\n"; };
 
@@ -69,11 +82,6 @@ int handle_index(const std::vector<std::string>& args) {
         return 1;
     }
 
-    // Quick sanity lookup on a canonical homopolymer k-mer for visibility.
-    const std::string probe(model->k(), 'A');
-    double probe_mean = 0.0;
-    const bool probe_ok = model->lookup(probe, probe_mean);
-
     PIRU_PROFILE_START(profile, "index");
 
     auto loader = piru::io::make_graph_loader(graph_path);
@@ -97,52 +105,169 @@ int handle_index(const std::vector<std::string>& args) {
         return 1;
     }
 
-    LOG_INFO("graph loaded (" + loader->get_format_name() + "): nodes=" +
-             std::to_string(imported.nodes.size()) + ", edges=" +
-             std::to_string(imported.edges.size()) + ", paths=" +
-             std::to_string(imported.paths.size()));
+    LOG_INFO("loaded graph: " + std::to_string(imported.nodes.size()) + " nodes, " +
+             std::to_string(imported.edges.size()) + " edges, " +
+             std::to_string(imported.paths.size()) + " paths (" + loader->get_format_name() + ")");
 
-    if (!imported.nodes.empty()) {
-        const auto& n = imported.nodes.front();
-        LOG_INFO("first node: id=" + n.id + " len=" + std::to_string(n.sequence.size()));
-    }
-    if (!imported.edges.empty()) {
-        const auto& e = imported.edges.front();
-        const auto from_orient = e.from_reverse ? "-" : "+";
-        const auto to_orient = e.to_reverse ? "-" : "+";
-        std::string overlap_info = e.overlap;
-        if (e.overlap_bases.has_value()) {
-            overlap_info += " (" + std::to_string(*e.overlap_bases) + "bp)";
+    // -------------------------------------------------------------------------
+    // Parameter parsing and validation
+    // -------------------------------------------------------------------------
+
+    const std::size_t pore_k = model->k();
+    std::size_t graph_k = 0;
+
+    // Auto-detect graph_k from overlap (DBG case)
+    if (!parsed.values.count("graph-k") && graph_flavor == "dbg") {
+        if (!imported.edges.empty() && imported.edges.front().overlap_bases.has_value()) {
+            const auto overlap = *imported.edges.front().overlap_bases;
+            graph_k = overlap + 1;
         }
-        LOG_INFO("first edge: " + e.from + from_orient + " -> " + e.to + to_orient +
-                 " overlap=" + overlap_info);
-    }
-    if (!imported.paths.empty()) {
-        const auto& p = imported.paths.front();
-        std::string preview;
-        const std::size_t limit = std::min<std::size_t>(p.steps.size(), 5);
-        for (std::size_t i = 0; i < limit; ++i) {
-            const auto& step = p.steps[i];
-            preview += (i == 0 ? "" : ",");
-            preview += step.segment_id + (step.is_reverse ? "-" : "+");
-        }
-        if (p.steps.size() > limit) preview += ",...";
-        LOG_INFO("first path: name=" + p.name + " steps=" + std::to_string(p.steps.size()) +
-                 " [" + preview + "]");
+    } else if (parsed.values.count("graph-k")) {
+        graph_k = std::stoul(parsed.values.at("graph-k"));
     }
 
-    std::string flavor_str = graph_type;
-    if (imported.flavor == piru::io::ImportedGraphFlavor::kUnknown) {
-        flavor_str = "unknown(" + graph_type + ")";
+    if (graph_k == 0) {
+        LOG_ERROR("index: cannot determine graph k-mer size (provide --graph-k)");
+        return 1;
     }
 
-    LOG_INFO("index summary (graph=" + flavor_str + ", file=" + graph_path +
-             ", model=" + model->name() + ", k=" + std::to_string(model->k()) + ").");
-    if (probe_ok) {
-        LOG_INFO("model lookup " + probe + " -> mean=" + std::to_string(probe_mean));
+    if (graph_k < pore_k) {
+        LOG_ERROR("index: graph k=" + std::to_string(graph_k) + " < pore k=" +
+                  std::to_string(pore_k) + " (invalid)");
+        return 1;
+    }
+
+    const std::size_t seed_k =
+        parsed.values.count("seed-k") ? std::stoul(parsed.values.at("seed-k")) : 10;
+    const std::size_t seed_stride =
+        parsed.values.count("seed-stride") ? std::stoul(parsed.values.at("seed-stride")) : 1;
+    const double seed_filter = parsed.values.count("seed-filter")
+                                   ? std::stod(parsed.values.at("seed-filter"))
+                                   : 1.0;
+
+    std::string output_dir = graph_path + ".piru";
+    if (parsed.values.count("output")) {
+        output_dir = parsed.values.at("output");
+    }
+
+    LOG_INFO("indexing with graph_k=" + std::to_string(graph_k) + ", pore_k=" +
+             std::to_string(pore_k) + ", seed_k=" + std::to_string(seed_k));
+
+    // -------------------------------------------------------------------------
+    // Stage 1: Graph Transformation (ImportedGraph -> AlnGraph)
+    // -------------------------------------------------------------------------
+
+    PIRU_PROFILE_START(profile, "transform");
+    piru::index::AlnGraph aln_graph;
+
+    if (graph_flavor == "dbg") {
+        aln_graph = piru::index::transformDbg(imported, graph_k, pore_k);
+    } else if (graph_flavor == "vg") {
+        LOG_ERROR("index: VG transformation not yet implemented");
+        return 1;
     } else {
-        LOG_WARN("model lookup failed for probe k-mer: " + probe);
+        LOG_ERROR("index: unknown graph flavor: " + graph_flavor);
+        return 1;
     }
+
+    if (!aln_graph.validate()) {
+        LOG_ERROR("index: AlnGraph validation failed after transformation");
+        return 1;
+    }
+
+    LOG_INFO("[1/4] transformed: " + std::to_string(aln_graph.nodeCount()) + " directional nodes");
+    PIRU_PROFILE_STOP(profile, "transform");
+
+    // -------------------------------------------------------------------------
+    // Stage 2: Pseudo-Linearization
+    // -------------------------------------------------------------------------
+
+    PIRU_PROFILE_START(profile, "linearize");
+
+    auto scc = piru::index::computeScc(aln_graph);
+    auto tips = piru::index::chainTips(aln_graph, scc);
+    piru::index::chainCycles(aln_graph, tips);
+    auto sb = piru::index::chainSuperbubbles(aln_graph, scc, tips);
+    auto chain_ids = piru::index::assignChainIds(sb.uf);
+    auto positions = piru::index::assignLinearPositions(aln_graph, chain_ids, scc);
+
+    // Store chain metadata in graph nodes
+    for (std::size_t i = 0; i < aln_graph.nodeCount(); ++i) {
+        aln_graph.mutableNode(i).chain_id = chain_ids[i];
+        aln_graph.mutableNode(i).linear_position = positions[i];
+    }
+
+    std::set<std::size_t> unique_chains(chain_ids.begin(), chain_ids.end());
+    LOG_INFO("[2/4] linearized: " + std::to_string(unique_chains.size()) + " chains");
+    PIRU_PROFILE_STOP(profile, "linearize");
+
+    // -------------------------------------------------------------------------
+    // Stage 3: Squigglization + Quantization
+    // -------------------------------------------------------------------------
+
+    PIRU_PROFILE_START(profile, "squigglize");
+
+    piru::signal::FuzzyQuantizerConfig fuzzy_cfg;
+    fuzzy_cfg.backend = "rh2";
+    auto fuzzy_quantizer = piru::signal::make_fuzzy_quantizer(fuzzy_cfg);
+    if (!fuzzy_quantizer) {
+        LOG_ERROR("index: failed to create fuzzy quantizer");
+        return 1;
+    }
+
+    piru::signal::AlignmentQuantizerConfig align_cfg;
+    align_cfg.backend = "int16";
+    auto alignment_quantizer = piru::signal::make_alignment_quantizer(align_cfg);
+    if (!alignment_quantizer) {
+        LOG_ERROR("index: failed to create alignment quantizer");
+        return 1;
+    }
+
+    const auto squiggle_result = piru::index::squigglizeAndQuantize(
+        aln_graph, *model, *fuzzy_quantizer, *alignment_quantizer);
+
+    std::size_t total_samples = 0;
+    for (const auto& sig : squiggle_result.fuzzy_signals) {
+        total_samples += sig.tokens.size();
+    }
+
+    LOG_INFO("[3/4] squigglized: " + std::to_string(total_samples) + " signal samples");
+    PIRU_PROFILE_STOP(profile, "squigglize");
+
+    // -------------------------------------------------------------------------
+    // Stage 4: Seed Extraction & Indexing
+    // -------------------------------------------------------------------------
+
+    PIRU_PROFILE_START(profile, "seeds");
+
+    piru::signal::SeedExtractorConfig extractor_cfg;
+    extractor_cfg.backend = "kmer";
+    extractor_cfg.k = seed_k;
+    extractor_cfg.stride = seed_stride;
+    extractor_cfg.qbits = 16;
+    auto extractor = piru::signal::make_seed_extractor(extractor_cfg);
+    if (!extractor) {
+        LOG_ERROR("index: failed to create seed extractor");
+        return 1;
+    }
+
+    piru::index::SeedBuildConfig seed_cfg;
+    seed_cfg.keep_least_frequent_fraction = seed_filter;
+
+    const auto seed_store =
+        piru::index::buildSeedStore(squiggle_result.fuzzy_signals, *extractor, seed_cfg);
+
+    LOG_INFO("[4/4] indexed: " + std::to_string(seed_store.size()) + " unique seeds (max_freq=" +
+             std::to_string(seed_store.max_hash_frequency()) + ")");
+    PIRU_PROFILE_STOP(profile, "seeds");
+
+    // -------------------------------------------------------------------------
+    // Stage 5: Serialize Index (TODO)
+    // -------------------------------------------------------------------------
+
+    PIRU_PROFILE_START(profile, "serialize");
+    LOG_WARN("serialization not yet implemented (index stays in memory)");
+    PIRU_PROFILE_STOP(profile, "serialize");
 
     PIRU_PROFILE_STOP(profile, "index");
     if (profile) piru::timing::report(std::cerr);
