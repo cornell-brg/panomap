@@ -35,14 +35,13 @@ AlignmentQuantizedSignal IntAlignmentQuantizer::quantize(const NormalizedSignal&
     (void)events;
     AlignmentQuantizedSignal quantized;
     const int bits = (config_.target_bits == 8) ? 8 : 16;
-    const float scale = 1.0f;  // Placeholder for future fixed-point scaling tweaks.
-
+    
     if (bits == 8) {
         quantized.kind = AlignmentQuantizationKind::kInt8;
-        quantized.data = quantize_to_int<std::int8_t>(signal.samples, scale);
+        quantized.data = quantize_to_int<std::int8_t>(signal.samples, config_.scale);
     } else {
         quantized.kind = AlignmentQuantizationKind::kInt16;
-        quantized.data = quantize_to_int<std::int16_t>(signal.samples, scale);
+        quantized.data = quantize_to_int<std::int16_t>(signal.samples, config_.scale);
     }
     return quantized;
 }
@@ -50,5 +49,9 @@ AlignmentQuantizedSignal IntAlignmentQuantizer::quantize(const NormalizedSignal&
 const AlignmentQuantizerConfig& IntAlignmentQuantizer::config() const { return config_; }
 
 std::string IntAlignmentQuantizer::name() const { return config_.backend; }
+
+float IntAlignmentQuantizer::scale() const { return config_.scale; }
+
+float IntAlignmentQuantizer::offset() const { return config_.offset; }
 
 }  // namespace piru::signal

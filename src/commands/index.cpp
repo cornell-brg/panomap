@@ -297,7 +297,9 @@ int handle_index(const std::vector<std::string>& args) {
     std::string basename = dir_path.filename().string();
     
     piru::io::index::write_graph(dir_path / (basename + ".graph"), graph_store, metadata);
-    piru::io::index::write_signals(dir_path / (basename + ".signals"), signal_store, 1.0f, 0.0f);
+    // This is a bit of a hack, we should probably have a better way to get this.
+    // This will be improved in a future refactoring.
+    piru::io::index::write_signals(dir_path / (basename + ".signals"), signal_store, alignment_quantizer->scale(), alignment_quantizer->offset());
     piru::io::index::write_seeds(dir_path / (basename + ".seeds"), seed_store);
 
     LOG_INFO("index written to " + output_dir);

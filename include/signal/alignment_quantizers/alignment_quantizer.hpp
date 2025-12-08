@@ -11,20 +11,34 @@
 namespace piru::signal {
 
 struct AlignmentQuantizerConfig {
-    std::string backend{"int16"};
-    std::string params;
-    int target_bits{16};  // Used for integer backends (8 or 16).
-    bool operator==(const AlignmentQuantizerConfig& other) const = default;
+    std::string backend{"passthrough"};
+    int target_bits{16};
+    float scale{1.0f};
+    float offset{0.0f};
 };
 
 class AlignmentQuantizer {
+
 public:
+
     virtual ~AlignmentQuantizer() = default;
 
+
+
     virtual AlignmentQuantizedSignal quantize(const NormalizedSignal& signal,
+
                                               const EventSeries* events) const = 0;
+
+
+
     virtual const AlignmentQuantizerConfig& config() const = 0;
+
     virtual std::string name() const = 0;
+
+    virtual float scale() const = 0;
+
+    virtual float offset() const = 0;
+
 };
 
 using AlignmentQuantizerPtr = std::unique_ptr<AlignmentQuantizer>;

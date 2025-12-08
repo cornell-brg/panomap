@@ -29,4 +29,8 @@ const AlignmentQuantizerConfig& PassthroughAlignmentQuantizer::config() const {
 
 std::string PassthroughAlignmentQuantizer::name() const { return config_.backend; }
 
+float PassthroughAlignmentQuantizer::scale() const { return 1.0f; }
+
+float PassthroughAlignmentQuantizer::offset() const { return 0.0f; }
+
 }  // namespace piru::signal

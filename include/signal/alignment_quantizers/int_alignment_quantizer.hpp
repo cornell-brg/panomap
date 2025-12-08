@@ -14,6 +14,8 @@ public:
                                       const EventSeries* events) const override;
     const AlignmentQuantizerConfig& config() const override;
     std::string name() const override;
+    float scale() const override;
+    float offset() const override;
 
 private:
     AlignmentQuantizerConfig config_;
