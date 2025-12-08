@@ -243,6 +243,8 @@ TEST_CASE("SignalStore serialization round-trip (int8)") {
     CHECK(data0[0] == -10);
     CHECK(data0[1] == 0);
     CHECK(data0[2] == 10);
+    CHECK(data0[3] == 20);
+
     // Clean up
     std::remove(test_path.c_str());
 }
@@ -298,4 +300,79 @@ TEST_CASE("SeedStore serialization round-trip") {
 
     // Clean up
     std::remove(test_path.c_str());
+}
+
+TEST_CASE("Full index serialization round-trip") {
+    // 1. Create a full in-memory index.
+    // Graph
+    auto source_graph = std::make_unique<piru::index::AlnGraph>();
+    piru::index::AlnNode n0;
+    n0.label = "node0";
+    n0.original_id = "node0";
+    n0.sequence = "GATTACA";
+    n0.chain_id = 1;
+    n0.linear_position = 100;
+    source_graph->addNode(n0);
+
+    piru::index::AlnNode n1;
+    n1.label = "node1";
+    n1.original_id = "node1";
+    n1.sequence = "CAT";
+    n1.chain_id = 1;
+    n1.linear_position = 107;
+    source_graph->addNode(n1);
+    
+    source_graph->addEdge({0, 1, 3});
+    piru::index::AdjListGraphStore source_graph_store(std::move(*source_graph));
+    
+    // Signals
+    std::vector<piru::signal::AlignmentQuantizedSignal> signals;
+    signals.emplace_back(piru::signal::AlignmentQuantizedSignal{
+        .kind = piru::signal::AlignmentQuantizationKind::kInt16,
+        .data = std::vector<int16_t>{1,2,3}
+    });
+    signals.emplace_back(piru::signal::AlignmentQuantizedSignal{
+        .kind = piru::signal::AlignmentQuantizationKind::kInt16,
+        .data = std::vector<int16_t>{4,5,6,7}
+    });
+    piru::index::VectorSignalStore source_signal_store(std::move(signals));
+
+    // Seeds
+    auto source_seed_store = std::make_unique<piru::index::HashSeedStore>();
+    source_seed_store->insert(123, {0, 10});
+    source_seed_store->set_extractor_name("kmer");
+    source_seed_store->set_params({{"k", "10"}});
+
+    // Metadata
+    piru::io::index::IndexMetadata source_metadata;
+    source_metadata.graph_flavor = 1;
+    source_metadata.graph_k = 15;
+    source_metadata.pore_k = 9;
+    
+    // 2. Create a temporary directory.
+    const std::string temp_dir = std::filesystem::temp_directory_path() / "piru_test_index";
+    std::filesystem::create_directory(temp_dir);
+
+    // 3. Serialize the full index.
+    piru::io::index::write_graph(temp_dir + "/piru_test_index.graph", source_graph_store, source_metadata);
+    piru::io::index::write_signals(temp_dir + "/piru_test_index.signals", source_signal_store, 1.0f, 0.0f);
+    piru::io::index::write_seeds(temp_dir + "/piru_test_index.seeds", *source_seed_store);
+
+    // 4. Use load_index to load the entire index.
+    auto loaded_index = piru::io::index::load_index(temp_dir);
+
+    // 5. Assert that the loaded index is valid.
+    REQUIRE(loaded_index.graph != nullptr);
+    REQUIRE(loaded_index.signals != nullptr);
+    REQUIRE(loaded_index.seeds != nullptr);
+    
+    CHECK(loaded_index.metadata.graph_k == 15);
+    CHECK(loaded_index.metadata.pore_k == 9);
+
+    CHECK(loaded_index.graph->nodeCount() == 2);
+    CHECK(loaded_index.signals->size() == 2);
+    CHECK(loaded_index.seeds->size() == 1);
+    
+    // Clean up
+    std::filesystem::remove_all(temp_dir);
 }

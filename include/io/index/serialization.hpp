@@ -57,4 +57,14 @@ void write_seeds(const std::string& path, const piru::index::SeedStore& store);
 // Reads a SeedStore from the specified file path.
 std::unique_ptr<piru::index::HashSeedStore> read_seeds(const std::string& path);
 
+struct LoadedIndex {
+    IndexMetadata metadata;
+    std::unique_ptr<piru::index::GraphStore> graph;
+    std::unique_ptr<piru::index::SignalStore> signals;
+    std::unique_ptr<piru::index::SeedStore> seeds;
+};
+
+// Loads a complete index from the specified directory path.
+LoadedIndex load_index(const std::string& index_dir);
+
 } // namespace piru::io::index

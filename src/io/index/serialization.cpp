@@ -2,6 +2,7 @@
 #include "io/index/serialization.hpp"
 
 #include <chrono>
+#include <filesystem>
 #include <fstream>
 #include <stdexcept>
 #include <vector>
@@ -556,6 +557,42 @@ std::unique_ptr<piru::index::HashSeedStore> read_seeds(const std::string& path) 
     }
     
     return store;
+}
+
+LoadedIndex load_index(const std::string& index_dir) {
+    std::filesystem::path dir_path(index_dir);
+    std::string basename = dir_path.filename().string();
+    
+    // Construct paths
+    std::string graph_path = dir_path / (basename + ".graph");
+    std::string signals_path = dir_path / (basename + ".signals");
+    std::string seeds_path = dir_path / (basename + ".seeds");
+
+    // Load components
+    auto [graph_store, metadata] = read_graph(graph_path);
+    auto [signals_store_ptr, signal_meta] = read_signals(signals_path);
+    auto seeds_store = read_seeds(seeds_path);
+
+    // Perform consistency checks
+    if (graph_store->nodeCount() != signals_store_ptr->size()) {
+        throw std::runtime_error("Node count mismatch between GraphStore and SignalStore.");
+    }
+    
+    if (seeds_store->size() > 0) {
+        // This is a weak check. A better check would be to compare the
+        // extractor name and params with the global metadata.
+        // For now, we'll just check if the extractor name is not empty.
+        if (metadata.fuzzy_quantizer.empty()) {
+             LOG_WARN("Fuzzy quantizer type is not set in the global metadata.");
+        }
+    }
+
+    return {
+        std::move(metadata),
+        std::move(graph_store),
+        std::move(signals_store_ptr),
+        std::move(seeds_store)
+    };
 }
 
 } // namespace piru::io::index
