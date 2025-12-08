@@ -1,0 +1,228 @@
+// SPDX-License-Identifier: MIT
+#include "io/index/serialization.hpp"
+
+#include <chrono>
+#include <fstream>
+#include <stdexcept>
+#include <vector>
+
+#include "version.hpp"
+#include "index/aln_graph.hpp"
+#include "util/logging.hpp"
+
+namespace piru::io::index {
+namespace {
+
+// Helper to write a plain old data (POD) type to a stream.
+template <typename T>
+void write_pod(std::ostream& out, const T& val) {
+    out.write(reinterpret_cast<const char*>(&val), sizeof(T));
+}
+
+// Helper to read a plain old data (POD) type from a stream.
+template <typename T>
+void read_pod(std::istream& in, T& val) {
+    in.read(reinterpret_cast<char*>(&val), sizeof(T));
+}
+
+// Helper to write a std::string to a stream (length-prefixed).
+void write_string(std::ostream& out, const std::string& s) {
+    uint32_t len = static_cast<uint32_t>(s.length());
+    write_pod(out, len);
+    out.write(s.c_str(), len);
+}
+
+// Helper to read a std::string from a stream (length-prefixed).
+std::string read_string(std::istream& in) {
+    uint32_t len = 0;
+    read_pod(in, len);
+    std::vector<char> buf(len);
+    in.read(buf.data(), len);
+    return std::string(buf.begin(), buf.end());
+}
+
+} // namespace
+
+void write_graph(const std::string& path,
+                 const piru::index::GraphStore& store,
+                 const IndexMetadata& metadata) {
+    // --- Backend detection ---
+    const auto* adj_store = dynamic_cast<const piru::index::AdjListGraphStore*>(&store);
+    if (!adj_store) {
+        throw std::runtime_error("Unsupported GraphStore backend type for serialization.");
+    }
+    const std::string backend_type = "adjlist";
+
+    std::ofstream out(path, std::ios::binary);
+    if (!out) {
+        throw std::runtime_error("Failed to open file for writing: " + path);
+    }
+
+    // --- Common Header ---
+    const char magic[8] = {'P', 'I', 'R', 'U', 'G', 'R', 'A', 'F'};
+    out.write(magic, 8);
+    write_pod<uint32_t>(out, 1000); // Format version 1.0
+
+    // Placeholder for header size, we'll come back and write it later.
+    const auto header_size_pos = out.tellp();
+    write_pod<uint32_t>(out, 0);
+
+    write_string(out, backend_type);
+
+    const auto metadata_start_pos = out.tellp();
+
+    // --- Global Index Metadata ---
+    write_pod<uint32_t>(out, piru::Version::kMajor);
+    write_pod<uint32_t>(out, piru::Version::kMinor);
+    write_pod<uint32_t>(out, piru::Version::kPatch);
+
+    const auto timestamp = std::chrono::system_clock::now();
+    const auto timestamp_since_epoch = std::chrono::duration_cast<std::chrono::seconds>(
+        timestamp.time_since_epoch()).count();
+    write_pod<uint64_t>(out, timestamp_since_epoch);
+
+    write_pod<uint32_t>(out, metadata.graph_flavor);
+    write_pod<uint32_t>(out, metadata.graph_k);
+    write_pod<uint32_t>(out, metadata.pore_k);
+    write_string(out, metadata.model_name);
+    write_string(out, metadata.fuzzy_quantizer);
+    write_string(out, metadata.align_quantizer);
+    write_string(out, metadata.source_path);
+
+    // --- Graph Metadata ---
+    const auto& graph = adj_store->graph();
+    write_pod<uint64_t>(out, graph.nodeCount());
+    write_pod<uint64_t>(out, graph.edgeCount());
+    write_pod<uint64_t>(out, 0); // Path count, not supported yet
+    write_pod<uint32_t>(out, 0); // Reserved
+    write_pod<uint32_t>(out, 0); // Reserved
+
+    // Now calculate and write the actual header size.
+    const auto data_start_pos = out.tellp();
+    const uint32_t header_size = static_cast<uint32_t>(data_start_pos);
+    out.seekp(header_size_pos);
+    write_pod<uint32_t>(out, header_size);
+    out.seekp(data_start_pos);
+
+    // --- Node Array ---
+    for (size_t i = 0; i < graph.nodeCount(); ++i) {
+        const auto& node = graph.node(i);
+        write_string(out, node.sequence);
+        write_pod<uint32_t>(out, node.chain_id.value_or(-1));
+        write_pod<int64_t>(out, node.linear_position.value_or(0));
+        write_string(out, node.label);
+    }
+
+    // --- Edge Array ---
+    for (const auto& edge : graph.edges()) {
+        write_pod<uint32_t>(out, edge.from);
+        write_pod<uint32_t>(out, edge.to);
+        write_pod<uint32_t>(out, edge.overlap_bases);
+    }
+
+    // --- Path Array ---
+    // Not implemented.
+}
+
+std::pair<std::unique_ptr<piru::index::AdjListGraphStore>, IndexMetadata>
+read_graph(const std::string& path) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in) {
+        throw std::runtime_error("Failed to open file for reading: " + path);
+    }
+
+    // --- Common Header ---
+    char magic[8];
+    in.read(magic, 8);
+    if (std::string(magic, 8) != "PIRUGRAF") {
+        throw std::runtime_error("Invalid magic number for .graph file.");
+    }
+
+    uint32_t format_version;
+    read_pod(in, format_version);
+    if (format_version > 1000) {
+        LOG_WARN("Attempting to read a .graph file with a newer version (" +
+                 std::to_string(format_version) + "). Compatibility is not guaranteed.");
+    }
+
+    uint32_t header_size;
+    read_pod(in, header_size);
+
+    std::string backend_type = read_string(in);
+    if (backend_type != "adjlist") {
+        throw std::runtime_error("Unsupported backend type for .graph file: " + backend_type);
+    }
+
+    // --- Global Index Metadata ---
+    IndexMetadata metadata;
+    read_pod(in, metadata.piru_version_major);
+    read_pod(in, metadata.piru_version_minor);
+    read_pod(in, metadata.piru_version_patch);
+    read_pod(in, metadata.build_timestamp);
+    read_pod(in, metadata.graph_flavor);
+    read_pod(in, metadata.graph_k);
+    read_pod(in, metadata.pore_k);
+    metadata.model_name = read_string(in);
+    metadata.fuzzy_quantizer = read_string(in);
+    metadata.align_quantizer = read_string(in);
+    metadata.source_path = read_string(in);
+
+    // --- Graph Metadata ---
+    uint64_t node_count, edge_count, path_count;
+    read_pod(in, node_count);
+    read_pod(in, edge_count);
+    read_pod(in, path_count);
+    in.seekg(8, std::ios_base::cur); // Skip reserved fields
+
+    if (static_cast<uint32_t>(in.tellg()) != header_size) {
+        throw std::runtime_error("Header size mismatch in .graph file.");
+    }
+
+    auto graph = std::make_unique<piru::index::AlnGraph>();
+    // --- Node Array ---
+    for (uint64_t i = 0; i < node_count; ++i) {
+        piru::index::AlnNode node;
+        node.sequence = read_string(in);
+        uint32_t chain_id_u32;
+        read_pod(in, chain_id_u32);
+        if (chain_id_u32 != static_cast<uint32_t>(-1)) {
+            node.chain_id = chain_id_u32;
+        }
+        int64_t linear_pos;
+        read_pod(in, linear_pos);
+        node.linear_position = linear_pos;
+        node.label = read_string(in);
+        graph->addNode(std::move(node));
+    }
+
+    // --- Edge Array ---
+    for (uint64_t i = 0; i < edge_count; ++i) {
+        piru::index::AlnEdge edge;
+        uint32_t from, to, overlap;
+        read_pod(in, from);
+        read_pod(in, to);
+        read_pod(in, overlap);
+        edge.from = from;
+        edge.to = to;
+        edge.overlap_bases = overlap;
+        graph->addEdge(edge);
+    }
+    
+    // --- Path Array ---
+    // Not implemented in writer, but need to handle skipping if present.
+    if(path_count > 0) {
+        LOG_WARN("Path array found in .graph file but is not supported. Skipping.");
+        // This is a placeholder for skipping logic. For now, we assume it's not there.
+    }
+
+    // Verify that we have reached the end of the file.
+    if (in.peek() != EOF) {
+        throw std::runtime_error("Trailing data found in .graph file after expected content.");
+    }
+
+    auto store = std::make_unique<piru::index::AdjListGraphStore>(std::move(*graph));
+
+    return {std::move(store), std::move(metadata)};
+}
+
+} // namespace piru::io::index

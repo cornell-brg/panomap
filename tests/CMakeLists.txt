@@ -51,6 +51,7 @@ if(DOCTEST_AVAILABLE)
         test_signal_seed_extractors.cpp
         test_mapping_batch.cpp
         test_index_pipeline.cpp
+        test_serialization.cpp
     )
 
     target_include_directories(piru_tests PRIVATE
@@ -74,6 +75,7 @@ if(DOCTEST_AVAILABLE)
         ${CMAKE_SOURCE_DIR}/src/io/results/alignment_conversion.cpp
         ${CMAKE_SOURCE_DIR}/src/io/results/result_writer_factory.cpp
         ${CMAKE_SOURCE_DIR}/src/io/models/builtin_models.cpp
+        ${CMAKE_SOURCE_DIR}/src/io/index/serialization.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/event_detectors/event_detector_factory.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/event_detectors/passthrough_event_detector.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/event_detectors/scrappie_event_detector.cpp
