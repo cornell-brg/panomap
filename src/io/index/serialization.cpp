@@ -9,6 +9,7 @@
 #include "version.hpp"
 #include "index/aln_graph.hpp"
 #include "index/signal_store.hpp"
+#include "index/seed_store.hpp"
 #include "util/logging.hpp"
 
 namespace piru::io::index {
@@ -380,6 +381,170 @@ read_signals(const std::string& path) {
 
     auto store = std::make_unique<piru::index::VectorSignalStore>(std::move(signals));
     return {std::move(store), metadata};
+}
+
+void write_seeds(const std::string& path, const piru::index::SeedStore& store) {
+    const auto* hash_store = dynamic_cast<const piru::index::HashSeedStore*>(&store);
+    if (!hash_store) {
+        throw std::runtime_error("Unsupported SeedStore backend type for serialization.");
+    }
+
+    std::ofstream out(path, std::ios::binary);
+    if (!out) {
+        throw std::runtime_error("Failed to open file for writing: " + path);
+    }
+
+    // --- Common Header ---
+    const char magic[8] = {'P', 'I', 'R', 'U', 'S', 'E', 'E', 'D'};
+    out.write(magic, 8);
+    write_pod<uint32_t>(out, 1000); // Format version 1.0
+
+    const auto header_size_pos = out.tellp();
+    write_pod<uint32_t>(out, 0); // Placeholder for header size
+    
+    write_string(out, "hash");
+
+    // --- Seed Metadata ---
+    const auto& data = hash_store->data();
+    uint64_t total_hit_count = 0;
+    for (const auto& pair : data) {
+        total_hit_count += pair.second.size();
+    }
+
+    write_pod<uint64_t>(out, data.size());
+    write_pod<uint64_t>(out, total_hit_count);
+    write_pod<uint32_t>(out, hash_store->seed_k());
+    write_pod<uint32_t>(out, hash_store->seed_stride());
+    write_pod<uint32_t>(out, hash_store->seed_qbits());
+    write_pod<uint32_t>(out, hash_store->max_hash_frequency());
+    write_pod<uint64_t>(out, hash_store->frequency_threshold());
+    write_pod<double>(out, hash_store->filter_fraction());
+
+    const uint32_t header_size = static_cast<uint32_t>(out.tellp());
+    out.seekp(header_size_pos);
+    write_pod<uint32_t>(out, header_size);
+    out.seekp(header_size);
+    
+    // --- Hash Entry Array & Hit List Array ---
+    std::vector<uint64_t> sorted_hashes;
+    sorted_hashes.reserve(data.size());
+    for(const auto& pair : data) {
+        sorted_hashes.push_back(pair.first);
+    }
+    std::sort(sorted_hashes.begin(), sorted_hashes.end());
+    
+    const auto hash_entry_start = out.tellp();
+    const auto hit_list_start = hash_entry_start + std::streampos(sorted_hashes.size() * (sizeof(uint64_t) + sizeof(uint64_t) + sizeof(uint32_t)));
+    
+    uint64_t current_hit_offset = 0;
+    for(const auto& hash : sorted_hashes) {
+        const auto& hits = data.at(hash);
+        write_pod<uint64_t>(out, hash);
+        write_pod<uint64_t>(out, current_hit_offset);
+        write_pod<uint32_t>(out, hits.size());
+        current_hit_offset += hits.size() * (sizeof(uint32_t) + sizeof(uint32_t));
+    }
+
+    out.seekp(hit_list_start);
+    for(const auto& hash : sorted_hashes) {
+        const auto& hits = data.at(hash);
+        for(const auto& hit : hits) {
+            write_pod<uint32_t>(out, static_cast<uint32_t>(hit.node_id));
+            write_pod<uint32_t>(out, static_cast<uint32_t>(hit.offset));
+        }
+    }
+}
+
+std::unique_ptr<piru::index::HashSeedStore> read_seeds(const std::string& path) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in) {
+        throw std::runtime_error("Failed to open file for reading: " + path);
+    }
+
+    // --- Common Header ---
+    char magic[8];
+    in.read(magic, 8);
+    if (std::string(magic, 8) != "PIRUSEED") {
+        throw std::runtime_error("Invalid magic number for .seeds file.");
+    }
+
+    uint32_t format_version;
+    read_pod(in, format_version);
+    if (format_version > 1000) {
+        LOG_WARN("Attempting to read a .seeds file with a newer version (" +
+                 std::to_string(format_version) + "). Compatibility is not guaranteed.");
+    }
+    
+    uint32_t header_size;
+    read_pod(in, header_size);
+    std::string backend_type = read_string(in);
+    if (backend_type != "hash") {
+        throw std::runtime_error("Unsupported backend type for .seeds file: " + backend_type);
+    }
+
+    // --- Seed Metadata ---
+    uint64_t unique_hash_count, total_hit_count;
+    uint32_t seed_k, seed_stride, seed_qbits;
+    uint32_t max_hash_frequency;
+    uint64_t frequency_threshold;
+    double filter_fraction;
+
+    read_pod(in, unique_hash_count);
+    read_pod(in, total_hit_count);
+    read_pod(in, seed_k);
+    read_pod(in, seed_stride);
+    read_pod(in, seed_qbits);
+    read_pod(in, max_hash_frequency);
+    read_pod(in, frequency_threshold);
+    read_pod(in, filter_fraction);
+
+    if (static_cast<uint32_t>(in.tellg()) != header_size) {
+        throw std::runtime_error("Header size mismatch in .seeds file.");
+    }
+    
+    auto store = std::make_unique<piru::index::HashSeedStore>();
+    store->set_seed_k(seed_k);
+    store->set_seed_stride(seed_stride);
+    store->set_seed_qbits(seed_qbits);
+    store->set_max_hash_frequency(max_hash_frequency);
+    store->set_frequency_threshold(frequency_threshold);
+    store->set_filter_fraction(filter_fraction);
+    
+    auto& data = store->mutableData();
+
+    struct HashEntry {
+        uint64_t hash;
+        uint64_t offset;
+        uint32_t count;
+    };
+    std::vector<HashEntry> hash_entries(unique_hash_count);
+    for(uint64_t i=0; i < unique_hash_count; ++i) {
+        read_pod(in, hash_entries[i].hash);
+        read_pod(in, hash_entries[i].offset);
+        read_pod(in, hash_entries[i].count);
+    }
+
+    const auto hit_list_start = in.tellg();
+
+    for(const auto& entry : hash_entries) {
+        in.seekg(hit_list_start + std::streamoff(entry.offset));
+        auto& hits = data[entry.hash];
+        hits.reserve(entry.count);
+        for(uint32_t j=0; j < entry.count; ++j) {
+            uint32_t node_id, offset;
+            read_pod(in, node_id);
+            read_pod(in, offset);
+            hits.push_back({node_id, offset});
+        }
+    }
+    
+    in.seekg(hit_list_start + std::streamoff(total_hit_count * (sizeof(uint32_t) + sizeof(uint32_t))));
+    
+    if (in.peek() != EOF) {
+        throw std::runtime_error("Trailing data found in .seeds file after expected content.");
+    }
+    
+    return store;
 }
 
 } // namespace piru::io::index

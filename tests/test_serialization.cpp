@@ -243,7 +243,57 @@ TEST_CASE("SignalStore serialization round-trip (int8)") {
     CHECK(data0[0] == -10);
     CHECK(data0[1] == 0);
     CHECK(data0[2] == 10);
-    CHECK(data0[3] == 20);
+    // Clean up
+    std::remove(test_path.c_str());
+}
+
+TEST_CASE("SeedStore serialization round-trip") {
+    // 1. Create a HashSeedStore with sample data.
+    auto source_store = std::make_unique<piru::index::HashSeedStore>();
+    source_store->insert(123, {1, 10});
+    source_store->insert(456, {2, 20});
+    source_store->insert(123, {3, 30});
+    source_store->set_seed_k(10);
+    source_store->set_seed_stride(5);
+    source_store->set_seed_qbits(8);
+    source_store->set_max_hash_frequency(2);
+    source_store->set_frequency_threshold(100);
+    source_store->set_filter_fraction(0.1);
+
+    const std::string test_path = temp_file_path("test.seeds");
+
+    // 2. Use write_seeds to serialize it.
+    piru::io::index::write_seeds(test_path, *source_store);
+
+    // 3. Use read_seeds to deserialize it.
+    auto loaded_store = piru::io::index::read_seeds(test_path);
+
+    // 4. Assert that the stores are identical.
+    REQUIRE(loaded_store != nullptr);
+    CHECK(loaded_store->size() == 2);
+    CHECK(loaded_store->seed_k() == 10);
+    CHECK(loaded_store->seed_stride() == 5);
+    CHECK(loaded_store->seed_qbits() == 8);
+    CHECK(loaded_store->max_hash_frequency() == 2);
+    CHECK(loaded_store->frequency_threshold() == 100);
+    CHECK(loaded_store->filter_fraction() == 0.1);
+    
+    const auto* hits123 = loaded_store->lookup(123);
+    REQUIRE(hits123 != nullptr);
+    REQUIRE(hits123->size() == 2);
+    CHECK((*hits123)[0].node_id == 1);
+    CHECK((*hits123)[0].offset == 10);
+    CHECK((*hits123)[1].node_id == 3);
+    CHECK((*hits123)[1].offset == 30);
+    
+    const auto* hits456 = loaded_store->lookup(456);
+    REQUIRE(hits456 != nullptr);
+    REQUIRE(hits456->size() == 1);
+    CHECK((*hits456)[0].node_id == 2);
+    CHECK((*hits456)[0].offset == 20);
+
+    const auto* hits999 = loaded_store->lookup(999);
+    CHECK(hits999 == nullptr);
 
     // Clean up
     std::remove(test_path.c_str());

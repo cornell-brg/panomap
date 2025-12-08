@@ -9,6 +9,7 @@
 
 #include "index/graph_store.hpp"
 #include "index/signal_store.hpp"
+#include "index/seed_store.hpp"
 
 namespace piru::io::index {
 
@@ -49,5 +50,11 @@ void write_signals(const std::string& path, const piru::index::SignalStore& stor
 // Reads a SignalStore from the specified file path.
 std::pair<std::unique_ptr<piru::index::VectorSignalStore>, SignalMetadata>
 read_signals(const std::string& path);
+
+// Writes the SeedStore to the specified file path.
+void write_seeds(const std::string& path, const piru::index::SeedStore& store);
+
+// Reads a SeedStore from the specified file path.
+std::unique_ptr<piru::index::HashSeedStore> read_seeds(const std::string& path);
 
 } // namespace piru::io::index
