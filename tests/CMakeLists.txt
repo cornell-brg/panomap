@@ -89,6 +89,7 @@ if(DOCTEST_AVAILABLE)
         ${CMAKE_SOURCE_DIR}/src/signal/alignment_quantizers/int_alignment_quantizer.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/seed_extractors/seed_extractor_factory.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/seed_extractors/kmer_seed_extractor.cpp
+        ${CMAKE_SOURCE_DIR}/src/index/aln_graph.cpp
         ${CMAKE_SOURCE_DIR}/src/index/squigglize.cpp
         ${CMAKE_SOURCE_DIR}/src/index/seed_builder.cpp
         ${CMAKE_SOURCE_DIR}/src/index/transform_dbg.cpp

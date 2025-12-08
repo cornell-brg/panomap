@@ -54,7 +54,7 @@ SuperbubbleResult chainSuperbubbles(const AlnGraph& graph, const SccResult& scc,
                                      const TipFoldingResult& tip_result);
 
 // Assign chain IDs based on union-find representatives.
-std::vector<std::size_t> assignChainIds(const UnionFind& uf);
+std::vector<std::size_t> assignChainIds(UnionFind uf);
 
 // Assign approximate linear positions per chain using BFS/DFS propagation.
 std::vector<std::int64_t> assignLinearPositions(const AlnGraph& graph,
