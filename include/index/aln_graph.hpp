@@ -6,9 +6,25 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace piru::index {
+
+struct AlnPathStep {
+    std::string node_id;
+    bool is_reverse{false}; // Indicates if this step traverses the node in reverse
+};
+
+struct AlnPath {
+    std::string name;
+    std::vector<AlnPathStep> steps;
+    // Overlap length in bases for each step, if explicitly tracked (e.g., from ImportedPath).
+    // The size would be steps.size() - 1 for overlaps between steps.
+    std::vector<std::size_t> overlaps;
+};
+
+// ... (rest of the file)
 
 struct AlnNode {
     std::size_t id{0};                // Sequential ID within the graph.
@@ -62,6 +78,10 @@ public:
 
     const std::vector<AlnEdge>& edges() const { return edges_; }
 
+    void addPath(AlnPath path) { paths_.push_back(std::move(path)); } // Fixed std::std::move
+    const std::vector<AlnPath>& paths() const { return paths_; }
+    std::size_t pathCount() const { return paths_.size(); }
+
     // Basic consistency checks: edge bounds, adjacency symmetry, optional metadata presence.
     bool validate() const;
 
@@ -70,6 +90,7 @@ private:
     std::vector<AlnEdge> edges_;
     std::vector<std::vector<std::size_t>> out_edges_;
     std::vector<std::vector<std::size_t>> in_edges_;
+    std::vector<AlnPath> paths_;
 };
 
-}  // namespace piru::index
+} // namespace piru::index

@@ -41,6 +41,7 @@ if(DOCTEST_AVAILABLE)
         test_metrics.cpp
         test_models.cpp
         test_graphs.cpp
+        test_aln_graph.cpp
         test_results.cpp
         test_reads.cpp
         test_signal_mocks.cpp

@@ -108,14 +108,14 @@ GraphStore SignalStore SeedStore
        (on disk)
 ```
 
-**Current status:** Graph loading and model validation are implemented. Graph transformation, pseudo-linearization, squigglization, and index builder are planned.
+**Current status:** Graph loading and model validation are implemented. DBG graph transformation, pseudo-linearization, squigglization, index building, and on-disk serialization are implemented. VG graph transformation is planned.
 
 **Component status:**
 - [x] GraphLoader (GFA/vg)
 - [ ] Transform (ImportedGraph → AlnGraph)
-- [ ] Pseudo-Linearize (chain IDs, linear coords)
-- [ ] Squigglize & Index Builder
-- [ ] GraphStore / SignalStore / SeedStore backends + serialization
+- [x] Pseudo-Linearize (chain IDs, linear coords)
+- [x] Squigglize & Index Builder
+- [x] GraphStore / SignalStore / SeedStore backends + serialization
 
 **Pipeline stages:**
 1. **GraphLoader**: Parses GFA/vg files into ImportedGraph (bidirectional graph with nodes, edges, paths)
@@ -210,7 +210,7 @@ GraphStore SignalStore SeedStore
  └──────────────┘
 ```
 
-**Current status:** Read parsing is implemented. Index loading, signal preprocessing, alignment core, and result writing are planned.
+**Current status:** Read parsing and index loading are implemented. Signal preprocessing, alignment core, and result writing are planned.
 
 **Component status:**
 - [x] Read parse (ReadProvider)
@@ -219,6 +219,7 @@ GraphStore SignalStore SeedStore
 - [x] Fuzzy quantization (seeding)
 - [x] Alignment quantization (scoring)
 - [x] Seed extraction
+- [x] Index Loader
 - [ ] SeedStore lookup
 - [ ] Clustering/chaining
 - [ ] Alignment scoring
@@ -379,19 +380,10 @@ GraphStore SignalStore SeedStore
 
 ## Future/Roadmap (selected)
 - **Index**:
-  - Implement graph transformation (ImportedGraph → AlnGraph: directional, cleaned)
-  - Implement pseudo-linearization (AlnGraph → AlnGraph with chain IDs + linear coordinates):
-    - Superbubble detection algorithm
-    - Chain assignment and linear coordinate generation
-    - Handle nodes that don't belong to chains
-  - Implement GraphStore interface + backends (adjacency list, CSR) with chain ID and coordinate storage
-  - Implement SignalStore interface + backends (float32, int16, int8, custom quantization)
-  - Implement squigglization (AlnGraph + pore model → SignalStore)
-  - Implement SeedStore interface + backends:
-    - Seeding strategies (k-mer, minimizer)
-    - Seed quantization backends (rawhash2-style, other binning schemes)
+  - Implement CSR backend for GraphStore.
+  - Implement advanced quantization for SignalStore (custom fixed-point, adaptive).
+  - Implement minimizer-based seeding strategy for SeedStore.
 - **Map**:
-  - Implement index loader (GraphStore + SignalStore + SeedStore)
   - Implement alignment core (AlignSingle):
     - Seed lookup via SeedStore
     - Seed clustering by chain ID

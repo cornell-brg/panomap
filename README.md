@@ -33,6 +33,22 @@ cmake .. -DBUILD_TESTING=ON
 make check
 ```
 
+### Testing CLI Commands
+
+To manually test the `piru index` and `piru map` commands:
+
+1.  **Build the `piru` executable**: If you haven't already, ensure the project is built by running `make -j $(nproc)` from your `build` directory.
+2.  **Create an index**: Use the `piru index` command with a test graph to generate an index.
+    ```bash
+    ./piru index --graph-k 15 --output ./my_test_index ../piru/tests/data/graphs/sample.gfa
+    ```
+    This command will create a directory named `./my_test_index` containing the generated `.graph`, `.signals`, and `.seeds` files.
+3.  **Run `piru map` with the new index**: Use the `piru map` command, pointing it to the index you just created and some sample reads.
+    ```bash
+    ./piru map --index ./my_test_index ../piru/tests/data/reads/sample.blow5
+    ```
+    If successful, you should see an informational message indicating that the index was loaded, for example: `[INFO] loading index from ./my_test_index`.
+
 **CMake options (all default to ON):**
 - `PIRU_USE_TBB`: enable oneTBB backend for parallelism
 - `PIRU_FETCH_TBB`: fetch oneTBB if not found on system
@@ -51,11 +67,11 @@ cmake .. -DPIRU_FETCH_TBB=OFF
 ### Basic Mapping Example
 
 ```bash
-# Load and inspect a graph with a pore model
-./build/piru index --graph=vg --model=r10.4 --profile reference.vg
+# 1. Create an index
+./build/piru index --graph-k 15 --model=r10.4 --output ./my_index piru/tests/data/graphs/sample.gfa
 
-# List reads from a slow5/blow5 file
-./build/piru map --profile reads.blow5
+# 2. Map reads using the created index
+./build/piru map --index ./my_index piru/tests/data/reads/sample.blow5
 
 # Show help for any command
 ./build/piru index --help
