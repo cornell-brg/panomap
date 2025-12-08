@@ -150,8 +150,12 @@ int handle_index(const std::vector<std::string>& args) {
         output_dir = parsed.values.at("output");
     }
 
-    LOG_INFO("indexing with graph_k=" + std::to_string(graph_k) + ", pore_k=" +
-             std::to_string(pore_k) + ", seed_k=" + std::to_string(seed_k));
+    LOG_INFO("input: " + graph_path + " (type=" + graph_flavor + ", graph_k=" +
+             std::to_string(graph_k) + ")");
+    LOG_INFO("model: " + model->name() + " (k=" + std::to_string(pore_k) + ")");
+    LOG_INFO("seeds: k=" + std::to_string(seed_k) + ", stride=" + std::to_string(seed_stride) +
+             ", filter=" + std::to_string(seed_filter));
+    LOG_INFO("output: " + output_dir);
 
     // -------------------------------------------------------------------------
     // Stage 1: Graph Transformation (ImportedGraph -> AlnGraph)

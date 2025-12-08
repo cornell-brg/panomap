@@ -21,8 +21,16 @@ std::vector<::option> build_longopts(const std::vector<Option>& opts) {
     longs.reserve(opts.size() + 1);
     for (const auto& o : opts) {
         if (o.long_opt.empty()) continue;
+        // For long-only options (short_opt == 0), getopt_long returns 0,
+        // so we use a unique non-zero value to distinguish them.
+        // We'll use negative indices starting from -1 for long-only options.
+        int val = o.short_opt;
+        if (val == 0) {
+            // Assign unique negative value based on position in vector
+            val = -1 - static_cast<int>(&o - opts.data());
+        }
         longs.push_back({o.long_opt.c_str(), o.requires_arg ? required_argument : no_argument,
-                         nullptr, o.short_opt});
+                         nullptr, val});
     }
     longs.push_back({nullptr, 0, nullptr, 0});
     return longs;
@@ -55,8 +63,25 @@ bool parse_args(const std::vector<std::string>& args, const ParseConfig& config,
             if (config.on_error) config.on_error("Unknown or invalid option");
             return false;
         }
-        auto it = std::find_if(config.options.begin(), config.options.end(),
-                               [&](const Option& o) { return o.short_opt == c; });
+
+        // Find the matching option
+        std::vector<Option>::const_iterator it;
+        if (c < 0) {
+            // Negative value means this is a long-only option
+            // Decode the index: c = -1 - index
+            int index = -1 - c;
+            if (index >= 0 && index < static_cast<int>(config.options.size())) {
+                it = config.options.begin() + index;
+            } else {
+                if (config.on_error) config.on_error("Internal error: invalid option index");
+                return false;
+            }
+        } else {
+            // Regular option with short name
+            it = std::find_if(config.options.begin(), config.options.end(),
+                              [&](const Option& o) { return o.short_opt == c; });
+        }
+
         if (it == config.options.end()) {
             if (config.on_error) config.on_error("Unknown option");
             return false;
