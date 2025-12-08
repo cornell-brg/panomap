@@ -5,8 +5,10 @@
 
 #include <string>
 #include <memory>
+#include <utility>
 
 #include "index/graph_store.hpp"
+#include "index/signal_store.hpp"
 
 namespace piru::io::index {
 
@@ -34,5 +36,18 @@ void write_graph(const std::string& path,
 // Returns the loaded graph store and the global metadata read from the file.
 std::pair<std::unique_ptr<piru::index::AdjListGraphStore>, IndexMetadata>
 read_graph(const std::string& path);
+
+struct SignalMetadata {
+    uint32_t quantization_bits{0};
+    float scale{1.0f};
+    float offset{0.0f};
+};
+
+// Writes the SignalStore to the specified file path.
+void write_signals(const std::string& path, const piru::index::SignalStore& store, float scale, float offset);
+
+// Reads a SignalStore from the specified file path.
+std::pair<std::unique_ptr<piru::index::VectorSignalStore>, SignalMetadata>
+read_signals(const std::string& path);
 
 } // namespace piru::io::index

@@ -8,6 +8,7 @@
 
 #include "version.hpp"
 #include "index/aln_graph.hpp"
+#include "index/signal_store.hpp"
 #include "util/logging.hpp"
 
 namespace piru::io::index {
@@ -223,6 +224,162 @@ read_graph(const std::string& path) {
     auto store = std::make_unique<piru::index::AdjListGraphStore>(std::move(*graph));
 
     return {std::move(store), std::move(metadata)};
+}
+
+
+void write_signals(const std::string& path, const piru::index::SignalStore& store, float scale, float offset) {
+    // --- Backend detection ---
+    const auto* vec_store = dynamic_cast<const piru::index::VectorSignalStore*>(&store);
+    if (!vec_store) {
+        throw std::runtime_error("Unsupported SignalStore backend type for serialization.");
+    }
+
+    const auto& signals = vec_store->signals();
+    std::string backend_type = "float32"; // Default
+    uint32_t quantization_bits = 32;
+
+    if (!signals.empty()) {
+        const auto first_kind = signals[0].kind;
+        if (first_kind == piru::signal::AlignmentQuantizationKind::kInt16) {
+            backend_type = "int16";
+            quantization_bits = 16;
+        } else if (first_kind == piru::signal::AlignmentQuantizationKind::kInt8) {
+            backend_type = "int8";
+            quantization_bits = 8;
+        } else if (first_kind != piru::signal::AlignmentQuantizationKind::kFloat32) {
+             throw std::runtime_error("Unsupported signal quantization kind for serialization.");
+        }
+        
+        // Validate that all signals have the same kind.
+        for(size_t i = 1; i < signals.size(); ++i) {
+            if (signals[i].kind != first_kind) {
+                throw std::runtime_error("Inconsistent signal kinds in SignalStore.");
+            }
+        }
+    }
+    
+    std::ofstream out(path, std::ios::binary);
+    if (!out) {
+        throw std::runtime_error("Failed to open file for writing: " + path);
+    }
+
+    // --- Common Header ---
+    const char magic[8] = {'P', 'I', 'R', 'U', 'S', 'I', 'G', 'S'};
+    out.write(magic, 8);
+    write_pod<uint32_t>(out, 1000); // Format version 1.0
+
+    const auto header_size_pos = out.tellp();
+    write_pod<uint32_t>(out, 0); // Placeholder for header size
+    
+    write_string(out, backend_type);
+
+    // --- Signal Metadata ---
+    write_pod<uint64_t>(out, signals.size());
+    write_pod<uint32_t>(out, quantization_bits);
+    write_pod<float>(out, scale);
+    write_pod<float>(out, offset);
+    write_pod<uint32_t>(out, 0);  // Reserved
+
+    const uint32_t header_size = static_cast<uint32_t>(out.tellp());
+    out.seekp(header_size_pos);
+    write_pod<uint32_t>(out, header_size);
+    out.seekp(header_size);
+
+    // --- Signal Array ---
+    for (const auto& signal : signals) {
+        std::visit([&out](const auto& data_vec) {
+            using T = typename std::decay_t<decltype(data_vec)>::value_type;
+            uint32_t sample_count = static_cast<uint32_t>(data_vec.size());
+            write_pod(out, sample_count);
+            for(const auto& sample : data_vec) {
+                write_pod<T>(out, sample);
+            }
+        }, signal.data);
+    }
+}
+
+std::pair<std::unique_ptr<piru::index::VectorSignalStore>, SignalMetadata>
+read_signals(const std::string& path) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in) {
+        throw std::runtime_error("Failed to open file for reading: " + path);
+    }
+
+    // --- Common Header ---
+    char magic[8];
+    in.read(magic, 8);
+    if (std::string(magic, 8) != "PIRUSIGS") {
+        throw std::runtime_error("Invalid magic number for .signals file.");
+    }
+
+    uint32_t format_version;
+    read_pod(in, format_version);
+    if (format_version > 1000) {
+        LOG_WARN("Attempting to read a .signals file with a newer version (" +
+                 std::to_string(format_version) + "). Compatibility is not guaranteed.");
+    }
+
+    uint32_t header_size;
+    read_pod(in, header_size);
+    
+    std::string backend_type = read_string(in);
+
+    // --- Signal Metadata ---
+    SignalMetadata metadata;
+    uint64_t node_count;
+    read_pod(in, node_count);
+    read_pod(in, metadata.quantization_bits);
+    read_pod(in, metadata.scale);
+    read_pod(in, metadata.offset);
+    in.seekg(4, std::ios_base::cur); // Skip reserved
+
+    if (static_cast<uint32_t>(in.tellg()) != header_size) {
+        throw std::runtime_error("Header size mismatch in .signals file.");
+    }
+
+    auto signals = std::vector<piru::signal::AlignmentQuantizedSignal>();
+    signals.reserve(node_count);
+
+    // --- Signal Array ---
+    for (uint64_t i = 0; i < node_count; ++i) {
+        uint32_t sample_count;
+        read_pod(in, sample_count);
+        piru::signal::AlignmentQuantizedSignal sig;
+
+        if (backend_type == "float32") {
+            sig.kind = piru::signal::AlignmentQuantizationKind::kFloat32;
+            std::vector<float> data(sample_count);
+            for(uint32_t j=0; j<sample_count; ++j) {
+                read_pod(in, data[j]);
+            }
+            sig.data = std::move(data);
+        } else if (backend_type == "int16") {
+            sig.kind = piru::signal::AlignmentQuantizationKind::kInt16;
+            std::vector<int16_t> data(sample_count);
+            for(uint32_t j=0; j<sample_count; ++j) {
+                read_pod(in, data[j]);
+            }
+            sig.data = std::move(data);
+        } else if (backend_type == "int8") {
+            sig.kind = piru::signal::AlignmentQuantizationKind::kInt8;
+            std::vector<int8_t> data(sample_count);
+            for(uint32_t j=0; j<sample_count; ++j) {
+                read_pod(in, data[j]);
+            }
+            sig.data = std::move(data);
+        } else {
+            throw std::runtime_error("Unsupported backend type for .signals file: " + backend_type);
+        }
+        signals.push_back(std::move(sig));
+    }
+    
+    // Verify that we have reached the end of the file.
+    if (in.peek() != EOF) {
+        throw std::runtime_error("Trailing data found in .signals file after expected content.");
+    }
+
+    auto store = std::make_unique<piru::index::VectorSignalStore>(std::move(signals));
+    return {std::move(store), metadata};
 }
 
 } // namespace piru::io::index

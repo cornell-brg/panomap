@@ -122,3 +122,129 @@ TEST_CASE("GraphStore serialization round-trip") {
     // Clean up the temporary file
     std::remove(test_path.c_str());
 }
+
+TEST_CASE("SignalStore serialization round-trip (int16)") {
+    // 1. Create a VectorSignalStore with int16 data.
+    std::vector<piru::signal::AlignmentQuantizedSignal> signals;
+    signals.emplace_back(piru::signal::AlignmentQuantizedSignal{
+        .kind = piru::signal::AlignmentQuantizationKind::kInt16,
+        .data = std::vector<int16_t>{100, 101, 102}
+    });
+    signals.emplace_back(piru::signal::AlignmentQuantizedSignal{
+        .kind = piru::signal::AlignmentQuantizationKind::kInt16,
+        .data = std::vector<int16_t>{-50, 0, 50, 100}
+    });
+    piru::index::VectorSignalStore source_store(std::move(signals));
+    
+    const std::string test_path = temp_file_path("test_int16.signals");
+
+    // 2. Use write_signals to serialize the store.
+    const float test_scale = 0.5f;
+    const float test_offset = 50.0f;
+    piru::io::index::write_signals(test_path, source_store, test_scale, test_offset);
+
+    // 3. Use read_signals to deserialize it back.
+    auto [loaded_store, loaded_metadata] = piru::io::index::read_signals(test_path);
+
+    // 4. Assert that the deserialized store and metadata are identical.
+    REQUIRE(loaded_store != nullptr);
+    CHECK(loaded_metadata.quantization_bits == 16);
+    CHECK(loaded_metadata.scale == test_scale);
+    CHECK(loaded_metadata.offset == test_offset);
+    REQUIRE(loaded_store->size() == 2);
+
+    const auto* sig0 = loaded_store->get(0);
+    REQUIRE(sig0 != nullptr);
+    CHECK(sig0->kind == piru::signal::AlignmentQuantizationKind::kInt16);
+    const auto& data0 = std::get<std::vector<int16_t>>(sig0->data);
+    CHECK(data0.size() == 3);
+    CHECK(data0[0] == 100);
+    CHECK(data0[1] == 101);
+    CHECK(data0[2] == 102);
+
+    const auto* sig1 = loaded_store->get(1);
+    REQUIRE(sig1 != nullptr);
+    CHECK(sig1->kind == piru::signal::AlignmentQuantizationKind::kInt16);
+    const auto& data1 = std::get<std::vector<int16_t>>(sig1->data);
+    CHECK(data1.size() == 4);
+    CHECK(data1[0] == -50);
+    CHECK(data1[1] == 0);
+    CHECK(data1[2] == 50);
+    CHECK(data1[3] == 100);
+
+    // Clean up
+    std::remove(test_path.c_str());
+}
+
+TEST_CASE("SignalStore serialization round-trip (float32)") {
+    // 1. Create a VectorSignalStore with float32 data.
+    std::vector<piru::signal::AlignmentQuantizedSignal> signals;
+    signals.emplace_back(piru::signal::AlignmentQuantizedSignal{
+        .kind = piru::signal::AlignmentQuantizationKind::kFloat32,
+        .data = std::vector<float>{100.5f, 101.25f, 102.0f}
+    });
+    piru::index::VectorSignalStore source_store(std::move(signals));
+
+    const std::string test_path = temp_file_path("test_float32.signals");
+
+    // 2. Use write_signals to serialize the store.
+    piru::io::index::write_signals(test_path, source_store, 1.0f, 0.0f);
+
+    // 3. Use read_signals to deserialize it back.
+    auto [loaded_store, loaded_metadata] = piru::io::index::read_signals(test_path);
+
+    // 4. Assert that the deserialized store is identical.
+    REQUIRE(loaded_store != nullptr);
+    CHECK(loaded_metadata.quantization_bits == 32);
+    CHECK(loaded_metadata.scale == 1.0f);
+    CHECK(loaded_metadata.offset == 0.0f);
+    REQUIRE(loaded_store->size() == 1);
+
+    const auto* sig0 = loaded_store->get(0);
+    REQUIRE(sig0 != nullptr);
+    CHECK(sig0->kind == piru::signal::AlignmentQuantizationKind::kFloat32);
+    const auto& data0 = std::get<std::vector<float>>(sig0->data);
+    CHECK(data0.size() == 3);
+    CHECK(data0[0] == 100.5f);
+    CHECK(data0[1] == 101.25f);
+    CHECK(data0[2] == 102.0f);
+
+    // Clean up
+    std::remove(test_path.c_str());
+}
+
+TEST_CASE("SignalStore serialization round-trip (int8)") {
+    // 1. Create a VectorSignalStore with int8 data.
+    std::vector<piru::signal::AlignmentQuantizedSignal> signals;
+    signals.emplace_back(piru::signal::AlignmentQuantizedSignal{
+        .kind = piru::signal::AlignmentQuantizationKind::kInt8,
+        .data = std::vector<int8_t>{-10, 0, 10, 20}
+    });
+    piru::index::VectorSignalStore source_store(std::move(signals));
+
+    const std::string test_path = temp_file_path("test_int8.signals");
+
+    // 2. Use write_signals to serialize the store.
+    piru::io::index::write_signals(test_path, source_store, 1.0f, 0.0f);
+
+    // 3. Use read_signals to deserialize it back.
+    auto [loaded_store, loaded_metadata] = piru::io::index::read_signals(test_path);
+
+    // 4. Assert that the deserialized store is identical.
+    REQUIRE(loaded_store != nullptr);
+    REQUIRE(loaded_store->size() == 1);
+    CHECK(loaded_metadata.quantization_bits == 8);
+
+    const auto* sig0 = loaded_store->get(0);
+    REQUIRE(sig0 != nullptr);
+    CHECK(sig0->kind == piru::signal::AlignmentQuantizationKind::kInt8);
+    const auto& data0 = std::get<std::vector<int8_t>>(sig0->data);
+    CHECK(data0.size() == 4);
+    CHECK(data0[0] == -10);
+    CHECK(data0[1] == 0);
+    CHECK(data0[2] == 10);
+    CHECK(data0[3] == 20);
+
+    // Clean up
+    std::remove(test_path.c_str());
+}

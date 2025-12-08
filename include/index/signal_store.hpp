@@ -36,6 +36,8 @@ public:
 
     std::vector<piru::signal::AlignmentQuantizedSignal>& mutableSignals() { return signals_; }
 
+    const std::vector<piru::signal::AlignmentQuantizedSignal>& signals() const { return signals_; }
+
 private:
     std::vector<piru::signal::AlignmentQuantizedSignal> signals_;
 };
