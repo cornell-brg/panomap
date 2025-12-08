@@ -49,7 +49,7 @@ SquiggleResult squigglizeAndQuantize(const AlnGraph& graph,
             double mean = 0.0;
             if (!model.lookup(std::string(kmer), mean)) {
                 LOG_WARN("Missing k-mer in model at node " + node.label + " pos " +
-                         std::to_string(i));
+                         std::to_string(i) + ": " + std::string(kmer));
                 mean = 0.0;
             }
             const float val = static_cast<float>(mean);

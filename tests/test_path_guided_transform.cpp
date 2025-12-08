@@ -221,3 +221,178 @@ TEST_CASE("PathGuidedTransform: accurate coverage statistics") {
   CHECK(stats.uncovered_node_count == 2);  // Nodes 4 and 5
   CHECK(result.pathCount() == 1);
 }
+
+//------------------------------------------------------------------------------
+// Stage 3 Tests: Local Expansion for Uncovered Nodes
+//------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
+// Test 6: Uncovered node with single successor gets expanded
+//------------------------------------------------------------------------------
+TEST_CASE("PathGuidedTransform: uncovered node with single successor expanded") {
+  ImportedGraph imported;
+  imported.flavor = ImportedGraphFlavor::kVg;
+
+  // Graph: 1 -> 2 -> 3
+  // Path only covers node 1
+  // Node 2 is uncovered and should be expanded with context from node 3
+  imported.add_node({"1", "AAAA"});
+  imported.add_node({"2", "CCCC"});
+  imported.add_node({"3", "GGGG"});
+
+  imported.add_edge({"1", "2", false, false, "0", std::nullopt});
+  imported.add_edge({"2", "3", false, false, "0", std::nullopt});
+
+  // Path covers only node 1
+  ImportedPath path;
+  path.name = "path1";
+  path.steps.push_back({"1", false});
+  imported.add_path(path);
+
+  PathGuidedTransform transform;
+  AlnGraph result = transform.apply(imported, 0, 5);  // k=5, k-1=4
+
+  auto stats = transform.getStats();
+  CHECK(stats.uncovered_node_count == 2);  // Nodes 2 and 3 uncovered
+
+  // Verify that expanded variants of node 2 exist
+  // Node 2 should have a variant with context from node 3 (first 4 bases of "GGGG")
+  bool found_node2_expanded = false;
+  for (std::size_t i = 0; i < result.nodeCount(); ++i) {
+    const AlnNode& node = result.node(i);
+    if (node.original_id == "2" && !node.is_reverse) {
+      if (node.sequence == "CCCCGGGG") {  // CCCC + GGGG (k-1=4 bases)
+        found_node2_expanded = true;
+      }
+    }
+  }
+
+  CHECK(found_node2_expanded);
+}
+
+//------------------------------------------------------------------------------
+// Test 7: Uncovered node with multiple successors creates multiple variants
+//------------------------------------------------------------------------------
+TEST_CASE("PathGuidedTransform: uncovered node with branching successors") {
+  ImportedGraph imported;
+  imported.flavor = ImportedGraphFlavor::kVg;
+
+  // Graph: 1 -> 2, where 2 has two successors: 3 and 4
+  //             2 -> 3
+  //             2 -> 4
+  // Path covers only node 1, node 2 is uncovered
+  imported.add_node({"1", "AAAA"});
+  imported.add_node({"2", "CCCC"});
+  imported.add_node({"3", "GGGG"});
+  imported.add_node({"4", "TTTT"});
+
+  imported.add_edge({"1", "2", false, false, "0", std::nullopt});
+  imported.add_edge({"2", "3", false, false, "0", std::nullopt});
+  imported.add_edge({"2", "4", false, false, "0", std::nullopt});
+
+  ImportedPath path;
+  path.name = "path1";
+  path.steps.push_back({"1", false});
+  imported.add_path(path);
+
+  PathGuidedTransform transform;
+  AlnGraph result = transform.apply(imported, 0, 5);  // k=5, k-1=4
+
+  // Node 2 should have multiple variants (one for each successor context)
+  int node2_variants = 0;
+  bool found_ctx_3 = false;  // CCCC + GGGG
+  bool found_ctx_4 = false;  // CCCC + TTTT
+
+  for (std::size_t i = 0; i < result.nodeCount(); ++i) {
+    const AlnNode& node = result.node(i);
+    if (node.original_id == "2" && !node.is_reverse) {
+      node2_variants++;
+      if (node.sequence == "CCCCGGGG") found_ctx_3 = true;
+      if (node.sequence == "CCCCTTTT") found_ctx_4 = true;
+    }
+  }
+
+  CHECK(node2_variants >= 2);  // At least 2 variants (one per successor)
+  CHECK(found_ctx_3);
+  CHECK(found_ctx_4);
+}
+
+//------------------------------------------------------------------------------
+// Test 8: Uncovered tip node (no successors) gets variant with empty context
+//------------------------------------------------------------------------------
+TEST_CASE("PathGuidedTransform: uncovered tip node with no successors") {
+  ImportedGraph imported;
+  imported.flavor = ImportedGraphFlavor::kVg;
+
+  // Graph: 1 -> 2, where 2 is a tip (no successors)
+  // Path covers only node 1
+  imported.add_node({"1", "AAAA"});
+  imported.add_node({"2", "CCCC"});
+
+  imported.add_edge({"1", "2", false, false, "0", std::nullopt});
+
+  ImportedPath path;
+  path.name = "path1";
+  path.steps.push_back({"1", false});
+  imported.add_path(path);
+
+  PathGuidedTransform transform;
+  AlnGraph result = transform.apply(imported, 0, 5);
+
+  // Node 2 is uncovered and has no successors
+  // Should still create a variant (with empty context)
+  bool found_node2 = false;
+  for (std::size_t i = 0; i < result.nodeCount(); ++i) {
+    const AlnNode& node = result.node(i);
+    if (node.original_id == "2" && !node.is_reverse) {
+      // Should have base sequence only (no context to add)
+      if (node.sequence == "CCCC") {
+        found_node2 = true;
+      }
+    }
+  }
+
+  CHECK(found_node2);
+}
+
+//------------------------------------------------------------------------------
+// Test 9: Moderate branching with uncovered nodes
+//------------------------------------------------------------------------------
+TEST_CASE("PathGuidedTransform: moderate branching expansion") {
+  ImportedGraph imported;
+  imported.flavor = ImportedGraphFlavor::kVg;
+
+  // Simple branching graph
+  // 1 -> 2 (uncovered) -> 3
+  //                    -> 4
+  // Path covers only node 1
+  imported.add_node({"1", "AAAA"});
+  imported.add_node({"2", "CCCC"});
+  imported.add_node({"3", "GGGG"});
+  imported.add_node({"4", "TTTT"});
+
+  imported.add_edge({"1", "2", false, false, "0", std::nullopt});
+  imported.add_edge({"2", "3", false, false, "0", std::nullopt});
+  imported.add_edge({"2", "4", false, false, "0", std::nullopt});
+
+  // Path covers only node 1
+  ImportedPath path;
+  path.name = "path1";
+  path.steps.push_back({"1", false});
+  imported.add_path(path);
+
+  PathGuidedTransform transform;
+  AlnGraph result = transform.apply(imported, 0, 5);  // k=5, k-1=4
+
+  // Node 2 is uncovered and should be expanded with contexts from both successors
+  int node2_variants = 0;
+  for (std::size_t i = 0; i < result.nodeCount(); ++i) {
+    const AlnNode& node = result.node(i);
+    if (node.original_id == "2" && !node.is_reverse) {
+      node2_variants++;
+    }
+  }
+
+  // Should have at least 2 variants (one per successor: 3 and 4)
+  CHECK(node2_variants >= 2);
+}

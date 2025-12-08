@@ -94,6 +94,7 @@ add_executable(piru
     src/index/aln_graph.cpp
     src/index/transform_dbg.cpp
     src/index/path_guided_transform.cpp
+    src/index/vg_transform_factory.cpp
     src/index/pseudo_linearize.cpp
     src/index/squigglize.cpp
     src/index/seed_builder.cpp

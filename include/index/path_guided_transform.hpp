@@ -44,6 +44,18 @@ private:
                                std::size_t pore_k,
                                std::unordered_set<std::string>& covered_nodes);
 
+  // Stage 3: Expand uncovered nodes by traversing successors
+  void expandUncoveredNodes(AlnGraph& graph,
+                            const std::unordered_set<std::string>& uncovered_node_ids,
+                            const NodeMapping& node_mapping,
+                            std::size_t k_minus_1);
+
+  // Helper: Collect all k-1 contexts via depth-limited traversal
+  std::vector<ContextInfo> collectKMinus1Contexts(const AlnGraph& graph,
+                                                   std::size_t start_node_id,
+                                                   std::size_t depth,
+                                                   std::unordered_set<std::size_t>& visited) const;
+
   // Helper: Get reverse complement of a sequence
   std::string revcomp(const std::string& seq) const;
 

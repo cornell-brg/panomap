@@ -99,6 +99,7 @@ if(DOCTEST_AVAILABLE)
         ${CMAKE_SOURCE_DIR}/src/index/seed_builder.cpp
         ${CMAKE_SOURCE_DIR}/src/index/transform_dbg.cpp
         ${CMAKE_SOURCE_DIR}/src/index/path_guided_transform.cpp
+        ${CMAKE_SOURCE_DIR}/src/index/vg_transform_factory.cpp
         ${CMAKE_SOURCE_DIR}/src/index/pseudo_linearize.cpp
         ${CMAKE_SOURCE_DIR}/src/mapping/batch_mapper.cpp
     )

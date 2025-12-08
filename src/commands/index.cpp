@@ -11,6 +11,7 @@
 #include "index/seed_builder.hpp"
 #include "index/squigglize.hpp"
 #include "index/transform_dbg.hpp"
+#include "index/vg_transform_factory.hpp"
 #include "io/graphs/graph.hpp"
 #include "io/graphs/graph_loader_factory.hpp"
 #include "io/index/serialization.hpp"
@@ -127,15 +128,18 @@ int handle_index(const std::vector<std::string>& args) {
         graph_k = std::stoul(parsed.values.at("graph-k"));
     }
 
-    if (graph_k == 0) {
-        LOG_ERROR("index: cannot determine graph k-mer size (provide --graph-k)");
-        return 1;
-    }
+    // VG graphs don't need graph_k
+    if (graph_flavor != "vg") {
+        if (graph_k == 0) {
+            LOG_ERROR("index: cannot determine graph k-mer size (provide --graph-k)");
+            return 1;
+        }
 
-    if (graph_k < pore_k) {
-        LOG_ERROR("index: graph k=" + std::to_string(graph_k) + " < pore k=" +
-                  std::to_string(pore_k) + " (invalid)");
-        return 1;
+        if (graph_k < pore_k) {
+            LOG_ERROR("index: graph k=" + std::to_string(graph_k) + " < pore k=" +
+                      std::to_string(pore_k) + " (invalid)");
+            return 1;
+        }
     }
 
     const std::size_t seed_k =
@@ -168,8 +172,18 @@ int handle_index(const std::vector<std::string>& args) {
     if (graph_flavor == "dbg") {
         aln_graph = piru::index::transformDbg(imported, graph_k, pore_k);
     } else if (graph_flavor == "vg") {
-        LOG_ERROR("index: VG transformation not yet implemented");
-        return 1;
+        // VG transformation using path-guided approach
+        piru::index::TransformConfig transform_config;
+        transform_config.uncovered_strategy = "expand";  // Default: local expansion
+
+        auto vg_transform = piru::index::makeVGTransform("path_guided", transform_config);
+        aln_graph = vg_transform->apply(imported, 0, pore_k);  // graph_k=0 (unused for VG)
+
+        auto stats = vg_transform->getStats();
+        LOG_INFO("VG transform: " + std::to_string(stats.original_node_count) + " original nodes → " +
+                 std::to_string(stats.transformed_node_count) + " transformed nodes (" +
+                 std::to_string(stats.node_expansion_ratio) + "x expansion)");
+        LOG_INFO("VG coverage: " + std::to_string(stats.uncovered_node_count) + " uncovered nodes");
     } else {
         LOG_ERROR("index: unknown graph flavor: " + graph_flavor);
         return 1;

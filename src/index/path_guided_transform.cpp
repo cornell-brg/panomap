@@ -160,7 +160,7 @@ void PathGuidedTransform::walkPathsAndAddContext(
 
       // Add step to path
       AlnPathStep aln_step;
-      aln_step.node_id = std::to_string(node_with_context_id);
+      aln_step.node_id = graph.node(node_with_context_id).label;
       aln_step.is_reverse = is_reverse;
       aln_path.steps.push_back(aln_step);
     }
@@ -194,10 +194,171 @@ AlnGraph PathGuidedTransform::apply(const piru::io::ImportedGraph& imported,
                                     : 0.0;
   stats_.uncovered_node_count = imported.nodes.size() - covered_nodes.size();
 
-  // TODO Stage 3: Handle uncovered nodes with expansion
-  // For now, uncovered nodes are simply not included in the output
+  // Stage 3: Handle uncovered nodes with expansion
+  std::unordered_set<std::string> uncovered_node_ids;
+  for (const auto& node : imported.nodes) {
+    if (covered_nodes.find(node.id) == covered_nodes.end()) {
+      uncovered_node_ids.insert(node.id);
+    }
+  }
+
+  if (!uncovered_node_ids.empty()) {
+    const std::size_t k_minus_1 = pore_k - 1;
+    expandUncoveredNodes(graph, uncovered_node_ids, node_mapping, k_minus_1);
+  }
 
   return graph;
+}
+
+//------------------------------------------------------------------------------
+// Stage 3: Expansion algorithm for uncovered nodes
+//------------------------------------------------------------------------------
+
+// Recursive depth-limited traversal to collect all k-1 contexts
+// Returns contexts by greedily collecting bases from successor paths
+std::vector<ContextInfo> PathGuidedTransform::collectKMinus1Contexts(
+    const AlnGraph& graph,
+    std::size_t start_node_id,
+    std::size_t depth,
+    std::unordered_set<std::size_t>& visited) const {
+
+  std::vector<ContextInfo> contexts;
+  const auto& successors = graph.outgoing(start_node_id);
+
+  // If no successors, return empty context
+  if (successors.empty()) {
+    return {{"", 0}};
+  }
+
+  // For each immediate successor, collect context greedily
+  // (take first available path, don't explore all branches for now to avoid explosion)
+  for (std::size_t succ_id : successors) {
+    // Cycle detection: skip if we've visited this node in current path
+    if (visited.find(succ_id) != visited.end()) {
+      continue;
+    }
+
+    // Greedily collect k-1 bases by following the first available path
+    std::string collected_context;
+    std::size_t current_node = succ_id;
+    std::unordered_set<std::size_t> path_visited = visited;
+    path_visited.insert(succ_id);
+
+    // Collect up to 'depth' bases
+    while (collected_context.size() < depth) {
+      const AlnNode& curr_node = graph.node(current_node);
+
+      // Extract bases from current node's sequence (up to what we need)
+      std::size_t bases_needed = depth - collected_context.size();
+      std::size_t bases_available = curr_node.sequence.size();
+      std::size_t bases_to_take = std::min(bases_needed, bases_available);
+
+      if (bases_to_take > 0) {
+        collected_context += curr_node.sequence.substr(0, bases_to_take);
+      }
+
+      // If we've collected enough, break
+      if (collected_context.size() >= depth) {
+        break;
+      }
+
+      // Move to first available successor
+      const auto& next_successors = graph.outgoing(current_node);
+      if (next_successors.empty()) {
+        break;  // No more successors, context incomplete
+      }
+
+      // Take first successor that hasn't been visited (greedy)
+      bool found_next = false;
+      for (std::size_t next_id : next_successors) {
+        if (path_visited.find(next_id) == path_visited.end()) {
+          current_node = next_id;
+          path_visited.insert(next_id);
+          found_next = true;
+          break;
+        }
+      }
+
+      if (!found_next) {
+        break;  // All successors visited (cycle), stop
+      }
+    }
+
+    // Add this context
+    ContextInfo context_info;
+    context_info.context = collected_context;
+    context_info.successor_aln_id = succ_id;  // Track the immediate successor
+    contexts.push_back(context_info);
+  }
+
+  return contexts;
+}
+
+// Expand uncovered nodes by creating variants for each k-1 context
+void PathGuidedTransform::expandUncoveredNodes(
+    AlnGraph& graph,
+    const std::unordered_set<std::string>& uncovered_node_ids,
+    const NodeMapping& node_mapping,
+    std::size_t k_minus_1) {
+
+  // For each uncovered node, create variants with all possible k-1 contexts
+  for (const auto& uncovered_id : uncovered_node_ids) {
+    // Get both forward and reverse variants of the uncovered node
+    auto mapping_it = node_mapping.find(uncovered_id);
+    if (mapping_it == node_mapping.end()) {
+      continue;
+    }
+
+    // Process both forward and reverse variants
+    for (bool process_reverse : {false, true}) {
+      std::size_t base_aln_id = process_reverse ? mapping_it->second.second
+                                                 : mapping_it->second.first;
+
+      const AlnNode& base_node = graph.node(base_aln_id);
+
+      // Collect all possible k-1 contexts from successors
+      std::unordered_set<std::size_t> visited;
+      auto contexts = collectKMinus1Contexts(graph, base_aln_id, k_minus_1, visited);
+
+      // Deduplicate contexts by context string
+      std::unordered_map<std::string, ContextInfo> unique_contexts;
+      for (const auto& ctx : contexts) {
+        if (unique_contexts.find(ctx.context) == unique_contexts.end()) {
+          unique_contexts[ctx.context] = ctx;
+        }
+      }
+
+      // Create variant node for each unique context
+      for (const auto& [context_str, context_info] : unique_contexts) {
+        AlnNode variant_node;
+        variant_node.label = base_node.label + "_exp_ctx";
+        variant_node.original_id = base_node.original_id;
+        variant_node.is_reverse = base_node.is_reverse;
+        variant_node.sequence = base_node.sequence + context_str;
+
+        std::size_t variant_id = graph.addNode(variant_node);
+
+        // Wire predecessors of base node to this variant
+        const auto& predecessors = graph.incoming(base_aln_id);
+        for (std::size_t pred_id : predecessors) {
+          AlnEdge edge;
+          edge.from = pred_id;
+          edge.to = variant_id;
+          edge.overlap_bases = 0;
+          graph.addEdge(edge);
+        }
+
+        // Wire this variant to its successor (if context is non-empty)
+        if (!context_str.empty() && context_info.successor_aln_id != 0) {
+          AlnEdge edge;
+          edge.from = variant_id;
+          edge.to = context_info.successor_aln_id;
+          edge.overlap_bases = k_minus_1;
+          graph.addEdge(edge);
+        }
+      }
+    }
+  }
 }
 
 //------------------------------------------------------------------------------
