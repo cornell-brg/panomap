@@ -299,12 +299,21 @@ Offset   Size   Type       Field                  Description
 ------   ----   ----       -----                  -----------
 H        8      uint64_t   unique_hash_count      Number of unique seed hashes
 H+8      8      uint64_t   total_hit_count        Total number of seed hits across all hashes
-H+16     4      uint32_t   seed_k                 Seed k-mer size
-H+20     4      uint32_t   seed_stride            Seed stride
-H+24     4      uint32_t   seed_qbits             Seed quantization bits
-H+28     4      uint32_t   max_hash_frequency     Maximum hits for any single hash
-H+32     8      uint64_t   frequency_threshold    Frequency filter threshold
-H+40     8      double     filter_fraction        Keep least frequent fraction (0.0-1.0)
+H+16     4      uint32_t   max_hash_frequency     Maximum hits for any single hash
+H+20     8      uint64_t   frequency_threshold    Frequency filter threshold
+H+28     8      double     filter_fraction        Keep least frequent fraction (0.0-1.0)
+H+36     4      uint32_t   extractor_name_length  Length of the seed extractor name string
+H+40     N      char[]     extractor_name         Name of the seeder (e.g., "kmer", "minimizer")
+H+40+N   4      uint32_t   num_extractor_params   Number of key-value parameters for the extractor
+```
+This is followed by `num_extractor_params` records of the following structure:
+```
+Offset   Size   Type       Field              Description
+------   ----   ----       -----              -----------
+0        4      uint32_t   key_length         Length of parameter key string
+4        N      char[]     key                Parameter key (e.g., "k", "stride", "window_size")
+4+N      4      uint32_t   value_length       Length of parameter value string
+8+N      M      char[]     value              Parameter value (as a string)
 ```
 
 ### Hash Entry Array

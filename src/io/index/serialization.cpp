@@ -413,12 +413,17 @@ void write_seeds(const std::string& path, const piru::index::SeedStore& store) {
 
     write_pod<uint64_t>(out, data.size());
     write_pod<uint64_t>(out, total_hit_count);
-    write_pod<uint32_t>(out, hash_store->seed_k());
-    write_pod<uint32_t>(out, hash_store->seed_stride());
-    write_pod<uint32_t>(out, hash_store->seed_qbits());
     write_pod<uint32_t>(out, hash_store->max_hash_frequency());
     write_pod<uint64_t>(out, hash_store->frequency_threshold());
     write_pod<double>(out, hash_store->filter_fraction());
+    write_string(out, hash_store->extractor_name());
+    
+    const auto& params = hash_store->params();
+    write_pod<uint32_t>(out, params.size());
+    for(const auto& pair : params) {
+        write_string(out, pair.first);
+        write_string(out, pair.second);
+    }
 
     const uint32_t header_size = static_cast<uint32_t>(out.tellp());
     out.seekp(header_size_pos);
@@ -484,31 +489,37 @@ std::unique_ptr<piru::index::HashSeedStore> read_seeds(const std::string& path) 
 
     // --- Seed Metadata ---
     uint64_t unique_hash_count, total_hit_count;
-    uint32_t seed_k, seed_stride, seed_qbits;
     uint32_t max_hash_frequency;
     uint64_t frequency_threshold;
     double filter_fraction;
+    std::string extractor_name;
+    uint32_t num_extractor_params;
 
     read_pod(in, unique_hash_count);
     read_pod(in, total_hit_count);
-    read_pod(in, seed_k);
-    read_pod(in, seed_stride);
-    read_pod(in, seed_qbits);
     read_pod(in, max_hash_frequency);
     read_pod(in, frequency_threshold);
     read_pod(in, filter_fraction);
+    extractor_name = read_string(in);
+    read_pod(in, num_extractor_params);
+    
+    std::map<std::string, std::string> params;
+    for(uint32_t i=0; i<num_extractor_params; ++i) {
+        auto key = read_string(in);
+        auto val = read_string(in);
+        params[key] = val;
+    }
 
     if (static_cast<uint32_t>(in.tellg()) != header_size) {
         throw std::runtime_error("Header size mismatch in .seeds file.");
     }
     
     auto store = std::make_unique<piru::index::HashSeedStore>();
-    store->set_seed_k(seed_k);
-    store->set_seed_stride(seed_stride);
-    store->set_seed_qbits(seed_qbits);
     store->set_max_hash_frequency(max_hash_frequency);
     store->set_frequency_threshold(frequency_threshold);
     store->set_filter_fraction(filter_fraction);
+    store->set_extractor_name(extractor_name);
+    store->set_params(params);
     
     auto& data = store->mutableData();
 

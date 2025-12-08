@@ -6,8 +6,10 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <map>
 #include <unordered_map>
 #include <vector>
+#include <string>
 
 namespace piru::index {
 
@@ -25,10 +27,9 @@ public:
     virtual std::size_t size() const = 0;
     virtual std::size_t max_hash_frequency() const = 0;
     virtual std::size_t frequency_threshold() const = 0;
-    virtual uint32_t seed_k() const = 0;
-    virtual uint32_t seed_stride() const = 0;
-    virtual uint32_t seed_qbits() const = 0;
     virtual double filter_fraction() const = 0;
+    virtual const std::string& extractor_name() const = 0;
+    virtual const std::map<std::string, std::string>& params() const = 0;
 };
 
 using SeedStorePtr = std::unique_ptr<SeedStore>;
@@ -48,19 +49,16 @@ public:
     std::size_t size() const override { return store_.size(); }
 
     std::size_t max_hash_frequency() const override { return max_hash_frequency_; }
-
     std::size_t frequency_threshold() const override { return frequency_threshold_; }
-    uint32_t seed_k() const override { return seed_k_; }
-    uint32_t seed_stride() const override { return seed_stride_; }
-    uint32_t seed_qbits() const override { return seed_qbits_; }
     double filter_fraction() const override { return filter_fraction_; }
+    const std::string& extractor_name() const override { return extractor_name_; }
+    const std::map<std::string, std::string>& params() const override { return params_; }
 
     void set_max_hash_frequency(std::size_t freq) { max_hash_frequency_ = freq; }
     void set_frequency_threshold(std::size_t threshold) { frequency_threshold_ = threshold; }
-    void set_seed_k(uint32_t k) { seed_k_ = k; }
-    void set_seed_stride(uint32_t stride) { seed_stride_ = stride; }
-    void set_seed_qbits(uint32_t qbits) { seed_qbits_ = qbits; }
     void set_filter_fraction(double fraction) { filter_fraction_ = fraction; }
+    void set_extractor_name(std::string name) { extractor_name_ = std::move(name); }
+    void set_params(std::map<std::string, std::string> p) { params_ = std::move(p); }
 
     const std::unordered_map<std::uint64_t, std::vector<SeedHit>>& data() const { return store_; }
     std::unordered_map<std::uint64_t, std::vector<SeedHit>>& mutableData() { return store_; }
@@ -69,10 +67,9 @@ private:
     std::unordered_map<std::uint64_t, std::vector<SeedHit>> store_;
     std::size_t max_hash_frequency_{0};
     std::size_t frequency_threshold_{0};
-    uint32_t seed_k_{0};
-    uint32_t seed_stride_{0};
-    uint32_t seed_qbits_{0};
     double filter_fraction_{0.0};
+    std::string extractor_name_;
+    std::map<std::string, std::string> params_;
 };
 
 }  // namespace piru::index

@@ -253,9 +253,8 @@ TEST_CASE("SeedStore serialization round-trip") {
     source_store->insert(123, {1, 10});
     source_store->insert(456, {2, 20});
     source_store->insert(123, {3, 30});
-    source_store->set_seed_k(10);
-    source_store->set_seed_stride(5);
-    source_store->set_seed_qbits(8);
+    source_store->set_extractor_name("kmer");
+    source_store->set_params({{"k", "10"}, {"stride", "5"}});
     source_store->set_max_hash_frequency(2);
     source_store->set_frequency_threshold(100);
     source_store->set_filter_fraction(0.1);
@@ -271,9 +270,11 @@ TEST_CASE("SeedStore serialization round-trip") {
     // 4. Assert that the stores are identical.
     REQUIRE(loaded_store != nullptr);
     CHECK(loaded_store->size() == 2);
-    CHECK(loaded_store->seed_k() == 10);
-    CHECK(loaded_store->seed_stride() == 5);
-    CHECK(loaded_store->seed_qbits() == 8);
+    CHECK(loaded_store->extractor_name() == "kmer");
+    const auto& params = loaded_store->params();
+    REQUIRE(params.size() == 2);
+    CHECK(params.at("k") == "10");
+    CHECK(params.at("stride") == "5");
     CHECK(loaded_store->max_hash_frequency() == 2);
     CHECK(loaded_store->frequency_threshold() == 100);
     CHECK(loaded_store->filter_fraction() == 0.1);
