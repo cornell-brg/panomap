@@ -50,6 +50,7 @@ if(DOCTEST_AVAILABLE)
         test_signal_alignment_quantize.cpp
         test_signal_seed_extractors.cpp
         test_mapping_batch.cpp
+        test_index_pipeline.cpp
     )
 
     target_include_directories(piru_tests PRIVATE
@@ -88,6 +89,10 @@ if(DOCTEST_AVAILABLE)
         ${CMAKE_SOURCE_DIR}/src/signal/alignment_quantizers/int_alignment_quantizer.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/seed_extractors/seed_extractor_factory.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/seed_extractors/kmer_seed_extractor.cpp
+        ${CMAKE_SOURCE_DIR}/src/index/squigglize.cpp
+        ${CMAKE_SOURCE_DIR}/src/index/seed_builder.cpp
+        ${CMAKE_SOURCE_DIR}/src/index/transform_dbg.cpp
+        ${CMAKE_SOURCE_DIR}/src/index/pseudo_linearize.cpp
         ${CMAKE_SOURCE_DIR}/src/mapping/batch_mapper.cpp
     )
 

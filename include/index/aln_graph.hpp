@@ -60,6 +60,9 @@ public:
     const std::vector<std::size_t>& outgoing(std::size_t idx) const { return out_edges_.at(idx); }
     const std::vector<std::size_t>& incoming(std::size_t idx) const { return in_edges_.at(idx); }
 
+    // Basic consistency checks: edge bounds, adjacency symmetry, optional metadata presence.
+    bool validate() const;
+
 private:
     std::vector<AlnNode> nodes_;
     std::vector<AlnEdge> edges_;

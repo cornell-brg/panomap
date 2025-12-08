@@ -300,9 +300,127 @@ The raw signal samples are processed down two parallel paths for two different p
 
 This stage builds the `SeedStore`, a hash map for fast seed lookups during mapping.
 
--   A sliding window is applied to the **fuzzy quantized** samples of each node.
--   The content of the window is hashed to create a "seed." The hashing method is reused from existing signal processing utilities (`piru/signal/`).
--   This seed is stored as a key in a hash table, with its value being a list of locations (`[node_id, offset]`) where the seed occurred in the graph.
+**Implementation**: `piru/include/index/seed_builder.hpp`, `piru/src/index/seed_builder.cpp`
+
+```cpp
+HashSeedStore buildSeedStore(
+    const std::vector<FuzzyQuantizedSignal>& signals,
+    const SeedExtractor& extractor,
+    const SeedBuildConfig& config = SeedBuildConfig{});
+```
+
+#### Algorithm Steps
+
+**Step 1: Seed Extraction**
+
+For each node in the graph:
+1. Pass the fuzzy-quantized signal to the `SeedExtractor` interface
+2. The extractor applies a sliding window and produces a list of seeds
+3. Each seed contains: `{hash, position, span}`
+
+**Current extractors**:
+- **K-mer extractor** (`KmerSeedExtractor`): Slides a window of `k` consecutive quantized tokens, hashes the window content, and emits seeds at stride intervals
+  - Config: `{.backend = "kmer", .k = 10, .stride = 1, .qbits = 4}`
+  - Output: Dense seeds every `stride` positions
+
+**Future extractors** (easily added via interface):
+- **Minimizer extractor**: Selects local minima within a sliding window to reduce seed density while maintaining coverage
+  - Config: `{.backend = "minimizer", .k = 15, .window = 10, .qbits = 4}`
+  - Benefit: ~10x fewer seeds, faster mapping, same sensitivity
+
+**Step 2: Hash Table Population**
+
+```cpp
+for (node_id in 0..signals.size()) {
+    seeds = extractor.extract(signals[node_id])
+    for (seed in seeds) {
+        store.insert(seed.hash, SeedHit{node_id, seed.position})
+    }
+}
+```
+
+Seeds with the same hash value (collisions) are stored in a list:
+```cpp
+SeedStore: hash → [(node_id, offset), (node_id, offset), ...]
+```
+
+**Step 3: Frequency Statistics**
+
+Compute statistics for seed filtering and scoring:
+
+```cpp
+// Max frequency: maximum number of hits for any single hash
+max_hash_frequency = max(|hits| for each hash in store)
+
+// Frequency distribution
+frequencies = [|hits| for each hash in store]
+sort(frequencies)
+```
+
+**Step 4: Frequency Filtering (GraphAligner-style)**
+
+To avoid over-represented seeds (repetitive regions, homopolymers), compute a frequency threshold:
+
+```cpp
+SeedBuildConfig config{.keep_least_frequent_fraction = 0.1};
+
+// Keep only seeds with frequency ≤ 10th percentile
+pos = frequencies.size() * 0.1
+threshold = frequencies[pos] + 1
+```
+
+**Rationale**: Seeds that occur very frequently (e.g., in repetitive regions) provide little mapping information and slow down alignment. By filtering to the least frequent fraction, we keep informative seeds while discarding noise.
+
+**During mapping**:
+```cpp
+auto hits = store.lookup(seed_hash);
+if (hits && hits->size() < store.frequency_threshold()) {
+    // This seed is rare enough to use
+    process_seed_hits(*hits);
+}
+```
+
+#### Extensibility: Switching Seed Types
+
+The `buildSeedStore` function is **backend-agnostic**—it doesn't know whether seeds come from k-mers, minimizers, or any future strategy. To switch seed types:
+
+**Current (k-mer seeds)**:
+```cpp
+auto extractor = make_seed_extractor(
+    SeedExtractorConfig{.backend = "kmer", .k = 10, .stride = 1});
+auto store = buildSeedStore(signals, *extractor);
+```
+
+**Future (minimizer seeds)**:
+```cpp
+auto extractor = make_seed_extractor(
+    SeedExtractorConfig{.backend = "minimizer", .k = 15, .window = 10});
+auto store = buildSeedStore(signals, *extractor);  // NO CHANGE!
+```
+
+Adding a new seed type requires:
+1. Implement `MinimizerSeedExtractor : public SeedExtractor`
+2. Update `make_seed_extractor` factory to recognize `"minimizer"` backend
+3. Done! All existing code (hash table, frequency filtering, indexing) works unchanged.
+
+**Design benefit**: Separation of concerns between seed extraction (pluggable strategy) and seed storage (fixed hash table).
+
+#### Output
+
+The `HashSeedStore` provides:
+- **Lookup**: `lookup(hash) → vector<SeedHit>*` (returns `nullptr` if hash not found)
+- **Frequency stats**: `max_hash_frequency()`, `frequency_threshold()`
+- **Size**: `size()` returns unique hash count
+
+**Storage backend**:
+```cpp
+std::unordered_map<uint64_t, std::vector<SeedHit>> store_;
+```
+
+**Alternative backends** (future work):
+- Inverted index (CSR format) for memory efficiency
+- On-disk hash table for very large graphs
+- Filtered hash table (discard seeds above threshold instead of storing flags)
 
 ## Index Components (Output)
 
