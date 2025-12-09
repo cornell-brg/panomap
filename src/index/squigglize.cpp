@@ -79,11 +79,11 @@ SquiggleResult squigglizeAndQuantize(const AlnGraph& graph,
             ++count;
         }
 
-        // Log summary if node has N bases
-        if (n_kmer_count > 0) {
-            LOG_INFO("Node " + node.label + ": " + std::to_string(n_kmer_count) +
-                     " k-mers with N bases (marked as NaN)");
-        }
+        // // Log summary if node has N bases
+        // if (n_kmer_count > 0) {
+        //     LOG_INFO("Node " + node.label + ": " + std::to_string(n_kmer_count) +
+        //              " k-mers with N bases (marked as NaN)");
+        // }
     }
 
     const double global_mean = (count == 0) ? 0.0 : sum / static_cast<double>(count);
@@ -122,6 +122,7 @@ SquiggleResult squigglizeAndQuantize(const AlnGraph& graph,
         result.alignment_signals[node_id] = alignment_quantizer.quantize(normalized, nullptr);
     }
 
+    result.raw_signals = std::move(raw_signals);
     return result;
 }
 

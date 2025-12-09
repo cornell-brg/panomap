@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <iostream>
+#include <map>
 #include <set>
 #include <string>
 #include <vector>
@@ -52,9 +53,13 @@ int handle_index(const std::vector<std::string>& args) {
         {'o', "output", true, "Output index directory (default: <graph-file>.piru)"},
         {'t', "threads", true, "Worker threads"},
         {'p', "profile", false, "Emit timing profile (tree)"},
+        {'\0', "", false, "\nSeed Generation Options:"},
         {'\0', "seed-k", true, "Seed k-mer size (default: 10)"},
         {'\0', "seed-stride", true, "Seed stride (default: 1)"},
         {'\0', "seed-filter", true, "Keep least frequent seed fraction (default: 1.0)"},
+        {'\0', "", false, "\nAlignment Quantization Options:"},
+        {'\0', "aq-backend", true, "Backend: int16 (default), int8, passthrough"},
+        {'\0', "aq-scale", true, "Manual scale override (expert)"},
     };
     config.on_error = [](const std::string&) { std::cerr << "index: invalid option\n"; };
 
@@ -247,7 +252,10 @@ int handle_index(const std::vector<std::string>& args) {
     }
 
     piru::signal::AlignmentQuantizerConfig align_cfg;
-    align_cfg.backend = "int16";
+    align_cfg.backend = parsed.values.count("aq-backend") ? parsed.values.at("aq-backend") : "int16";
+    if (parsed.values.count("aq-scale")) {
+        align_cfg.scale = std::stof(parsed.values.at("aq-scale"));
+    }
     auto alignment_quantizer = piru::signal::make_alignment_quantizer(align_cfg);
     if (!alignment_quantizer) {
         LOG_ERROR("index: failed to create alignment quantizer");
@@ -256,6 +264,22 @@ int handle_index(const std::vector<std::string>& args) {
 
     const auto squiggle_result = piru::index::squigglizeAndQuantize(
         aln_graph, *model, *fuzzy_quantizer, *alignment_quantizer);
+
+#ifdef PIRU_DUMP_GRAPHS
+    piru::GfaExporter::dumpAlnGraph(aln_graph, "raw_signals.gfa",
+                                      piru::AlnGraphDumpMode::RawSignal,
+                                      &squiggle_result.raw_signals, {});
+
+    std::map<std::string, std::string> aln_quant_tags;
+    aln_quant_tags["AQ_backend"] = "Z:" + alignment_quantizer->name();
+    aln_quant_tags["AQ_scale"] = "f:" + std::to_string(alignment_quantizer->scale());
+    aln_quant_tags["AQ_offset"] = "f:" + std::to_string(alignment_quantizer->offset());
+
+    piru::GfaExporter::dumpAlnGraph(aln_graph, "aln_quantized.gfa",
+                                      piru::AlnGraphDumpMode::AlnQuantized,
+                                      &squiggle_result.alignment_signals,
+                                      aln_quant_tags);
+#endif
 
     std::size_t total_samples = 0;
     for (const auto& sig : squiggle_result.fuzzy_signals) {

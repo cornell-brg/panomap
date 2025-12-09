@@ -14,6 +14,7 @@
 namespace piru::index {
 
 struct SquiggleResult {
+    std::vector<std::vector<float>> raw_signals;
     std::vector<piru::signal::FuzzyQuantizedSignal> fuzzy_signals;
     std::vector<piru::signal::AlignmentQuantizedSignal> alignment_signals;
 };

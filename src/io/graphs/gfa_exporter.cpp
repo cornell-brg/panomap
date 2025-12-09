@@ -2,8 +2,10 @@
 
 #include <fstream>
 #include <iostream>
+#include <variant>
 
 #include "io/graphs/graph.hpp"
+#include "signal/signal_types.hpp"
 
 namespace piru {
 
@@ -49,15 +51,21 @@ void GfaExporter::dumpImportedGraph(const io::ImportedGraph& graph, const std::s
     }
 }
 
-void GfaExporter::dumpAlnGraph(const index::AlnGraph& graph, const std::string& path,
-                               AlnGraphDumpMode mode, const void* data) {
+void GfaExporter::dumpAlnGraph(
+    const index::AlnGraph& graph, const std::string& path,
+    AlnGraphDumpMode mode, const void* data,
+    const std::map<std::string, std::string>& header_tags) {
     std::ofstream out(path);
     if (!out) {
         std::cerr << "Error: could not open file " << path << std::endl;
         return;
     }
 
-    out << "H\tVN:Z:1.0" << std::endl;
+    out << "H\tVN:Z:1.0";
+    for (const auto& tag : header_tags) {
+        out << "\t" << tag.first << ":" << tag.second;
+    }
+    out << std::endl;
 
     if (mode == AlnGraphDumpMode::Bases) {
         for (size_t i = 0; i < graph.nodeCount(); ++i) {
@@ -129,21 +137,47 @@ void GfaExporter::dumpAlnGraph(const index::AlnGraph& graph, const std::string& 
             out << std::endl;
         }
     } else if (mode == AlnGraphDumpMode::AlnQuantized) {
-        const auto* signal_data = static_cast<const std::vector<std::vector<int16_t>>*>(data);
+        const auto* signal_data = static_cast<const std::vector<signal::AlignmentQuantizedSignal>*>(data);
         if (!signal_data) {
             return;
         }
         for (size_t i = 0; i < graph.nodeCount(); ++i) {
             const auto& node = graph.node(i);
             out << "S\t" << node.id << "\t";
-            const auto& signals = (*signal_data)[i];
-            for (size_t j = 0; j < signals.size(); ++j) {
-                out << signals[j];
-                if (j < signals.size() - 1) {
-                    out << ",";
+            
+            const auto& aln_sig = (*signal_data)[i];
+            if (std::holds_alternative<std::vector<int16_t>>(aln_sig.data)) {
+                const auto& signals = std::get<std::vector<int16_t>>(aln_sig.data);
+                for (size_t j = 0; j < signals.size(); ++j) {
+                    out << signals[j];
+                    if (j < signals.size() - 1) {
+                        out << ",";
+                    }
                 }
+                out << "\tLN:i:" << signals.size();
+            } else if (std::holds_alternative<std::vector<int8_t>>(aln_sig.data)) {
+                const auto& signals = std::get<std::vector<int8_t>>(aln_sig.data);
+                for (size_t j = 0; j < signals.size(); ++j) {
+                    out << static_cast<int>(signals[j]);
+                    if (j < signals.size() - 1) {
+                        out << ",";
+                    }
+                }
+                out << "\tLN:i:" << signals.size();
+            } else if (std::holds_alternative<std::vector<float>>(aln_sig.data)) {
+                const auto& signals = std::get<std::vector<float>>(aln_sig.data);
+                for (size_t j = 0; j < signals.size(); ++j) {
+                    out << signals[j];
+                    if (j < signals.size() - 1) {
+                        out << ",";
+                    }
+                }
+                out << "\tLN:i:" << signals.size();
+            } else {
+                out << "\tLN:i:0";
             }
-            out << "\tLN:i:" << signals.size() << "\tst:Z:aln_quant";
+            
+            out << "\tst:Z:aln_quant";
             if (!node.original_id.empty()) {
                 out << "\toi:Z:" << node.original_id << (node.is_reverse ? "-" : "+");
             }

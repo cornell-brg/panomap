@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <vector>
 
 namespace piru::signal {
@@ -36,7 +37,21 @@ std::vector<T> quantize_to_int(const std::vector<float>& samples, float scale) {
 }  // namespace
 
 IntAlignmentQuantizer::IntAlignmentQuantizer(AlignmentQuantizerConfig config)
-    : config_(std::move(config)) {}
+    : config_(std::move(config)) {
+    // If the scale is the default, calculate a new one to maximize the dynamic range
+    // based on the normalized input range of [-3.0, 3.0].
+    if (config_.scale == 1.0f) {
+        const float input_max = 3.0f;
+        if (config_.target_bits == 8) {
+            // Reserve min for sentinel
+            config_.scale = (static_cast<float>(std::numeric_limits<int8_t>::max()) - 1.0f) / input_max;
+        } else {  // Default to 16 bits
+            config_.target_bits = 16;
+            // Reserve min for sentinel
+            config_.scale = (static_cast<float>(std::numeric_limits<int16_t>::max()) - 1.0f) / input_max;
+        }
+    }
+}
 
 AlignmentQuantizedSignal IntAlignmentQuantizer::quantize(const NormalizedSignal& signal,
                                                          const EventSeries* events) const {

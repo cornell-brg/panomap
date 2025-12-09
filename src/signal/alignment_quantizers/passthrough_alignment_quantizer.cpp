@@ -13,13 +13,8 @@ AlignmentQuantizedSignal PassthroughAlignmentQuantizer::quantize(const Normalize
                                                                  const EventSeries* events) const {
     (void)events;
     AlignmentQuantizedSignal quantized;
-    quantized.kind = AlignmentQuantizationKind::kInt16;
-    std::vector<std::int16_t> values;
-    values.reserve(signal.samples.size());
-    for (const auto sample : signal.samples) {
-        values.push_back(static_cast<std::int16_t>(sample));
-    }
-    quantized.data = std::move(values);
+    quantized.kind = AlignmentQuantizationKind::kFloat32;
+    quantized.data = signal.samples;
     return quantized;
 }
 
