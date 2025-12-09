@@ -41,17 +41,17 @@ TEST_CASE("Passthrough fuzzy quantizer truncates to int16 tokens") {
     CHECK(quantized.tokens[2] == static_cast<std::int16_t>(0));
 }
 
-TEST_CASE("Passthrough alignment quantizer emits int16 payload") {
+TEST_CASE("Passthrough alignment quantizer emits float32 payload") {
     NormalizedSignal norm;
     norm.samples = {5.9f, -1.1f};
 
     auto quantizer = make_alignment_quantizer(AlignmentQuantizerConfig{.backend = "passthrough"});
     auto quantized = quantizer->quantize(norm, nullptr);
 
-    CHECK(quantized.kind == AlignmentQuantizationKind::kInt16);
-    auto* vec_ptr = std::get_if<std::vector<std::int16_t>>(&quantized.data);
+    CHECK(quantized.kind == AlignmentQuantizationKind::kFloat32);
+    auto* vec_ptr = std::get_if<std::vector<float>>(&quantized.data);
     REQUIRE(vec_ptr != nullptr);
     REQUIRE(vec_ptr->size() == 2);
-    CHECK((*vec_ptr)[0] == static_cast<std::int16_t>(5));
-    CHECK((*vec_ptr)[1] == static_cast<std::int16_t>(-1));
+    CHECK((*vec_ptr)[0] == doctest::Approx(5.9f));
+    CHECK((*vec_ptr)[1] == doctest::Approx(-1.1f));
 }
