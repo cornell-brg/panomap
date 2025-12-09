@@ -38,17 +38,20 @@ private:
   importedGraphToAlnGraph(const piru::io::ImportedGraph& imported);
 
   // Task 2: Walk paths and add k-1 context from successors
-  void walkPathsAndAddContext(AlnGraph& graph,
-                               const piru::io::ImportedGraph& imported,
-                               const NodeMapping& node_mapping,
-                               std::size_t pore_k,
-                               std::unordered_set<std::string>& covered_nodes);
+  // Returns variant_map: (original_id|orientation|context) → aln_node_id
+  std::unordered_map<std::string, std::size_t> walkPathsAndAddContext(
+      AlnGraph& graph,
+      const piru::io::ImportedGraph& imported,
+      NodeMapping& node_mapping,
+      std::size_t pore_k,
+      std::unordered_set<std::string>& covered_nodes);
 
-  // Stage 3: Expand uncovered nodes by traversing successors
+  // Stage 3: Expand uncovered nodes by creating F/R variants
   void expandUncoveredNodes(AlnGraph& graph,
                             const std::unordered_set<std::string>& uncovered_node_ids,
-                            const NodeMapping& node_mapping,
-                            std::size_t k_minus_1);
+                            NodeMapping& node_mapping,
+                            std::size_t k_minus_1,
+                            const piru::io::ImportedGraph& imported);
 
   // Helper: Collect all k-1 contexts via depth-limited traversal
   std::vector<ContextInfo> collectKMinus1Contexts(const AlnGraph& graph,

@@ -159,7 +159,16 @@ void GfaExporter::dumpAlnGraph(const index::AlnGraph& graph, const std::string& 
 
     for (const auto& edge : graph.edges()) {
         out << "L\t" << edge.from << "\t+\t" << edge.to << "\t+\t"
-            << edge.overlap_bases << "M" << std::endl;
+            << edge.overlap_bases << "M";
+        const auto& from_node = graph.node(edge.from);
+        const auto& to_node = graph.node(edge.to);
+        if (!from_node.original_id.empty()) {
+            out << "\tof:Z:" << from_node.original_id << (from_node.is_reverse ? "-" : "+");
+        }
+        if (!to_node.original_id.empty()) {
+            out << "\tot:Z:" << to_node.original_id << (to_node.is_reverse ? "-" : "+");
+        }
+        out << std::endl;
     }
     
     for (const auto& path : graph.paths()) {

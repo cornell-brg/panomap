@@ -192,6 +192,9 @@ int handle_index(const std::vector<std::string>& args) {
                  std::to_string(stats.transformed_node_count) + " transformed nodes (" +
                  std::to_string(stats.node_expansion_ratio) + "x expansion)");
         LOG_INFO("VG coverage: " + std::to_string(stats.uncovered_node_count) + " uncovered nodes");
+        #ifdef PIRU_DUMP_GRAPHS
+            piru::GfaExporter::dumpAlnGraph(aln_graph, "transformed_graph.gfa");
+        #endif
     } else {
         LOG_ERROR("index: unknown graph flavor: " + graph_flavor);
         return 1;
