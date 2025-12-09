@@ -279,6 +279,18 @@ int handle_index(const std::vector<std::string>& args) {
                                       piru::AlnGraphDumpMode::AlnQuantized,
                                       &squiggle_result.alignment_signals,
                                       aln_quant_tags);
+
+    std::map<std::string, std::string> fuzzy_quant_tags;
+    fuzzy_quant_tags["FQ_backend"] = "Z:" + fuzzy_quantizer->name();
+    fuzzy_quant_tags["FQ_fine_min"] = "f:" + std::to_string(fuzzy_cfg.fine_min);
+    fuzzy_quant_tags["FQ_fine_max"] = "f:" + std::to_string(fuzzy_cfg.fine_max);
+    fuzzy_quant_tags["FQ_fine_range"] = "f:" + std::to_string(fuzzy_cfg.fine_range);
+    fuzzy_quant_tags["FQ_qbits"] = "i:" + std::to_string(fuzzy_cfg.qbits);
+
+    piru::GfaExporter::dumpAlnGraph(aln_graph, "fuzzy_quantized.gfa",
+                                      piru::AlnGraphDumpMode::FuzzyQuantized,
+                                      &squiggle_result.fuzzy_signals,
+                                      fuzzy_quant_tags);
 #endif
 
     std::size_t total_samples = 0;

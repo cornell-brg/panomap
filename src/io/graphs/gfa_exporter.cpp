@@ -110,14 +110,14 @@ void GfaExporter::dumpAlnGraph(
             out << std::endl;
         }
     } else if (mode == AlnGraphDumpMode::FuzzyQuantized) {
-        const auto* signal_data = static_cast<const std::vector<std::vector<int16_t>>*>(data);
+        const auto* signal_data = static_cast<const std::vector<signal::FuzzyQuantizedSignal>*>(data);
         if (!signal_data) {
             return;
         }
         for (size_t i = 0; i < graph.nodeCount(); ++i) {
             const auto& node = graph.node(i);
             out << "S\t" << node.id << "\t";
-            const auto& signals = (*signal_data)[i];
+            const auto& signals = (*signal_data)[i].tokens;
             for (size_t j = 0; j < signals.size(); ++j) {
                 out << signals[j];
                 if (j < signals.size() - 1) {
