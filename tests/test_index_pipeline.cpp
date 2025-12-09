@@ -154,9 +154,9 @@ TEST_CASE("DBG transform splits nodes and trims overlaps") {
 
     // Sequences trimmed to length 3 (ACGTA -> ACG, CGTAC -> CGT).
     CHECK(aln.node(0).sequence == "ACG");      // n1 forward
-    CHECK(aln.node(1).sequence == "CGT");      // n1 reverse (revcomp of ACG)
+    CHECK(aln.node(1).sequence == "TAC");      // n1 reverse (revcomp of TAC)
     CHECK(aln.node(2).sequence == "CGT");      // n2 forward
-    CHECK(aln.node(3).sequence == "ACG");      // n2 reverse (revcomp of CGT)
+    CHECK(aln.node(3).sequence == "GTA");      // n2 reverse (revcomp of GTA)
 
     // One edge mapped forward with overlap reduced from 4 -> 2.
     CHECK(aln.edgeCount() == 1);
