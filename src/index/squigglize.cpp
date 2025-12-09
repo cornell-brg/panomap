@@ -2,11 +2,22 @@
 #include "index/squigglize.hpp"
 
 #include <cmath>
+#include <limits>
 
 #include "util/logging.hpp"
 
 namespace piru::index {
 namespace {
+
+// Check if k-mer contains N or other non-ACGT bases
+bool hasNBase(const std::string_view& kmer) {
+    for (char c : kmer) {
+        if (c != 'A' && c != 'C' && c != 'G' && c != 'T') {
+            return true;
+        }
+    }
+    return false;
+}
 
 float safeNormalize(float value, double mean, double stddev) {
     // If all values are identical, normalize to 0
@@ -44,8 +55,18 @@ SquiggleResult squigglizeAndQuantize(const AlnGraph& graph,
 
         auto& samples = raw_signals[node_id];
         samples.reserve(seq.size() - k + 1);
+        std::size_t n_kmer_count = 0;
         for (std::size_t i = 0; i + static_cast<std::size_t>(k) <= seq.size(); ++i) {
             const std::string_view kmer(seq.data() + i, static_cast<std::size_t>(k));
+
+            // Check for N bases or other non-ACGT characters
+            if (hasNBase(kmer)) {
+                // Emit NaN sentinel for N-containing k-mers
+                samples.push_back(std::numeric_limits<float>::quiet_NaN());
+                ++n_kmer_count;
+                continue;
+            }
+
             double mean = 0.0;
             if (!model.lookup(std::string(kmer), mean)) {
                 LOG_WARN("Missing k-mer in model at node " + node.label + " pos " +
@@ -57,15 +78,23 @@ SquiggleResult squigglizeAndQuantize(const AlnGraph& graph,
             sum += val;
             ++count;
         }
+
+        // Log summary if node has N bases
+        if (n_kmer_count > 0) {
+            LOG_INFO("Node " + node.label + ": " + std::to_string(n_kmer_count) +
+                     " k-mers with N bases (marked as NaN)");
+        }
     }
 
     const double global_mean = (count == 0) ? 0.0 : sum / static_cast<double>(count);
 
     // Second pass: compute variance using two-pass algorithm for numerical stability.
+    // Skip NaN values when computing variance.
     double variance = 0.0;
     if (count > 0) {
         for (const auto& samples : raw_signals) {
             for (const auto val : samples) {
+                if (std::isnan(val)) continue;  // Skip NaN sentinels
                 const double diff = static_cast<double>(val) - global_mean;
                 variance += diff * diff;
             }
@@ -81,7 +110,12 @@ SquiggleResult squigglizeAndQuantize(const AlnGraph& graph,
         normalized.sampling_rate_hz = 0.0f;
         normalized.samples.reserve(samples.size());
         for (const auto val : samples) {
-            normalized.samples.push_back(safeNormalize(val, global_mean, global_std));
+            // Pass through NaN unchanged; normalize valid values
+            if (std::isnan(val)) {
+                normalized.samples.push_back(val);
+            } else {
+                normalized.samples.push_back(safeNormalize(val, global_mean, global_std));
+            }
         }
 
         result.fuzzy_signals[node_id] = fuzzy_quantizer.quantize(normalized, nullptr);

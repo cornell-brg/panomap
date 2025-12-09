@@ -58,7 +58,15 @@ FuzzyQuantizedSignal Rh2FuzzyQuantizer::quantize(const NormalizedSignal& signal,
     (void)events;
     FuzzyQuantizedSignal quantized;
     quantized.tokens.reserve(signal.samples.size());
+    const std::int16_t sentinel = std::numeric_limits<std::int16_t>::min();
+
     for (const auto sample : signal.samples) {
+        // Handle NaN sentinel: map to minimum int16 value
+        if (std::isnan(sample)) {
+            quantized.tokens.push_back(sentinel);
+            continue;
+        }
+
         const auto val = dynamic_quantize(sample, config_);
         quantized.tokens.push_back(static_cast<std::int16_t>(val));
     }

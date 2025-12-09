@@ -106,14 +106,23 @@ piru index [options] <graph-file>
 
 **Examples:**
 ```bash
-# Load a vg graph with R10.4 model
-./build/piru index --graph=vg --model=r10.4 reference.vg
+# Index a VG variation graph (e.g., HLA pangenome)
+./build/piru index --graph=vg --model=r9.4 --output ./drb1_index tests/data/graphs/drb1.vg
 
-# Load a GFA graph (interpreted as dbg by default)
-./build/piru index --graph=dbg reference.gfa
+# Index a GFA de Bruijn graph
+./build/piru index --graph=dbg --graph-k=15 --output ./sample_index tests/data/graphs/sample.gfa
+
+# Use custom pore model
+./build/piru index --graph=vg --model=/path/to/custom.model --output ./my_index reference.vg
 ```
 
-The command loads the graph, displays structure summary (nodes, edges, paths), and validates the pore model.
+**VG Graph Indexing Details:**
+- VG graphs use **path-guided transformation**: embedded haplotype paths provide biologically accurate k-1 context
+- Nodes appearing in multiple paths with different contexts are duplicated (e.g., HLA graphs with 12 haplotypes may show 3x expansion)
+- N bases in sequences are handled via sentinel values; seed extraction skips these regions
+- Example: drb1.vg (5111 nodes) → 15333 transformed nodes, 5135 chains, 45 unique seeds
+
+The command loads the graph, transforms it into a squigglization-ready format, generates signal representations, builds the seed index, and writes all components to the output directory.
 
 ### `map` - Map Reads
 

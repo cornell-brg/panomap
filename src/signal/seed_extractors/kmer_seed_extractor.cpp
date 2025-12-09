@@ -60,7 +60,23 @@ SeedBuffer KmerSeedExtractor::extract(const FuzzyQuantizedSignal& signal,
     // full 64-bit hash space if needed.
     const std::uint64_t mix_mask = 0xFFFFFFFFULL;
 
+    const std::int16_t sentinel = std::numeric_limits<std::int16_t>::min();
+
     for (std::size_t start = 0; start + k <= tokens.size(); start += stride) {
+        // Check if window contains sentinel (N base marker)
+        bool has_sentinel = false;
+        for (std::size_t j = 0; j < k; ++j) {
+            if (tokens[start + j] == sentinel) {
+                has_sentinel = true;
+                break;
+            }
+        }
+
+        // Skip seed extraction for windows containing sentinels
+        if (has_sentinel) {
+            continue;
+        }
+
         std::uint64_t packed = 0;
         // Two packing strategies to avoid undefined behavior:
         // 1. Normal case (k*qbits < 64): bit-pack tokens via shift-and-OR.

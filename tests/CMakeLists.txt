@@ -55,6 +55,7 @@ if(DOCTEST_AVAILABLE)
         test_index_pipeline.cpp
         test_serialization.cpp
         test_cli.cpp
+        test_gfa_exporter.cpp
     )
 
     target_include_directories(piru_tests PRIVATE
@@ -72,6 +73,7 @@ if(DOCTEST_AVAILABLE)
         ${CMAKE_SOURCE_DIR}/src/io/graphs/graph_loader_factory.cpp
         ${CMAKE_SOURCE_DIR}/src/io/graphs/gfa_loader.cpp
         ${CMAKE_SOURCE_DIR}/src/io/graphs/vg_loader.cpp
+        ${CMAKE_SOURCE_DIR}/src/io/graphs/gfa_exporter.cpp
         ${CMAKE_SOURCE_DIR}/src/io/results/gaf_writer.cpp
         ${CMAKE_SOURCE_DIR}/src/io/results/gam_writer.cpp
         ${CMAKE_SOURCE_DIR}/src/io/results/json_writer.cpp

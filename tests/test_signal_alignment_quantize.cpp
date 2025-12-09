@@ -22,7 +22,8 @@ TEST_CASE("Int16 alignment quantizer rounds and clamps") {
     REQUIRE(vec != nullptr);
     REQUIRE(vec->size() == 3);
     CHECK((*vec)[0] == 1);
-    CHECK((*vec)[1] == std::numeric_limits<std::int16_t>::min());
+    // min() is reserved for sentinel, so clamps to min()+1
+    CHECK((*vec)[1] == std::numeric_limits<std::int16_t>::min() + 1);
     CHECK((*vec)[2] == std::numeric_limits<std::int16_t>::max());
 }
 

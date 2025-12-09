@@ -17,9 +17,17 @@ std::vector<T> quantize_to_int(const std::vector<float>& samples, float scale) {
     out.reserve(samples.size());
     const auto min_val = static_cast<double>(std::numeric_limits<T>::min());
     const auto max_val = static_cast<double>(std::numeric_limits<T>::max());
+    const T sentinel = std::numeric_limits<T>::min();
+
     for (const auto s : samples) {
+        // Handle NaN sentinel: map to minimum value
+        if (std::isnan(s)) {
+            out.push_back(sentinel);
+            continue;
+        }
+
         double v = static_cast<double>(s) * static_cast<double>(scale);
-        v = std::clamp(std::round(v), min_val, max_val);
+        v = std::clamp(std::round(v), min_val + 1.0, max_val);  // Reserve min for sentinel
         out.push_back(static_cast<T>(v));
     }
     return out;

@@ -129,52 +129,136 @@ DBGs inherently encode overlaps between nodes: by construction, adjacent nodes i
 
 Variation graphs typically do not have overlapping nodes—adjacent nodes represent distinct sequence regions without shared bases. This poses a problem for squigglization, which requires `k-1` bases of context at node boundaries.
 
-**Transformation Strategy: Node Splitting by Successor Context**
+**Transformation Strategy: Path-Guided with Local Expansion Fallback**
 
-The key challenge is that a single VG node may have multiple successors, each providing different k-1 context. We use a **node splitting strategy** to handle this:
+VG graphs often contain embedded paths (haplotypes) representing known biological sequences. The implemented transformation leverages these paths for accurate context while providing a fallback mechanism for nodes not covered by any path.
 
--   **Step 1: Bidirectional → Directional Split**: Each bidirectional node is split into two directional nodes (forward and reverse complement), just like DBG transformation.
+**Implementation**: `PathGuidedTransform` in `piru/include/index/path_guided_transform.hpp`
 
--   **Step 2: Split by Successor Context**: For each directional node `N` with multiple outgoing edges:
-    -   For each successor `S₁, S₂, ..., Sₙ`:
-        1. Fetch the first `k-1` bases from successor `Sᵢ`
-        2. Create a new node `N_Sᵢ` with sequence = `N.sequence + Sᵢ.sequence[0:k-1]`
-        3. Add edge `N_Sᵢ → Sᵢ` with overlap = `k-1`
-    -   The original node `N` is replaced by `n` variants: `N_S₁, N_S₂, ..., N_Sₙ`
+**Algorithm Overview:**
 
--   **Step 3: Predecessor Re-wiring**: Update all incoming edges to `N`:
-    -   If predecessor `P` had edge `P → N`, it now has edges to all variants: `P → N_S₁, P → N_S₂, ..., P → N_Sₙ`
-    -   This preserves all original paths while ensuring each path has correct k-1 context
+1. **Bidirectional → Directional Split**: Each bidirectional node is split into forward and reverse complement variants (same as DBG transformation).
+
+2. **Path Walking with Context Addition**: For each embedded path in the VG graph:
+   - Trace the path through the directional graph
+   - For each step, append `k-1` bases from the next node in the path
+   - Create AlnNode with sequence = `base_sequence + next_node[0:k-1]`
+
+3. **Node Duplication by Path Context**: When the same node appears in multiple paths:
+   - If successor context is identical → reuse the same AlnNode (share across paths)
+   - If successor context differs → create a new AlnNode variant with the different context
+   - Track variants via key: `(original_id, successor_context, is_reverse)`
+
+4. **Coverage Tracking**: Track which original nodes were visited by any path. Nodes not covered require fallback handling.
+
+5. **Local Expansion Fallback**: For uncovered nodes (not visited by any path):
+   - Perform greedy depth-limited traversal to collect `k-1` context from successors
+   - Create one variant per immediate successor
+   - Follow first available path to avoid exponential explosion in highly branching regions
 
 **Example**:
 
 ```
-Original VG (no overlaps):
-    A (GATTACA) ──→ B (CCC)
-                └──→ C (GGG)
+Original VG with paths:
+    Node A (GATTACA)
+      ├─→ B (CCC)
+      └─→ C (GGG)
 
-After VG→DBG Expansion (k=5, so k-1=4):
-    A_B (GATTACA + CCCC) ──→ B (CCC)    [overlap=4]
-    A_C (GATTACA + GGGG) ──→ C (GGG)    [overlap=4]
+    Path P1: A → B
+    Path P2: A → C
 
-Now squigglization of A_B's last base 'A':
-    Sliding window: [ACCC] - has full context from B
+After Path-Guided Transformation (k=5, k-1=4):
+    A_B (GATTACA + CCCC) [from path P1] ──→ B (CCC)
+    A_C (GATTACA + GGGG) [from path P2] ──→ C (GGG)
+
+    Two variants of A, each with biologically accurate context from real haplotypes
 ```
 
-**Handling Complex Topologies**:
+**Example with Node Sharing**:
 
--   **Nodes with single successor**: No splitting needed, just append k-1 bases
--   **Nodes with no successors (tips)**: No expansion needed (or pad with sentinel characters if desired)
--   **Nodes with in-degree > 1**: Each incoming path gets duplicated across all successor splits
--   **Self-loops**: Node gets split to include k-1 bases from itself
+```
+Original VG:
+    Node X (AAAA) → Node Y (TTTT) → Node Z (GGGG)
+
+    Path P1: X → Y → Z
+    Path P2: X → Y → Z  (same successor contexts)
+
+After Transformation:
+    X_Y (AAAA + TTTT) [shared by P1, P2] ──→ Y_Z (TTTT + GGGG)
+
+    Only one variant of each node created, shared across both paths
+```
+
+**Handling Uncovered Nodes**:
+
+Nodes not visited by any embedded path use local expansion:
+
+```
+Uncovered node N with successors S1, S2:
+  → Creates N_S1 with context from S1 (following first path to depth k-1)
+  → Creates N_S2 with context from S2 (following first path to depth k-1)
+```
 
 **Graph Size Impact**:
 
--   Worst case: A node with `m` predecessors and `n` successors creates `n` new nodes, each receiving `m` incoming edges
--   Graph size increases, but enables **clean, context-complete squigglization** without runtime edge traversal
--   Trade-off: More nodes vs. simpler squigglization algorithm
+- **Best case**: All nodes covered by paths with identical contexts → minimal duplication
+- **Typical case**: Node duplication proportional to number of distinct contexts in embedded paths
+  - Example: drb1.vg with 12 HLA haplotype paths → node may appear up to 12 times if all paths provide different successor contexts
+  - Actual: drb1.vg: 5111 original nodes → 15333 transformed nodes (3x expansion)
+- **Worst case**: Highly branching uncovered regions → expansion based on successor count
 
-**Output**: A DBG-like `AlnGraph` where all nodes are directional and have sequences that include `k-1` bases of overlap from their successors, suitable for squigglization.
+**Trade-offs**:
+
+- ✅ **Biologically accurate**: Context comes from real haplotype sequences
+- ✅ **Efficient for path-covered nodes**: Shares nodes when paths agree on context
+- ✅ **Complete coverage**: Local expansion ensures all nodes get valid context
+- ❌ **Graph size increase**: More nodes than original VG (but less than naive splitting)
+- ✅ **Simple squigglization**: No runtime edge traversal needed
+
+**Handling Special Cases**:
+
+- **Nodes with no successors (tips)**: Get variant with empty context (base sequence only)
+- **Nodes in cycles**: Visited set tracking prevents infinite loops during expansion
+- **High branching factor**: Greedy traversal (first available path) prevents exponential explosion
+- **N bases in sequences**: Emit NaN sentinels during squigglization; seed extraction skips these windows
+
+**Output**: A DBG-like `AlnGraph` where all nodes are directional and have sequences that include `k-1` bases of overlap from their successors, suitable for squigglization. Nodes are duplicated only when their path contexts genuinely differ, preserving biological accuracy.
+
+#### Handling N Bases (Unknown Sequences)
+
+VG graphs often contain `N` bases representing unknown or ambiguous sequence regions. Since the pore model only defines signals for ACGT k-mers, k-mers containing N bases cannot be squigglized into valid signals. The pipeline uses a **sentinel value approach** to handle this:
+
+**Sentinel Value Strategy:**
+
+1. **Squigglization** (`squigglize.cpp`):
+   - Check each k-mer for N bases before model lookup
+   - If N detected: emit `std::numeric_limits<float>::quiet_NaN()` instead of a signal value
+   - Maintains 1:1 position correspondence: `signal[i]` always maps to sequence position `i`
+
+2. **Quantization**:
+   - **Float stages** (normalized signal, float alignment): Pass NaN through unchanged
+   - **Int stages** (fuzzy int16, alignment int16/int8): Map NaN → `std::numeric_limits<T>::min()`
+     - `int16_t`: NaN → `-32768` (min value reserved as sentinel)
+     - `int8_t`: NaN → `-128` (min value reserved as sentinel)
+     - Valid values clamped to `[min()+1, max()]` to avoid collision
+
+3. **Seed Extraction** (`kmer_seed_extractor.cpp`):
+   - Before generating seed hash, check if window contains any sentinel values
+   - Skip seed extraction for windows overlapping sentinel positions
+   - Result: **Only valid ACGT k-mers enter the seed index**
+
+**Example**: drb1.vg (HLA graph with many N bases)
+- 5111 original nodes with sequences containing N bases
+- Squigglization emits NaN at N positions (no warnings)
+- Seed index contains only 45 unique valid seeds (N-containing windows skipped)
+- Clean indexing with INFO-level logging: "Node X: Y k-mers with N bases (marked as NaN)"
+
+**Semantic Meaning**: Unknown base → missing signal (gap) → no seed → these regions are effectively excluded from seeding but preserved in topology.
+
+**Alternative Future Approach**: Tree-based model approximation (deferred):
+- For ambiguous k-mers like `AACTN`, compute average of all variants: `avg(model[AACTG], model[AACTA], model[AACTC], model[AACTT])`
+- Mark with quality scores indicating uncertainty
+- Allows approximate matching in N-rich regions (more complex, requires model changes)
 
 ### Pseudo-Linearization
 
