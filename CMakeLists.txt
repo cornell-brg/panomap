@@ -20,6 +20,7 @@ else()
 endif()
 
 option(PIRU_ENABLE_WARNINGS "Enable compiler warnings" ON)
+option(PIRU_DUMP_GRAPHS "Dump imported graph to GFA for debugging" OFF)
 option(PIRU_USE_TBB "Enable oneTBB backend for concurrency" ON)
 option(PIRU_FETCH_TBB "Fetch oneTBB via FetchContent if not found" ON)
 option(PIRU_FETCH_DOCTEST "Fetch doctest during configure (for tests)" ON)
@@ -112,6 +113,10 @@ if(PIRU_ENABLE_WARNINGS)
     else()
         target_compile_options(piru PRIVATE -Wall -Wextra -Wpedantic)
     endif()
+endif()
+
+if(PIRU_DUMP_GRAPHS)
+    target_compile_definitions(piru PRIVATE PIRU_DUMP_GRAPHS)
 endif()
 
 if(PIRU_TBB_AVAILABLE)

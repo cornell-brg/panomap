@@ -23,7 +23,7 @@ void GfaExporter::dumpImportedGraph(const io::ImportedGraph& graph, const std::s
     for (const auto& edge : graph.edges) {
         out << "L\t" << edge.from << "\t" << (edge.from_reverse ? "-" : "+") << "\t"
             << edge.to << "\t" << (edge.to_reverse ? "-" : "+") << "\t"
-            << edge.overlap << std::endl;
+            << edge.overlap << "M" << std::endl;
     }
 
     for (const auto& path : graph.paths) {
@@ -62,7 +62,10 @@ void GfaExporter::dumpAlnGraph(const index::AlnGraph& graph, const std::string& 
     if (mode == AlnGraphDumpMode::Bases) {
         for (size_t i = 0; i < graph.nodeCount(); ++i) {
             const auto& node = graph.node(i);
-            out << "S\t" << node.label << "\t" << node.sequence << "\tLN:i:" << node.sequence.length();
+            out << "S\t" << node.id << "\t" << node.sequence << "\tLN:i:" << node.sequence.length();
+            if (!node.original_id.empty()) {
+                out << "\toi:Z:" << node.original_id << (node.is_reverse ? "-" : "+");
+            }
             if (node.chain_id) {
                 out << "\tci:i:" << *node.chain_id;
             }
@@ -78,7 +81,7 @@ void GfaExporter::dumpAlnGraph(const index::AlnGraph& graph, const std::string& 
         }
         for (size_t i = 0; i < graph.nodeCount(); ++i) {
             const auto& node = graph.node(i);
-            out << "S\t" << node.label << "\t";
+            out << "S\t" << node.id << "\t";
             const auto& signals = (*signal_data)[i];
             for (size_t j = 0; j < signals.size(); ++j) {
                 out << signals[j];
@@ -87,6 +90,9 @@ void GfaExporter::dumpAlnGraph(const index::AlnGraph& graph, const std::string& 
                 }
             }
             out << "\tLN:i:" << signals.size() << "\tst:Z:raw_signal";
+            if (!node.original_id.empty()) {
+                out << "\toi:Z:" << node.original_id << (node.is_reverse ? "-" : "+");
+            }
             if (node.chain_id) {
                 out << "\tci:i:" << *node.chain_id;
             }
@@ -102,7 +108,7 @@ void GfaExporter::dumpAlnGraph(const index::AlnGraph& graph, const std::string& 
         }
         for (size_t i = 0; i < graph.nodeCount(); ++i) {
             const auto& node = graph.node(i);
-            out << "S\t" << node.label << "\t";
+            out << "S\t" << node.id << "\t";
             const auto& signals = (*signal_data)[i];
             for (size_t j = 0; j < signals.size(); ++j) {
                 out << signals[j];
@@ -111,6 +117,9 @@ void GfaExporter::dumpAlnGraph(const index::AlnGraph& graph, const std::string& 
                 }
             }
             out << "\tLN:i:" << signals.size() << "\tst:Z:fuzzy_quant";
+            if (!node.original_id.empty()) {
+                out << "\toi:Z:" << node.original_id << (node.is_reverse ? "-" : "+");
+            }
             if (node.chain_id) {
                 out << "\tci:i:" << *node.chain_id;
             }
@@ -126,7 +135,7 @@ void GfaExporter::dumpAlnGraph(const index::AlnGraph& graph, const std::string& 
         }
         for (size_t i = 0; i < graph.nodeCount(); ++i) {
             const auto& node = graph.node(i);
-            out << "S\t" << node.label << "\t";
+            out << "S\t" << node.id << "\t";
             const auto& signals = (*signal_data)[i];
             for (size_t j = 0; j < signals.size(); ++j) {
                 out << signals[j];
@@ -135,6 +144,9 @@ void GfaExporter::dumpAlnGraph(const index::AlnGraph& graph, const std::string& 
                 }
             }
             out << "\tLN:i:" << signals.size() << "\tst:Z:aln_quant";
+            if (!node.original_id.empty()) {
+                out << "\toi:Z:" << node.original_id << (node.is_reverse ? "-" : "+");
+            }
             if (node.chain_id) {
                 out << "\tci:i:" << *node.chain_id;
             }
@@ -146,7 +158,7 @@ void GfaExporter::dumpAlnGraph(const index::AlnGraph& graph, const std::string& 
     }
 
     for (const auto& edge : graph.edges()) {
-        out << "L\t" << graph.node(edge.from).label << "\t+\t" << graph.node(edge.to).label << "\t+\t"
+        out << "L\t" << edge.from << "\t+\t" << edge.to << "\t+\t"
             << edge.overlap_bases << "M" << std::endl;
     }
     

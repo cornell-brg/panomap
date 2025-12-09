@@ -94,9 +94,10 @@ bool GfaLoader::load(ImportedGraph& graph) {
             edge.from_reverse = parse_orientation(fields[2]);
             edge.to = fields[3];
             edge.to_reverse = parse_orientation(fields[4]);
-            edge.overlap = fields[5];
-            if (edge.overlap.empty()) edge.overlap = "0";
-            edge.overlap_bases = parse_overlap_bases(edge.overlap);
+            // Parse overlap CIGAR to numeric value. Assuming match-only overlaps (e.g., "0M").
+            const std::string& overlap_field = fields[5];
+            edge.overlap_bases = parse_overlap_bases(overlap_field);
+            edge.overlap = edge.overlap_bases ? std::to_string(*edge.overlap_bases) : "0";
             graph.add_edge(std::move(edge));
             continue;
         }

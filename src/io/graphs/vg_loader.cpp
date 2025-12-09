@@ -32,8 +32,8 @@ bool VgLoader::load(ImportedGraph& graph) {
             gedge.from = std::to_string(edge.from());
             gedge.to = std::to_string(edge.to());
             gedge.from_reverse = edge.from_start();
-            // libvgio marks to_end=true when traversing forward, so reverse is !to_end.
-            gedge.to_reverse = !edge.to_end();
+            // to_end=true means arriving at end of to node (reverse orientation in GFA).
+            gedge.to_reverse = edge.to_end();
             gedge.overlap = std::to_string(edge.overlap());  // 0 when unspecified.
             if (edge.overlap() != 0) {
                 gedge.overlap_bases = static_cast<std::size_t>(edge.overlap());

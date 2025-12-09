@@ -12,6 +12,7 @@
 #include "index/squigglize.hpp"
 #include "index/transform_dbg.hpp"
 #include "index/vg_transform_factory.hpp"
+#include "io/graphs/gfa_exporter.hpp"
 #include "io/graphs/graph.hpp"
 #include "io/graphs/graph_loader_factory.hpp"
 #include "io/index/serialization.hpp"
@@ -111,6 +112,10 @@ int handle_index(const std::vector<std::string>& args) {
              std::to_string(imported.edges.size()) + " edges, " +
              std::to_string(imported.paths.size()) + " paths (" + loader->get_format_name() + ")");
 
+#ifdef PIRU_DUMP_GRAPHS
+    piru::GfaExporter::dumpImportedGraph(imported, "imported_graph.gfa");
+#endif
+
     // -------------------------------------------------------------------------
     // Parameter parsing and validation
     // -------------------------------------------------------------------------
@@ -171,6 +176,9 @@ int handle_index(const std::vector<std::string>& args) {
 
     if (graph_flavor == "dbg") {
         aln_graph = piru::index::transformDbg(imported, graph_k, pore_k);
+        #ifdef PIRU_DUMP_GRAPHS
+            piru::GfaExporter::dumpAlnGraph(aln_graph, "transformed_graph.gfa");
+        #endif  
     } else if (graph_flavor == "vg") {
         // VG transformation using path-guided approach
         piru::index::TransformConfig transform_config;
@@ -194,7 +202,8 @@ int handle_index(const std::vector<std::string>& args) {
         return 1;
     }
 
-    LOG_INFO("[1/4] transformed: " + std::to_string(aln_graph.nodeCount()) + " directional nodes");
+    LOG_INFO("[1/4] transformed: " + std::to_string(aln_graph.nodeCount()) + " directional nodes (originally " +
+             std::to_string(imported.nodes.size()) + " bidirected nodes)");
     PIRU_PROFILE_STOP(profile, "transform");
 
     // -------------------------------------------------------------------------

@@ -82,21 +82,25 @@ AlnGraph transformDbg(const io::ImportedGraph& imported, std::size_t graph_k, st
             continue;
         }
 
-        // Trim last k_delta bases to preserve only pore_k-1 overlap
-        const std::string trimmed_seq = n.sequence.substr(0, n.sequence.size() - k_delta);
+        // Forward: trim back k_delta bases
+        const std::string fwd_seq = n.sequence.substr(0, n.sequence.size() - k_delta);
 
         AlnNode fwd;
         fwd.label = n.id;
         fwd.original_id = n.id;
         fwd.is_reverse = false;
-        fwd.sequence = trimmed_seq;
+        fwd.sequence = fwd_seq;
         const std::size_t fwd_id = graph.addNode(std::move(fwd));
+
+        // Reverse: revcomp first, then trim back k_delta bases
+        const std::string rc_seq = revcomp(n.sequence);
+        const std::string rev_seq = rc_seq.substr(0, rc_seq.size() - k_delta);
 
         AlnNode rev;
         rev.label = n.id;
         rev.original_id = n.id;
         rev.is_reverse = true;
-        rev.sequence = revcomp(trimmed_seq);  // Reverse complement of trimmed sequence
+        rev.sequence = rev_seq;
         const std::size_t rev_id = graph.addNode(std::move(rev));
 
         node_lookup[n.id] = {fwd_id, rev_id};
