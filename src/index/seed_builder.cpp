@@ -2,6 +2,8 @@
 #include "index/seed_builder.hpp"
 
 #include <algorithm>
+#include <map>
+#include <string>
 #include <vector>
 
 namespace piru::index {
@@ -10,6 +12,23 @@ HashSeedStore buildSeedStore(const std::vector<piru::signal::FuzzyQuantizedSigna
                              const piru::signal::SeedExtractor& extractor,
                              const SeedBuildConfig& config) {
     HashSeedStore store;
+
+    // Record extractor metadata for compatibility checks during mapping.
+    store.set_extractor_name(extractor.name());
+    std::map<std::string, std::string> params;
+    const auto& cfg = extractor.config();
+    params["backend"] = cfg.backend;
+    params["k"] = std::to_string(cfg.k);
+    params["stride"] = std::to_string(cfg.stride);
+    params["qbits"] = std::to_string(cfg.qbits);
+    if (cfg.window > 0) {
+        params["window"] = std::to_string(cfg.window);
+    }
+    if (!cfg.params.empty()) {
+        params["params"] = cfg.params;
+    }
+    store.set_params(std::move(params));
+    store.set_filter_fraction(config.keep_least_frequent_fraction);
 
     // Step 1: Extract seeds from all nodes and populate hash table
     for (std::size_t node_id = 0; node_id < signals.size(); ++node_id) {

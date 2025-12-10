@@ -5,11 +5,14 @@
 
 #include <cstdio>
 #include <filesystem>
+#include <fstream>
 #include <memory>
 
 #include "index/aln_graph.hpp"
 #include "index/graph_store.hpp"
+#include "index/seed_builder.hpp"
 #include "io/index/serialization.hpp"
+#include "signal/seed_extractors/seed_extractor_factory.hpp"
 
 namespace {
 // Helper function to get a temporary file path
@@ -249,6 +252,32 @@ TEST_CASE("SignalStore serialization round-trip (int8)") {
     std::remove(test_path.c_str());
 }
 
+TEST_CASE("buildSeedStore records extractor metadata") {
+    piru::signal::SeedExtractorConfig extractor_cfg;
+    extractor_cfg.backend = "kmer";
+    extractor_cfg.k = 7;
+    extractor_cfg.stride = 2;
+    extractor_cfg.qbits = 16;
+    auto extractor = piru::signal::make_seed_extractor(extractor_cfg);
+
+    piru::signal::FuzzyQuantizedSignal sig;
+    sig.tokens = {1, 2, 3, 4};
+    std::vector<piru::signal::FuzzyQuantizedSignal> signals = {sig};
+
+    piru::index::SeedBuildConfig build_cfg;
+    build_cfg.keep_least_frequent_fraction = 0.5;
+
+    auto store = piru::index::buildSeedStore(signals, *extractor, build_cfg);
+
+    CHECK(store.extractor_name() == "kmer");
+    const auto& params = store.params();
+    CHECK(params.at("backend") == "kmer");
+    CHECK(params.at("k") == "7");
+    CHECK(params.at("stride") == "2");
+    CHECK(params.at("qbits") == "16");
+    CHECK(store.filter_fraction() == doctest::Approx(0.5));
+}
+
 TEST_CASE("SeedStore serialization round-trip") {
     // 1. Create a HashSeedStore with sample data.
     auto source_store = std::make_unique<piru::index::HashSeedStore>();
@@ -374,5 +403,55 @@ TEST_CASE("Full index serialization round-trip") {
     CHECK(loaded_index.seeds->size() == 1);
     
     // Clean up
+    std::filesystem::remove_all(temp_dir);
+}
+
+TEST_CASE("Graph serialization rejects invalid magic") {
+    const std::string path = temp_file_path("bad_magic.graph");
+    {
+        std::ofstream out(path, std::ios::binary);
+        out << "BADMAGIC";  // wrong magic
+    }
+    CHECK_THROWS_AS(piru::io::index::read_graph(path), std::runtime_error);
+    std::remove(path.c_str());
+}
+
+TEST_CASE("load_index rejects alignment quantizer/signal mismatch") {
+    const std::string temp_dir = std::filesystem::temp_directory_path() / "piru_test_index_mismatch";
+    std::filesystem::create_directory(temp_dir);
+
+    // Graph metadata declares int16 align quantizer
+    piru::io::index::IndexMetadata metadata;
+    metadata.align_quantizer = "int16";
+    metadata.graph_flavor = 1;
+    metadata.graph_k = 15;
+    metadata.pore_k = 9;
+
+    // Graph
+    auto graph = std::make_unique<piru::index::AlnGraph>();
+    piru::index::AlnNode node;
+    node.sequence = "ACGT";
+    graph->addNode(node);
+    piru::index::AdjListGraphStore graph_store(std::move(*graph));
+
+    // Signals encoded as int8 (mismatch with metadata.align_quantizer)
+    std::vector<piru::signal::AlignmentQuantizedSignal> signals;
+    signals.emplace_back(piru::signal::AlignmentQuantizedSignal{
+        .kind = piru::signal::AlignmentQuantizationKind::kInt8,
+        .data = std::vector<int8_t>{1, 2, 3}
+    });
+    piru::index::VectorSignalStore signal_store(std::move(signals));
+
+    // Seeds (minimal, but valid extractor metadata)
+    auto seed_store = std::make_unique<piru::index::HashSeedStore>();
+    seed_store->insert(123, {0, 0});
+    seed_store->set_extractor_name("kmer");
+
+    piru::io::index::write_graph(temp_dir + "/piru_test_index_mismatch.graph", graph_store, metadata);
+    piru::io::index::write_signals(temp_dir + "/piru_test_index_mismatch.signals", signal_store, 1.0f, 0.0f);
+    piru::io::index::write_seeds(temp_dir + "/piru_test_index_mismatch.seeds", *seed_store);
+
+    CHECK_THROWS_AS(piru::io::index::load_index(temp_dir), std::runtime_error);
+
     std::filesystem::remove_all(temp_dir);
 }

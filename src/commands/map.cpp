@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <iostream>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -13,6 +14,65 @@
 #include "util/logging.hpp"
 #include "util/timing.hpp"
 #include "version.hpp"
+
+namespace {
+
+piru::signal::SeedExtractorConfig seed_config_from_store(const piru::index::HashSeedStore& store) {
+    piru::signal::SeedExtractorConfig cfg;
+    cfg.backend = store.extractor_name();
+    const auto& params = store.params();
+    auto get_u64 = [&params](const std::string& key, std::size_t default_val) -> std::size_t {
+        auto it = params.find(key);
+        if (it == params.end()) return default_val;
+        return std::stoull(it->second);
+    };
+    cfg.k = get_u64("k", cfg.k);
+    cfg.stride = get_u64("stride", cfg.stride);
+    cfg.window = get_u64("window", cfg.window);
+    auto it_qbits = params.find("qbits");
+    if (it_qbits != params.end()) cfg.qbits = static_cast<std::uint32_t>(std::stoul(it_qbits->second));
+    auto it_params = params.find("params");
+    if (it_params != params.end()) cfg.params = it_params->second;
+    return cfg;
+}
+
+void apply_index_compatibility(const piru::io::index::LoadedIndex& loaded,
+                               piru::mapping::BatchMapperConfig& map_config) {
+    // Fuzzy quantizer backend must match index metadata.
+    if (!loaded.metadata.fuzzy_quantizer.empty()) {
+        map_config.fuzzy_config.backend = loaded.metadata.fuzzy_quantizer;
+    }
+
+    // Seed extractor config must match the SeedStore metadata.
+    const auto* seed_store = dynamic_cast<piru::index::HashSeedStore*>(loaded.seeds.get());
+    if (!seed_store) {
+        throw std::runtime_error("Unsupported SeedStore backend in index (expected hash).");
+    }
+    auto index_seed_cfg = seed_config_from_store(*seed_store);
+    if (index_seed_cfg.backend.empty()) {
+        throw std::runtime_error("SeedStore extractor name missing in index.");
+    }
+
+    // If map config was left at defaults, adopt index config; otherwise require an exact match.
+    if (map_config.seed_config != index_seed_cfg) {
+        // Adopt automatically only when map config appears default-ish.
+        if (map_config.seed_config.backend == "kmer" && map_config.seed_config.k == 10 &&
+            map_config.seed_config.stride == 1 && map_config.seed_config.qbits == 4 &&
+            map_config.seed_config.window == 0 && map_config.seed_config.params.empty()) {
+            LOG_INFO("Using seed extractor settings from index: backend=" + index_seed_cfg.backend +
+                     ", k=" + std::to_string(index_seed_cfg.k) +
+                     ", stride=" + std::to_string(index_seed_cfg.stride) +
+                     ", qbits=" + std::to_string(index_seed_cfg.qbits));
+            map_config.seed_config = index_seed_cfg;
+        } else {
+            throw std::runtime_error(
+                "Seed extractor config mismatch between map settings and index (expected backend '" +
+                index_seed_cfg.backend + "').");
+        }
+    }
+}
+
+}  // namespace
 
 int handle_map(const std::vector<std::string>& args) {
     piru::cli::Parsed parsed;
@@ -66,7 +126,14 @@ int handle_map(const std::vector<std::string>& args) {
         LOG_ERROR("map: failed to load index from '" + index_path + "'");
         return 1;
     }
+    if (!loaded_index.seeds) {
+        LOG_ERROR("map: index is missing seeds; cannot perform lookups");
+        return 1;
+    }
     LOG_INFO("index loaded: " + std::to_string(loaded_index.graph->nodeCount()) + " nodes");
+    LOG_INFO("index metadata: fuzzy=" + loaded_index.metadata.fuzzy_quantizer +
+             ", align=" + loaded_index.metadata.align_quantizer +
+             ", seeds=" + loaded_index.seeds->extractor_name());
 
     const std::string reads_path = parsed.positionals[0];
     std::vector<std::filesystem::path> files;
@@ -97,6 +164,10 @@ int handle_map(const std::vector<std::string>& args) {
 
     piru::mapping::BatchMapperConfig map_config;
     map_config.num_threads = num_threads;
+    map_config.seed_store = loaded_index.seeds.get();
+
+    // Align map-side settings with index metadata before processing.
+    apply_index_compatibility(loaded_index, map_config);
 
     std::size_t total_reads = 0;
     std::size_t total_batches = 0;

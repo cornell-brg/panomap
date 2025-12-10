@@ -335,6 +335,21 @@ read_signals(const std::string& path) {
     read_pod(in, metadata.offset);
     in.seekg(4, std::ios_base::cur); // Skip reserved
 
+    uint32_t expected_bits = 0;
+    if (backend_type == "float32") {
+        expected_bits = 32;
+    } else if (backend_type == "int16") {
+        expected_bits = 16;
+    } else if (backend_type == "int8") {
+        expected_bits = 8;
+    } else {
+        throw std::runtime_error("Unsupported backend type for .signals file: " + backend_type);
+    }
+    if (metadata.quantization_bits != expected_bits) {
+        throw std::runtime_error("Quantization bits (" + std::to_string(metadata.quantization_bits) +
+                                 ") do not match backend '" + backend_type + "'");
+    }
+
     if (static_cast<uint32_t>(in.tellg()) != header_size) {
         throw std::runtime_error("Header size mismatch in .signals file.");
     }
@@ -577,14 +592,25 @@ LoadedIndex load_index(const std::string& index_dir) {
     if (graph_store->nodeCount() != signals_store_ptr->size()) {
         throw std::runtime_error("Node count mismatch between GraphStore and SignalStore.");
     }
-    
-    if (seeds_store->size() > 0) {
-        // This is a weak check. A better check would be to compare the
-        // extractor name and params with the global metadata.
-        // For now, we'll just check if the extractor name is not empty.
-        if (metadata.fuzzy_quantizer.empty()) {
-             LOG_WARN("Fuzzy quantizer type is not set in the global metadata.");
-        }
+
+    // Ensure alignment quantizer metadata matches stored signals.
+    auto expected_bits_from_align = [](const std::string& name) -> uint32_t {
+        if (name == "int8") return 8;
+        if (name.empty() || name == "int" || name == "int16" || name == "fixed") return 16;
+        if (name == "passthrough" || name == "float32") return 32;
+        throw std::runtime_error("Unknown alignment quantizer backend in metadata: '" + name + "'");
+    };
+    const uint32_t expected_bits = expected_bits_from_align(metadata.align_quantizer);
+    if (signal_meta.quantization_bits != expected_bits) {
+        throw std::runtime_error("Alignment quantizer '" + metadata.align_quantizer +
+                                 "' expects " + std::to_string(expected_bits) +
+                                 " bits but signals file encodes " +
+                                 std::to_string(signal_meta.quantization_bits));
+    }
+
+    // Basic SeedStore sanity checks.
+    if (seeds_store->size() > 0 && seeds_store->extractor_name().empty()) {
+        throw std::runtime_error("SeedStore extractor name is empty (invalid index).");
     }
 
     return {

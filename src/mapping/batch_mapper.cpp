@@ -11,6 +11,24 @@
 
 namespace piru::mapping {
 
+void SeedLookup::lookup(const signal::SeedBuffer& seeds, std::vector<SeedHitRecord>& out_hits) const {
+    if (!store_) return;
+    out_hits.clear();
+    out_hits.reserve(seeds.seeds.size());
+    for (const auto& seed : seeds.seeds) {
+        const auto* hits = store_->lookup(seed.hash);
+        if (!hits) continue;
+        if (hits->size() > freq_threshold_) continue;  // skip overly frequent seeds
+        for (const auto& h : *hits) {
+            out_hits.push_back(SeedHitRecord{
+                .target = h,
+                .read_pos = seed.position,
+                .hash = seed.hash,
+            });
+        }
+    }
+}
+
 void BatchBuffer::resize(std::size_t capacity) {
     raw_reads.resize(capacity);
     events.resize(capacity);
@@ -18,6 +36,7 @@ void BatchBuffer::resize(std::size_t capacity) {
     fuzzy_quantized.resize(capacity);
     alignment_quantized.resize(capacity);
     seeds.resize(capacity);
+    seed_hits.resize(capacity);
     num_reads = 0;
 }
 
@@ -29,6 +48,7 @@ void BatchBuffer::clear() {
         fuzzy_quantized[i].tokens.clear();
         alignment_quantized[i] = signal::AlignmentQuantizedSignal{};
         seeds[i].seeds.clear();
+        seed_hits[i].clear();
     }
     num_reads = 0;
 }
@@ -47,6 +67,13 @@ PipelineComponents BatchMapper::create_components() const {
     comps.fuzzy_quantizer = signal::make_fuzzy_quantizer(config_.fuzzy_config);
     comps.alignment_quantizer = signal::make_alignment_quantizer(config_.alignment_config);
     comps.seed_extractor = signal::make_seed_extractor(config_.seed_config);
+    comps.seed_store = config_.seed_store;
+    if (!comps.seed_store) {
+        throw std::runtime_error("BatchMapper requires a SeedStore for lookup");
+    }
+    const std::size_t freq_threshold = comps.seed_store->frequency_threshold();
+    // Limit the lookup helper to what the SeedStore exposes.
+    comps.lookup = SeedLookup(comps.seed_store, freq_threshold);
     return comps;
 }
 
@@ -102,13 +129,18 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
         components_.alignment_quantizer->quantize(batch.normalized[index], &batch.events[index]);
     batch.seeds[index] =
         components_.seed_extractor->extract(batch.fuzzy_quantized[index], &batch.events[index]);
+
+    // Lookup seeds in the index and collect hits.
+    components_.lookup.lookup(batch.seeds[index], batch.seed_hits[index]);
 }
 
 void BatchMapper::output_batch(const BatchBuffer& batch) const {
     for (std::size_t i = 0; i < batch.num_reads; ++i) {
         const auto& read = batch.raw_reads[i];
         const auto& seeds_for_read = batch.seeds[i].seeds;
+        const auto& hits_for_read = batch.seed_hits[i];
         output_ << read.read_id << "\tseeds=" << seeds_for_read.size()
+                << "\thits=" << hits_for_read.size()
                 << "\tlen=" << read.len_raw_signal << "\n";
     }
 }
