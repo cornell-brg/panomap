@@ -39,6 +39,11 @@ struct ClusterSummary {
 struct SeedClustererConfig {
     std::string backend{"fse"};  // "fse", "probe", "chaining" (future)
     std::size_t max_hash_frequency{0};  // from SeedStore metadata
+
+    // Clustering parameters (FSE/legacy)
+    int diagonal_cutoff{50};           // Max diagonal gap to stay in same cluster
+    std::size_t min_cluster_size{2};   // Minimum seeds per cluster
+    int max_clusters{-1};              // Max clusters to return (-1 = unlimited)
 };
 
 class SeedClusterer {
