@@ -20,34 +20,33 @@ The tool is built in modern C++ with a modular architecture that supports multip
 ### Build
 
 ```bash
-# Initialize submodules
+# Initialize submodules (required for slow5 and libvgio)
 git submodule update --init --recursive
 
-# Configure and build
-mkdir build && cd build
-cmake ..
-make -j $(nproc)
+# Configure (out-of-source) and build
+cmake -S piru -B piru/build
+cmake --build piru/build
 
 # Run tests (optional)
-cmake .. -DBUILD_TESTING=ON
-make check
+ctest --test-dir piru/build
 ```
 
 ### Testing CLI Commands
 
 To manually test the `piru index` and `piru map` commands:
 
-1.  **Build the `piru` executable**: If you haven't already, ensure the project is built by running `make -j $(nproc)` from your `build` directory.
-2.  **Create an index**: Use the `piru index` command with a test graph to generate an index.
+1.  **Build the `piru` executable**: See the build steps above; the binary lives at `piru/build/piru`.
+2.  **Create an index**: Use the `piru index` command with a test graph to generate an index directory.
     ```bash
-    ./piru index --graph-k 15 --output ./my_test_index ../piru/tests/data/graphs/sample.gfa
+    ./piru/build/piru index --graph=dbg --graph-k=15 \
+      --output ./my_test_index piru/tests/data/graphs/sample.gfa
     ```
     This command will create a directory named `./my_test_index` containing the generated `.graph`, `.signals`, and `.seeds` files.
 3.  **Run `piru map` with the new index**: Use the `piru map` command, pointing it to the index you just created and some sample reads.
     ```bash
-    ./piru map --index ./my_test_index ../piru/tests/data/reads/sample.blow5
+    ./piru/build/piru map --index ./my_test_index piru/tests/data/reads/sample.blow5
     ```
-    If successful, you should see an informational message indicating that the index was loaded, for example: `[INFO] loading index from ./my_test_index`.
+    If successful, you should see the index load plus per-read seed counts printed to stdout.
 
 **CMake options (all default to ON):**
 - `PIRU_USE_TBB`: enable oneTBB backend for parallelism
@@ -82,7 +81,7 @@ cmake .. -DPIRU_FETCH_TBB=OFF
 ### Main Tool
 
 ```bash
-./build/piru [--help] [--version] <command> [options]
+./piru/build/piru [--help] [--version] <command> [options]
 ```
 
 Run `piru --help` to see available subcommands and `piru <command> --help` for command-specific options.
@@ -91,7 +90,7 @@ All subcommands that support profiling (`index`, `map`, `mt-test`) accept a `-p/
 
 ### `index` - Build Index
 
-Load a graph file and prepare it for mapping. Currently supports loading and inspecting graphs; full index construction is under development.
+Load a graph file, transform it into an alignment-ready graph, squigglize/quantize signals, build seeds, and serialize the full index.
 
 ```bash
 piru index [options] <graph-file>
@@ -100,33 +99,42 @@ piru index [options] <graph-file>
 **Options:**
 - `-h, --help` - Show help
 - `-g, --graph TYPE` - Graph type: `dbg` (default) or `vg`
+- `-k, --graph-k N` - DBG k-mer size (auto-detected from overlap when possible)
 - `-m, --model MODEL` - Pore model: `r9.4`, `r10.4` (builtin), or path to model file
+- `-o, --output DIR` - Output directory (default `<graph-file>.piru`)
 - `-t, --threads N` - Worker threads (reserved for future indexing)
 - `-p, --profile` - Print timing breakdown
+- `--seed-k N`, `--seed-stride N`, `--seed-filter F` - Seed extraction controls
+- `--aq-backend BACKEND`, `--aq-scale SCALE` - Alignment quantization backend/override
 
 **Examples:**
 ```bash
 # Index a VG variation graph (e.g., HLA pangenome)
-./build/piru index --graph=vg --model=r9.4 --output ./drb1_index tests/data/graphs/drb1.vg
+./piru/build/piru index --graph=vg --model=r9.4 \
+  --output ./drb1_index piru/tests/data/graphs/drb1.vg
 
 # Index a GFA de Bruijn graph
-./build/piru index --graph=dbg --graph-k=15 --output ./sample_index tests/data/graphs/sample.gfa
+./piru/build/piru index --graph=dbg --graph-k=15 \
+  --output ./sample_index piru/tests/data/graphs/sample.gfa
 
 # Use custom pore model
-./build/piru index --graph=vg --model=/path/to/custom.model --output ./my_index reference.vg
+./piru/build/piru index --graph=vg --model=/path/to/custom.model \
+  --output ./my_index reference.vg
 ```
 
-**VG Graph Indexing Details:**
-- VG graphs use **path-guided transformation**: embedded haplotype paths provide biologically accurate k-1 context
-- Nodes appearing in multiple paths with different contexts are duplicated (e.g., HLA graphs with 12 haplotypes may show 3x expansion)
-- N bases in sequences are handled via sentinel values; seed extraction skips these regions
-- Example: drb1.vg (5111 nodes) → 15333 transformed nodes, 5135 chains, 45 unique seeds
+The command transforms the imported graph (DBG transform or VG path-guided transform), pseudo-linearizes it (chains, SCCs, superbubbles), squigglizes/quantizes signals, builds a seed store, and writes `<name>.graph`, `<name>.signals`, and `<name>.seeds` inside the output directory.
 
-The command loads the graph, transforms it into a squigglization-ready format, generates signal representations, builds the seed index, and writes all components to the output directory.
+**Debugging/inspection:** Configure with `-DPIRU_DUMP_GRAPHS=ON` to emit GFA snapshots (`imported_graph.gfa`, `transformed_graph.gfa`, `raw_signals.gfa`, `aln_quantized.gfa`, `fuzzy_quantized.gfa`) for manual verification. Signal values are encoded as comma-separated sequences with tags describing the dump type and quantizer settings.
+
+**VG Graph Indexing Details:**
+- VG graphs use **path-guided transformation** with forward and reverse walks; every original edge produces forward and reverse edges.
+- Nodes appearing in multiple paths with different contexts are duplicated; typical expansion is ~2x (e.g., `drb1.vg` 5111 nodes → 10222 directional nodes with k-1 overlaps).
+- k-1 context is appended during path walking (both strands) so reverse nodes carry proper squiggle context.
+- N bases are handled via sentinel values and are skipped during seed extraction.
 
 ### `map` - Map Reads
 
-Read and list raw signal data from slow5/blow5 files. Currently demonstrates read I/O; full mapping functionality is under development.
+Load an index, stream reads, and run the read-side signal pipeline (event detection, normalization, quantization, seeding). Alignment to the graph is not wired up yet; current output reports per-read seed counts.
 
 ```bash
 piru map [options] <reads-path>
@@ -134,6 +142,7 @@ piru map [options] <reads-path>
 
 **Options:**
 - `-h, --help` - Show help
+- `-i, --index DIR` - Path to index directory (required)
 - `-t, --threads N` - Worker threads (reserved for future mapping)
 - `-p, --profile` - Print timing breakdown
 

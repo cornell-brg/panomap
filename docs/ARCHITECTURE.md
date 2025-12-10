@@ -64,7 +64,7 @@ ImportedGraph        │
      ▼               │
 ┌──────────────┐     │
 │  Transform   │     │
-│   (future)   │     │
+│              │     │
 └──────────────┘     │
      │               │
      ▼               │
@@ -75,7 +75,7 @@ ImportedGraph        │
      ▼               │
 ┌──────────────┐     │
 │Pseudo-Linear │     │
-│   (future)   │     │
+│              │     │
 └──────────────┘     │
      │               │
      ▼               │
@@ -88,7 +88,7 @@ ImportedGraph        │
      ┌───────────────┐
      │ Squigglize &  │
      │ Index Builder │
-     │   (future)    │
+     │               │
      └───────────────┘
              │
              │ produces three components:
@@ -104,15 +104,15 @@ GraphStore SignalStore SeedStore
    └─────────┴─────────┘
              │
              ▼
-          index
-       (on disk)
+       index
+     (on disk)
 ```
 
-**Current status:** Graph loading and model validation are implemented. DBG graph transformation, pseudo-linearization, squigglization, index building, and on-disk serialization are implemented. VG graph transformation is planned.
+**Current status:** Full indexing pipeline is implemented for both DBG and VG graphs (path-guided transform, pseudo-linearization, squigglization/quantization, seed build, serialization).
 
 **Component status:**
 - [x] GraphLoader (GFA/vg)
-- [ ] Transform (ImportedGraph → AlnGraph)
+- [x] Transform (ImportedGraph → AlnGraph; DBG transform + VG path-guided transform)
 - [x] Pseudo-Linearize (chain IDs, linear coords)
 - [x] Squigglize & Index Builder
 - [x] GraphStore / SignalStore / SeedStore backends + serialization
@@ -147,15 +147,13 @@ GraphStore SignalStore SeedStore
  (raw signal)      │  Index   │
       │            │  Loader  │
       ▼            └──────────┘
- ┌──────────────┐       │
- │Event Detect  │       ├─────── GraphStore
- │ (future)     │       ├─────── SignalStore
- └──────────────┘       └─────── SeedStore
+ ┌──────────────┐
+ │Event Detect  │
+ └──────────────┘
       │
       ▼
  ┌──────────────┐
  │ Normalize    │
- │ (future)     │
  └──────────────┘
       │
       ▼
@@ -170,47 +168,16 @@ GraphStore SignalStore SeedStore
       ▼                │
  ┌──────────────┐      │
  │Seed Extract  │      │
- │& Lookup      │      │
- │ (SeedStore)  │      │
  └──────────────┘      │
       │                │
       ▼                │
-  Seed Hits            │
- (node_id+pos)         │
+  Seeds per read       │
+ (current output)      │
       │                │
-      ├────────────────┘
-      │
-      ▼
- ┌──────────────┐
- │   Cluster    │
- │ (by chain ID)│
- └──────────────┘
-      │
-      ▼
- ┌──────────────┐
- │    Chain     │
- │ (colinear)   │
- └──────────────┘
-      │
-      ▼
- ┌───────────────┐
- │Align & Score  │
- │(vs SignalStore│
- │ using aln.    │
- │ quant signal) │
- └───────────────┘
-      │
-      ▼
- AlignmentResult
-      │
-      ▼
- ┌──────────────┐
- │ ResultWriter │
- │(GAF/GAM/JSON)│
- └──────────────┘
+      └─── future: lookup → cluster → chain → align → results ───┘
 ```
 
-**Current status:** Read parsing and index loading are implemented. Signal preprocessing, alignment core, and result writing are planned.
+**Current status:** Read parsing, signal preprocessing, quantization, and seed extraction are implemented and exposed via `piru map` (currently reports per-read seed counts). Index loading exists but seed lookup, clustering/chaining, alignment scoring, and result writing are not yet wired.
 
 **Component status:**
 - [x] Read parse (ReadProvider)
@@ -220,10 +187,10 @@ GraphStore SignalStore SeedStore
 - [x] Alignment quantization (scoring)
 - [x] Seed extraction
 - [x] Index Loader
-- [ ] SeedStore lookup
-- [ ] Clustering/chaining
-- [ ] Alignment scoring
-- [ ] ResultWriter integration in map path
+- [ ] SeedStore lookup (future)
+- [ ] Clustering/chaining (future)
+- [ ] Alignment scoring (future)
+- [ ] ResultWriter integration in map path (future)
 
 **Mapping algorithm (planned):**
 1. **Signal preprocessing**:
@@ -284,13 +251,11 @@ GraphStore SignalStore SeedStore
 - Notes: GBZ/GBWTGraph support is on the roadmap; alignment graph conversion will happen downstream.
 
 ### Graph Storage (Index)
-- Target type: `AlnGraph` (planned) - directional, cleaned graph ready for squigglization, with chain IDs and linear coordinates.
-- Interface: `GraphStore` (planned) - abstract interface for graph topology navigation and chain queries.
-- Factory: `make_graph_store` (planned) - creates backend based on representation choice.
-- Backends (planned):
-  - Adjacency list (default) - simple, fast, cache-friendly.
-  - CSR (Compressed Sparse Row) - optimized for static graphs, excellent cache locality.
-  - Future: libhandlegraph-compatible backend, GPU/distributed representations.
+- Target type: `AlnGraph` - directional, cleaned graph ready for squigglization, with chain IDs and linear coordinates.
+- Interface: `GraphStore` (implemented).
+- Backends:
+  - `AdjListGraphStore` (current default) - simple adjacency-list wrapper over `AlnGraph`.
+  - Future: CSR/other compact layouts, libhandlegraph-compatible backend, GPU/distributed representations.
 - **Stored data**:
   - Topology: nodes, edges, paths
   - **Chain IDs**: which chain (if any) each node belongs to (from pseudo-linearization)
@@ -302,20 +267,13 @@ GraphStore SignalStore SeedStore
   - Separate from SignalStore (which holds signal data)
 
 ### Signal Storage (Index)
-- Interface: `SignalStore` (planned) - abstract interface for storing and retrieving per-node expected signal profiles.
-- Factory: `make_signal_store` (planned) - creates backend based on quantization choice.
-- **Storage Quantization** (goal: memory efficiency while preserving alignment accuracy):
-  - Backends (planned):
-    - `Float32SignalStore` - full precision (baseline).
-    - `Int16SignalStore` - 16-bit integer quantization.
-    - `Int8SignalStore` - 8-bit quantization for aggressive compression.
-    - Custom fixed-point or adaptive quantization schemes.
-  - Note: This is NOT the same as seed quantization; this is about storage format.
-- Usage: During alignment, query signal is compared against reference signals from SignalStore for scoring.
+- Interface: `SignalStore` (implemented).
+- Backend: `VectorSignalStore` (current) storing alignment-quantized per-node signals.
+- Notes: Alignment quantizer backend is selectable during indexing; signals are stored using that quantized format. Future backends can introduce alternative storage layouts or precisions.
 
 ### Seed Storage (Index)
-- Interface: `SeedStore` (planned) - abstract interface for seed lookup during mapping.
-- Factory: `make_seed_store` (planned) - creates backend based on seeding strategy and quantization choice.
+- Interface: `SeedStore` (implemented).
+- Backend: `HashSeedStore` (current) built from fuzzy-quantized seeds; serialized to disk.
 - **Two orthogonal design choices:**
   1. **Seeding Strategy**: How seeds are extracted
      - k-mer: consecutive k signal samples.
@@ -381,8 +339,8 @@ GraphStore SignalStore SeedStore
 ## Future/Roadmap (selected)
 - **Index**:
   - Implement CSR backend for GraphStore.
-  - Implement advanced quantization for SignalStore (custom fixed-point, adaptive).
-  - Implement minimizer-based seeding strategy for SeedStore.
+  - Implement advanced storage backends for SignalStore (custom fixed-point, adaptive) beyond the current vector store.
+  - Implement minimizer-based seeding strategy for SeedStore and corresponding storage tweaks.
 - **Map**:
   - Implement alignment core (AlignSingle):
     - Seed lookup via SeedStore
