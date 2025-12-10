@@ -165,6 +165,7 @@ int handle_map(const std::vector<std::string>& args) {
     piru::mapping::BatchMapperConfig map_config;
     map_config.num_threads = num_threads;
     map_config.seed_store = loaded_index.seeds.get();
+    map_config.graph_store = loaded_index.graph.get();
 
     // Align map-side settings with index metadata before processing.
     apply_index_compatibility(loaded_index, map_config);

@@ -101,6 +101,7 @@ add_executable(piru
     src/index/squigglize.cpp
     src/index/seed_builder.cpp
     src/mapping/batch_mapper.cpp
+    src/mapping/seed_clusterer_factory.cpp
     src/util/signal_handlers.cpp
     src/util/timing.cpp
 )

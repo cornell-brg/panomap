@@ -16,24 +16,23 @@
 #include "signal/seed_extractors/seed_extractor_factory.hpp"
 #include "signal/signal_types.hpp"
 #include "index/seed_store.hpp"
+#include "index/graph_store.hpp"
+#include "mapping/seed_clusterer.hpp"
 
 namespace piru::mapping {
 
-struct SeedHitRecord {
-    index::SeedHit target;      // node_id + offset in the graph
-    std::size_t read_pos{0};    // position of the seed in the read
-    std::uint64_t hash{0};      // seed hash to help downstream clustering/debugging
-};
-
 class SeedLookup {
 public:
-    SeedLookup(const index::SeedStore* store, std::size_t freq_threshold)
-        : store_(store), freq_threshold_(freq_threshold) {}
+    SeedLookup(const index::SeedStore* store,
+               const index::GraphStore* graph_store,
+               std::size_t freq_threshold)
+        : store_(store), graph_store_(graph_store), freq_threshold_(freq_threshold) {}
 
     void lookup(const signal::SeedBuffer& seeds, std::vector<SeedHitRecord>& out_hits) const;
 
 private:
     const index::SeedStore* store_{nullptr};  // non-owning
+    const index::GraphStore* graph_store_{nullptr};  // non-owning
     std::size_t freq_threshold_{0};
 };
 
@@ -48,6 +47,7 @@ struct BatchMapperConfig {
     signal::AlignmentQuantizerConfig alignment_config{};
     signal::SeedExtractorConfig seed_config{};
     const index::SeedStore* seed_store{nullptr};  // non-owning pointer to loaded SeedStore
+    const index::GraphStore* graph_store{nullptr};  // non-owning pointer to loaded GraphStore
 };
 
 struct BatchMapperStats {
@@ -76,7 +76,8 @@ struct PipelineComponents {
     signal::AlignmentQuantizerPtr alignment_quantizer;
     signal::SeedExtractorPtr seed_extractor;
     const index::SeedStore* seed_store{nullptr};  // non-owning; loaded index
-    SeedLookup lookup{nullptr, 0};
+    const index::GraphStore* graph_store{nullptr};  // non-owning; loaded index
+    SeedLookup lookup{nullptr, nullptr, 0};
 };
 
 class BatchMapper {

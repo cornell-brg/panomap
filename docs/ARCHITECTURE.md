@@ -187,7 +187,7 @@ GraphStore SignalStore SeedStore
 - [x] Alignment quantization (scoring)
 - [x] Seed extraction
 - [x] Index Loader
-- [ ] SeedStore lookup (future)
+- [x] SeedStore lookup
 - [ ] Clustering/chaining (future)
 - [ ] Alignment scoring (future)
 - [ ] ResultWriter integration in map path (future)

@@ -24,6 +24,10 @@ void SeedLookup::lookup(const signal::SeedBuffer& seeds, std::vector<SeedHitReco
                 .target = h,
                 .read_pos = seed.position,
                 .hash = seed.hash,
+                .span = seed.span,
+                .chain_id = graph_store_ ? graph_store_->chainId(h.node_id) : std::optional<std::int64_t>{},
+                .linear_pos = graph_store_ ? graph_store_->linearPosition(h.node_id) : std::optional<std::int64_t>{},
+                .frequency = hits->size(),
             });
         }
     }
@@ -68,12 +72,13 @@ PipelineComponents BatchMapper::create_components() const {
     comps.alignment_quantizer = signal::make_alignment_quantizer(config_.alignment_config);
     comps.seed_extractor = signal::make_seed_extractor(config_.seed_config);
     comps.seed_store = config_.seed_store;
+    comps.graph_store = config_.graph_store;
     if (!comps.seed_store) {
         throw std::runtime_error("BatchMapper requires a SeedStore for lookup");
     }
     const std::size_t freq_threshold = comps.seed_store->frequency_threshold();
     // Limit the lookup helper to what the SeedStore exposes.
-    comps.lookup = SeedLookup(comps.seed_store, freq_threshold);
+    comps.lookup = SeedLookup(comps.seed_store, comps.graph_store, freq_threshold);
     return comps;
 }
 
