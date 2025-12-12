@@ -106,6 +106,8 @@ add_executable(piru
     src/mapping/batch_mapper.cpp
     src/mapping/seed_clusterer_factory.cpp
     src/mapping/seed_merger.cpp
+    src/mapping/anchor_expander.cpp
+    src/mapping/dp_chain_clusterer.cpp
     src/util/signal_handlers.cpp
     src/util/timing.cpp
 )

@@ -59,6 +59,7 @@ if(DOCTEST_AVAILABLE)
         test_linearizers.cpp
         test_seed_merger.cpp
         test_anchor_expander.cpp
+        test_dp_chain_clusterer.cpp
     )
 
     target_include_directories(piru_tests PRIVATE
@@ -113,6 +114,7 @@ if(DOCTEST_AVAILABLE)
         ${CMAKE_SOURCE_DIR}/src/mapping/seed_clusterer_factory.cpp
         ${CMAKE_SOURCE_DIR}/src/mapping/seed_merger.cpp
         ${CMAKE_SOURCE_DIR}/src/mapping/anchor_expander.cpp
+        ${CMAKE_SOURCE_DIR}/src/mapping/dp_chain_clusterer.cpp
     )
 
     target_link_libraries(piru_tests PRIVATE doctest::doctest)
