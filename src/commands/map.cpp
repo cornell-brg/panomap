@@ -70,6 +70,11 @@ void apply_index_compatibility(const piru::io::index::LoadedIndex& loaded,
                 index_seed_cfg.backend + "').");
         }
     }
+
+    // Populate clusterer config from SeedStore metadata (critical for seed scoring).
+    map_config.clusterer_config.max_hash_frequency = seed_store->max_hash_frequency();
+    LOG_INFO("Using clustering config from index: max_hash_frequency=" +
+             std::to_string(map_config.clusterer_config.max_hash_frequency));
 }
 
 }  // namespace

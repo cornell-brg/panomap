@@ -104,6 +104,7 @@ if(DOCTEST_AVAILABLE)
         ${CMAKE_SOURCE_DIR}/src/index/vg_transform_factory.cpp
         ${CMAKE_SOURCE_DIR}/src/index/pseudo_linearize.cpp
         ${CMAKE_SOURCE_DIR}/src/mapping/batch_mapper.cpp
+        ${CMAKE_SOURCE_DIR}/src/mapping/seed_clusterer_factory.cpp
     )
 
     target_link_libraries(piru_tests PRIVATE doctest::doctest)

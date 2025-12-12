@@ -46,6 +46,7 @@ struct BatchMapperConfig {
     signal::FuzzyQuantizerConfig fuzzy_config{};
     signal::AlignmentQuantizerConfig alignment_config{};
     signal::SeedExtractorConfig seed_config{};
+    SeedClustererConfig clusterer_config{};
     const index::SeedStore* seed_store{nullptr};  // non-owning pointer to loaded SeedStore
     const index::GraphStore* graph_store{nullptr};  // non-owning pointer to loaded GraphStore
 };
@@ -63,6 +64,8 @@ struct BatchBuffer {
     std::vector<signal::AlignmentQuantizedSignal> alignment_quantized;
     std::vector<signal::SeedBuffer> seeds;
     std::vector<std::vector<SeedHitRecord>> seed_hits;
+    std::vector<ClusterSummary> clusters;
+    std::vector<std::string> alignment_notes;
     std::size_t num_reads{0};
 
     void resize(std::size_t capacity);
@@ -78,6 +81,7 @@ struct PipelineComponents {
     const index::SeedStore* seed_store{nullptr};  // non-owning; loaded index
     const index::GraphStore* graph_store{nullptr};  // non-owning; loaded index
     SeedLookup lookup{nullptr, nullptr, 0};
+    SeedClustererPtr clusterer;
 };
 
 class BatchMapper {
@@ -93,6 +97,8 @@ private:
     void process_read(BatchBuffer& batch, std::size_t index) const;
     void lookup_seed_hits(const signal::SeedBuffer& seeds,
                           std::vector<SeedHitRecord>& hits_out) const;
+    void run_alignment_stub(const ClusterSummary& summary, const io::RawRead& read,
+                            std::string& note) const;
     PipelineComponents create_components() const;
 
     BatchMapperConfig config_;

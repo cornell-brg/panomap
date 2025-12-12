@@ -41,6 +41,8 @@ void BatchBuffer::resize(std::size_t capacity) {
     alignment_quantized.resize(capacity);
     seeds.resize(capacity);
     seed_hits.resize(capacity);
+    clusters.resize(capacity);
+    alignment_notes.resize(capacity);
     num_reads = 0;
 }
 
@@ -53,6 +55,8 @@ void BatchBuffer::clear() {
         alignment_quantized[i] = signal::AlignmentQuantizedSignal{};
         seeds[i].seeds.clear();
         seed_hits[i].clear();
+        clusters[i] = ClusterSummary{};
+        alignment_notes[i].clear();
     }
     num_reads = 0;
 }
@@ -76,10 +80,24 @@ PipelineComponents BatchMapper::create_components() const {
     if (!comps.seed_store) {
         throw std::runtime_error("BatchMapper requires a SeedStore for lookup");
     }
+    comps.clusterer = make_seed_clusterer(config_.clusterer_config);
     const std::size_t freq_threshold = comps.seed_store->frequency_threshold();
     // Limit the lookup helper to what the SeedStore exposes.
     comps.lookup = SeedLookup(comps.seed_store, comps.graph_store, freq_threshold);
     return comps;
+}
+
+void BatchMapper::run_alignment_stub(const ClusterSummary& summary, const io::RawRead& read,
+                                     std::string& note) const {
+    if (summary.anchors.empty()) {
+        note = "align=none";
+        return;
+    }
+    const auto backend = components_.clusterer ? components_.clusterer->name() : "unknown";
+    note = "align=" + backend + " anchors=" + std::to_string(summary.anchors.size());
+    if (!read.read_id.empty()) {
+        note += " read=" + read.read_id;
+    }
 }
 
 BatchMapperStats BatchMapper::process_all() {
@@ -137,6 +155,12 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
 
     // Lookup seeds in the index and collect hits.
     components_.lookup.lookup(batch.seeds[index], batch.seed_hits[index]);
+
+    // Cluster hits into anchors (FSE/probe/chaining backend).
+    batch.clusters[index] = components_.clusterer->cluster(batch.seed_hits[index]);
+
+    // Alignment stub: record what would be aligned (backend + anchor count).
+    run_alignment_stub(batch.clusters[index], batch.raw_reads[index], batch.alignment_notes[index]);
 }
 
 void BatchMapper::output_batch(const BatchBuffer& batch) const {
@@ -144,9 +168,15 @@ void BatchMapper::output_batch(const BatchBuffer& batch) const {
         const auto& read = batch.raw_reads[i];
         const auto& seeds_for_read = batch.seeds[i].seeds;
         const auto& hits_for_read = batch.seed_hits[i];
+        const auto& clusters_for_read = batch.clusters[i];
         output_ << read.read_id << "\tseeds=" << seeds_for_read.size()
                 << "\thits=" << hits_for_read.size()
-                << "\tlen=" << read.len_raw_signal << "\n";
+                << "\tanchors=" << clusters_for_read.anchors.size()
+                << "\tlen=" << read.len_raw_signal;
+        if (!batch.alignment_notes[i].empty()) {
+            output_ << "\t" << batch.alignment_notes[i];
+        }
+        output_ << "\n";
     }
 }
 

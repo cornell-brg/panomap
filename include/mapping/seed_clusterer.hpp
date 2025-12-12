@@ -22,6 +22,7 @@ struct SeedHitRecord {
     std::optional<std::int64_t> chain_id;
     std::optional<std::int64_t> linear_pos;
     std::size_t frequency{0};   // occurrences of this hash in the index
+    mutable double score{0.0};  // Computed during clustering (mutable for legacy compatibility)
 };
 
 // Anchor candidate produced by clustering/chaining.
@@ -29,11 +30,19 @@ struct SeedAnchor {
     index::SeedHit target;          // node_id + offset in graph
     std::size_t read_pos{0};        // position in read
     double score{0.0};              // backend-specific score
+    std::size_t cluster_id{0};      // which cluster this anchor belongs to
+};
+
+// Group of anchors from a single cluster (for probe-based alignment)
+struct ClusterGroup {
+    double cluster_score{0.0};          // score of this cluster
+    std::vector<SeedAnchor> anchors;    // anchors/probes from this cluster
 };
 
 struct ClusterSummary {
-    double score{0.0};
-    std::vector<SeedAnchor> anchors;  // selected anchors (may be single or multiple)
+    double score{0.0};                      // overall best score
+    std::vector<SeedAnchor> anchors;        // flat list (for FSE)
+    std::vector<ClusterGroup> clusters;     // grouped by cluster (for Probe)
 };
 
 struct SeedClustererConfig {
@@ -44,6 +53,10 @@ struct SeedClustererConfig {
     int diagonal_cutoff{50};           // Max diagonal gap to stay in same cluster
     std::size_t min_cluster_size{2};   // Minimum seeds per cluster
     int max_clusters{-1};              // Max clusters to return (-1 = unlimited)
+
+    // Probe parameters (legacy)
+    std::size_t max_probes_per_cluster{10};  // Max probe seeds per cluster
+    std::size_t probe_stride{0};             // Override stride (0 = auto-compute from query length)
 };
 
 class SeedClusterer {
