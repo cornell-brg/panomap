@@ -8,19 +8,10 @@
 #include <vector>
 
 #include "cli/parse.hpp"
-#include "index/pseudo_linearize.hpp"
-#include "index/seed_builder.hpp"
-#include "index/squigglize.hpp"
-#include "index/transform_dbg.hpp"
-#include "index/vg_transform_factory.hpp"
-#include "io/graphs/gfa_exporter.hpp"
-#include "io/graphs/graph.hpp"
+#include "index/index_pipeline.hpp"
 #include "io/graphs/graph_loader_factory.hpp"
 #include "io/index/serialization.hpp"
 #include "io/models/model_factory.hpp"
-#include "signal/alignment_quantizers/alignment_quantizer_factory.hpp"
-#include "signal/fuzzy_quantizers/fuzzy_quantizer_factory.hpp"
-#include "signal/seed_extractors/seed_extractor_factory.hpp"
 #include "util/logging.hpp"
 #include "util/timing.hpp"
 #include "version.hpp"
@@ -54,9 +45,9 @@ int handle_index(const std::vector<std::string>& args) {
         {'t', "threads", true, "Worker threads"},
         {'p', "profile", false, "Emit timing profile (tree)"},
         {'\0', "", false, "\nSeed Generation Options:"},
-        {'\0', "seed-k", true, "Seed k-mer size (default: 10)"},
+        {'\0', "seed-k", true, "Seed k-mer size (default: 6)"},
         {'\0', "seed-stride", true, "Seed stride (default: 1)"},
-        {'\0', "seed-filter", true, "Keep least frequent seed fraction (default: 1.0)"},
+        {'\0', "seed-filter", true, "Keep least frequent seed fraction (default: 0.9)"},
         {'\0', "", false, "\nAlignment Quantization Options:"},
         {'\0', "aq-backend", true, "Backend: int16 (default), int8, passthrough"},
         {'\0', "aq-scale", true, "Manual scale override (expert)"},
@@ -152,13 +143,15 @@ int handle_index(const std::vector<std::string>& args) {
         }
     }
 
+    // Use defaults from IndexPipelineConfig (single source of truth)
+    piru::index::IndexPipelineConfig defaults;
     const std::size_t seed_k =
-        parsed.values.count("seed-k") ? std::stoul(parsed.values.at("seed-k")) : 10;
+        parsed.values.count("seed-k") ? std::stoul(parsed.values.at("seed-k")) : defaults.seed_k;
     const std::size_t seed_stride =
-        parsed.values.count("seed-stride") ? std::stoul(parsed.values.at("seed-stride")) : 1;
+        parsed.values.count("seed-stride") ? std::stoul(parsed.values.at("seed-stride")) : defaults.seed_stride;
     const double seed_filter = parsed.values.count("seed-filter")
                                    ? std::stod(parsed.values.at("seed-filter"))
-                                   : 1.0;
+                                   : defaults.seed_filter;
 
     std::string output_dir = graph_path + ".piru";
     if (parsed.values.count("output")) {
@@ -173,196 +166,54 @@ int handle_index(const std::vector<std::string>& args) {
     LOG_INFO("output: " + output_dir);
 
     // -------------------------------------------------------------------------
-    // Stage 1: Graph Transformation (ImportedGraph -> AlnGraph)
+    // Run Indexing Pipeline (shared with map --graph)
     // -------------------------------------------------------------------------
 
-    PIRU_PROFILE_START(profile, "transform");
-    piru::index::AlnGraph aln_graph;
-
-    if (graph_flavor == "dbg") {
-        aln_graph = piru::index::transformDbg(imported, graph_k, pore_k);
-        #ifdef PIRU_DUMP_GRAPHS
-            piru::GfaExporter::dumpAlnGraph(aln_graph, "transformed_graph.gfa");
-        #endif  
-    } else if (graph_flavor == "vg") {
-        // VG transformation using path-guided approach
-        piru::index::TransformConfig transform_config;
-        transform_config.uncovered_strategy = "expand";  // Default: local expansion
-
-        auto vg_transform = piru::index::makeVGTransform("path_guided", transform_config);
-        aln_graph = vg_transform->apply(imported, 0, pore_k);  // graph_k=0 (unused for VG)
-
-        auto stats = vg_transform->getStats();
-        LOG_INFO("VG transform: " + std::to_string(stats.original_node_count) + " original nodes → " +
-                 std::to_string(stats.transformed_node_count) + " transformed nodes (" +
-                 std::to_string(stats.node_expansion_ratio) + "x expansion)");
-        LOG_INFO("VG coverage: " + std::to_string(stats.uncovered_node_count) + " uncovered nodes");
-        #ifdef PIRU_DUMP_GRAPHS
-            piru::GfaExporter::dumpAlnGraph(aln_graph, "transformed_graph.gfa");
-        #endif
-    } else {
-        LOG_ERROR("index: unknown graph flavor: " + graph_flavor);
-        return 1;
-    }
-
-    if (!aln_graph.validate()) {
-        LOG_ERROR("index: AlnGraph validation failed after transformation");
-        return 1;
-    }
-
-    LOG_INFO("[1/4] transformed: " + std::to_string(aln_graph.nodeCount()) + " directional nodes (originally " +
-             std::to_string(imported.nodes.size()) + " bidirected nodes)");
-    PIRU_PROFILE_STOP(profile, "transform");
-
-    // -------------------------------------------------------------------------
-    // Stage 2: Pseudo-Linearization
-    // -------------------------------------------------------------------------
-
-    PIRU_PROFILE_START(profile, "linearize");
-
-    auto scc = piru::index::computeScc(aln_graph);
-    auto tips = piru::index::chainTips(aln_graph, scc);
-    piru::index::chainCycles(aln_graph, tips);
-    auto sb = piru::index::chainSuperbubbles(aln_graph, scc, tips);
-    auto chain_ids = piru::index::assignChainIds(sb.uf);
-    auto positions = piru::index::assignLinearPositions(aln_graph, chain_ids, scc);
-
-    // Store chain metadata in graph nodes
-    for (std::size_t i = 0; i < aln_graph.nodeCount(); ++i) {
-        aln_graph.mutableNode(i).chain_id = chain_ids[i];
-        aln_graph.mutableNode(i).linear_position = positions[i];
-    }
-
-    std::set<std::size_t> unique_chains(chain_ids.begin(), chain_ids.end());
-    LOG_INFO("[2/4] linearized: " + std::to_string(unique_chains.size()) + " chains");
-    PIRU_PROFILE_STOP(profile, "linearize");
-
-    // -------------------------------------------------------------------------
-    // Stage 3: Squigglization + Quantization
-    // -------------------------------------------------------------------------
-
-    PIRU_PROFILE_START(profile, "squigglize");
-
-    piru::signal::FuzzyQuantizerConfig fuzzy_cfg;
-    fuzzy_cfg.backend = "rh2";
-    auto fuzzy_quantizer = piru::signal::make_fuzzy_quantizer(fuzzy_cfg);
-    if (!fuzzy_quantizer) {
-        LOG_ERROR("index: failed to create fuzzy quantizer");
-        return 1;
-    }
-
-    piru::signal::AlignmentQuantizerConfig align_cfg;
-    align_cfg.backend = parsed.values.count("aq-backend") ? parsed.values.at("aq-backend") : "int16";
+    piru::index::IndexPipelineConfig index_config;
+    index_config.graph_flavor = graph_flavor;
+    index_config.linearizer = "superbubble";  // index command always uses superbubble
+    index_config.graph_k = graph_k;
+    index_config.seed_k = seed_k;
+    index_config.seed_stride = seed_stride;
+    index_config.seed_filter = seed_filter;
+    index_config.fuzzy_quantizer = "rh2";
+    index_config.alignment_quantizer =
+        parsed.values.count("aq-backend") ? parsed.values.at("aq-backend") : "int16";
     if (parsed.values.count("aq-scale")) {
-        align_cfg.scale = std::stof(parsed.values.at("aq-scale"));
-    }
-    auto alignment_quantizer = piru::signal::make_alignment_quantizer(align_cfg);
-    if (!alignment_quantizer) {
-        LOG_ERROR("index: failed to create alignment quantizer");
-        return 1;
+        index_config.alignment_scale = std::stod(parsed.values.at("aq-scale"));
     }
 
-    const auto squiggle_result = piru::index::squigglizeAndQuantize(
-        aln_graph, *model, *fuzzy_quantizer, *alignment_quantizer);
-
-#ifdef PIRU_DUMP_GRAPHS
-    piru::GfaExporter::dumpAlnGraph(aln_graph, "raw_signals.gfa",
-                                      piru::AlnGraphDumpMode::RawSignal,
-                                      &squiggle_result.raw_signals, {});
-
-    std::map<std::string, std::string> aln_quant_tags;
-    aln_quant_tags["AQ_backend"] = "Z:" + alignment_quantizer->name();
-    aln_quant_tags["AQ_scale"] = "f:" + std::to_string(alignment_quantizer->scale());
-    aln_quant_tags["AQ_offset"] = "f:" + std::to_string(alignment_quantizer->offset());
-
-    piru::GfaExporter::dumpAlnGraph(aln_graph, "aln_quantized.gfa",
-                                      piru::AlnGraphDumpMode::AlnQuantized,
-                                      &squiggle_result.alignment_signals,
-                                      aln_quant_tags);
-
-    std::map<std::string, std::string> fuzzy_quant_tags;
-    fuzzy_quant_tags["FQ_backend"] = "Z:" + fuzzy_quantizer->name();
-    fuzzy_quant_tags["FQ_fine_min"] = "f:" + std::to_string(fuzzy_cfg.fine_min);
-    fuzzy_quant_tags["FQ_fine_max"] = "f:" + std::to_string(fuzzy_cfg.fine_max);
-    fuzzy_quant_tags["FQ_fine_range"] = "f:" + std::to_string(fuzzy_cfg.fine_range);
-    fuzzy_quant_tags["FQ_qbits"] = "i:" + std::to_string(fuzzy_cfg.qbits);
-
-    piru::GfaExporter::dumpAlnGraph(aln_graph, "fuzzy_quantized.gfa",
-                                      piru::AlnGraphDumpMode::FuzzyQuantized,
-                                      &squiggle_result.fuzzy_signals,
-                                      fuzzy_quant_tags);
-#endif
-
-    std::size_t total_samples = 0;
-    for (const auto& sig : squiggle_result.fuzzy_signals) {
-        total_samples += sig.tokens.size();
-    }
-
-    LOG_INFO("[3/4] squigglized: " + std::to_string(total_samples) + " signal samples");
-    PIRU_PROFILE_STOP(profile, "squigglize");
+    auto result = piru::index::run_index_pipeline(imported, *model, index_config);
 
     // -------------------------------------------------------------------------
-    // Stage 4: Seed Extraction & Indexing
-    // -------------------------------------------------------------------------
-
-    PIRU_PROFILE_START(profile, "seeds");
-
-    piru::signal::SeedExtractorConfig extractor_cfg;
-    extractor_cfg.backend = "kmer";
-    extractor_cfg.k = seed_k;
-    extractor_cfg.stride = seed_stride;
-    extractor_cfg.qbits = 16;
-    auto extractor = piru::signal::make_seed_extractor(extractor_cfg);
-    if (!extractor) {
-        LOG_ERROR("index: failed to create seed extractor");
-        return 1;
-    }
-
-    piru::index::SeedBuildConfig seed_cfg;
-    seed_cfg.keep_least_frequent_fraction = seed_filter;
-
-    const auto seed_store =
-        piru::index::buildSeedStore(squiggle_result.fuzzy_signals, *extractor, seed_cfg);
-
-    LOG_INFO("[4/4] indexed: " + std::to_string(seed_store.size()) + " unique seeds (max_freq=" +
-             std::to_string(seed_store.max_hash_frequency()) + ")");
-    PIRU_PROFILE_STOP(profile, "seeds");
-
-    // -------------------------------------------------------------------------
-    // Stage 5: Serialize Index
+    // Serialize Index
     // -------------------------------------------------------------------------
 
     PIRU_PROFILE_START(profile, "serialize");
 
-    // 1. Create the store objects from the pipeline results.
-    piru::index::AdjListGraphStore graph_store(std::move(aln_graph));
-    piru::index::VectorSignalStore signal_store(std::move(squiggle_result.alignment_signals));
-    // The seed_store is already created.
-
-    // 2. Populate the global metadata.
+    // Populate metadata
     piru::io::index::IndexMetadata metadata;
-    metadata.graph_flavor = imported.flavor == piru::io::ImportedGraphFlavor::kDbg ? 1 : 2;
-    metadata.graph_k = graph_k;
-    metadata.pore_k = pore_k;
-    metadata.model_name = model->name();
-    metadata.fuzzy_quantizer = fuzzy_cfg.backend;
-    metadata.align_quantizer = align_cfg.backend;
+    metadata.graph_flavor = result.graph_flavor == piru::io::ImportedGraphFlavor::kDbg ? 1 : 2;
+    metadata.graph_k = result.graph_k;
+    metadata.pore_k = result.pore_k;
+    metadata.model_name = result.model_name;
+    metadata.fuzzy_quantizer = result.fuzzy_quantizer;
+    metadata.align_quantizer = result.alignment_quantizer;
     metadata.source_path = graph_path;
 
-    // 3. Create the output directory.
+    // Create output directory
     if (!std::filesystem::exists(output_dir)) {
         std::filesystem::create_directory(output_dir);
     }
 
-    // 4. Write the components to disk.
+    // Write components to disk
     std::filesystem::path dir_path(output_dir);
     std::string basename = dir_path.filename().string();
-    
-    piru::io::index::write_graph(dir_path / (basename + ".graph"), graph_store, metadata);
-    // This is a bit of a hack, we should probably have a better way to get this.
-    // This will be improved in a future refactoring.
-    piru::io::index::write_signals(dir_path / (basename + ".signals"), signal_store, alignment_quantizer->scale(), alignment_quantizer->offset());
-    piru::io::index::write_seeds(dir_path / (basename + ".seeds"), seed_store);
+
+    piru::io::index::write_graph(dir_path / (basename + ".graph"), *result.graph_store, metadata);
+    piru::io::index::write_signals(dir_path / (basename + ".signals"), *result.signal_store,
+                                    result.alignment_scale, result.alignment_offset);
+    piru::io::index::write_seeds(dir_path / (basename + ".seeds"), *result.seed_store);
 
     LOG_INFO("index written to " + output_dir);
     PIRU_PROFILE_STOP(profile, "serialize");

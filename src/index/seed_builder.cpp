@@ -6,6 +6,8 @@
 #include <string>
 #include <vector>
 
+#include "util/logging.hpp"
+
 namespace piru::index {
 
 HashSeedStore buildSeedStore(const std::vector<piru::signal::FuzzyQuantizedSignal>& signals,
@@ -31,13 +33,25 @@ HashSeedStore buildSeedStore(const std::vector<piru::signal::FuzzyQuantizedSigna
     store.set_filter_fraction(config.keep_least_frequent_fraction);
 
     // Step 1: Extract seeds from all nodes and populate hash table
+    std::size_t total_seeds_extracted = 0;
     for (std::size_t node_id = 0; node_id < signals.size(); ++node_id) {
         const auto& signal = signals[node_id];
         const auto seeds = extractor.extract(signal, nullptr);
+        total_seeds_extracted += seeds.seeds.size();
         for (const auto& seed : seeds.seeds) {
             store.insert(seed.hash, SeedHit{node_id, seed.position, seed.length});
         }
     }
+
+    const std::size_t unique_hashes = store.size();
+    const double uniqueness = total_seeds_extracted > 0
+        ? (100.0 * unique_hashes / total_seeds_extracted)
+        : 0.0;
+
+    LOG_INFO("Seed extraction: extracted=" + std::to_string(total_seeds_extracted) +
+             " seeds from " + std::to_string(signals.size()) + " nodes, unique=" +
+             std::to_string(unique_hashes) + " (" +
+             std::to_string(static_cast<int>(uniqueness)) + "%)");
 
     // Step 2: Compute max hash frequency
     std::size_t max_freq = 0;

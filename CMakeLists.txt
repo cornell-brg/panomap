@@ -103,6 +103,7 @@ add_executable(piru
     src/index/path_walk_linearizer.cpp
     src/index/squigglize.cpp
     src/index/seed_builder.cpp
+    src/index/index_pipeline.cpp
     src/mapping/batch_mapper.cpp
     src/mapping/seed_clusterer_factory.cpp
     src/mapping/seed_merger.cpp

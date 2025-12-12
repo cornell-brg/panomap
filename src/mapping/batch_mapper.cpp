@@ -138,7 +138,22 @@ void BatchMapper::load_batch(BatchBuffer& batch) {
 }
 
 void BatchMapper::process_batch(BatchBuffer& batch) {
+    // Calculate estimated memory before processing
+    std::size_t est_mem_mb = 0;
+    for (std::size_t i = 0; i < batch.num_reads; ++i) {
+        est_mem_mb += batch.raw_reads[i].len_raw_signal * sizeof(int16_t) / 1024 / 1024;
+    }
+    LOG_INFO("Processing batch: " + std::to_string(batch.num_reads) + " reads, ~" + std::to_string(est_mem_mb) + " MB raw signal");
+
     executor_->parallel_for(0, batch.num_reads, 1, [&](std::size_t i) { process_read(batch, i); });
+
+    // Calculate seed hits memory
+    std::size_t total_hits = 0;
+    for (std::size_t i = 0; i < batch.num_reads; ++i) {
+        total_hits += batch.seed_hits[i].size();
+    }
+    const std::size_t hits_mem_mb = total_hits * sizeof(SeedHitRecord) / 1024 / 1024;
+    LOG_INFO("Batch complete: total_hits=" + std::to_string(total_hits) + " (~" + std::to_string(hits_mem_mb) + " MB)");
 }
 
 void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
@@ -152,7 +167,6 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
     // Lookup seeds in the index and collect hits.
     components_.lookup.lookup(batch.seeds[index], batch.seed_hits[index]);
     batch.clusters[index] = components_.clusterer->cluster(batch.seed_hits[index]);
-
     // Alignment stub: record what would be aligned (backend + anchor count).
     run_alignment_stub(batch.clusters[index], batch.raw_reads[index], batch.alignment_notes[index]);
 }

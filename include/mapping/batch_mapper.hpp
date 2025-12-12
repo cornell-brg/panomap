@@ -17,6 +17,7 @@
 #include "signal/signal_types.hpp"
 #include "index/seed_store.hpp"
 #include "index/graph_store.hpp"
+#include "index/linearizer.hpp"
 #include "mapping/seed_clusterer.hpp"
 
 namespace piru::mapping {
@@ -49,6 +50,10 @@ struct BatchMapperConfig {
     SeedClustererConfig clusterer_config{};
     const index::SeedStore* seed_store{nullptr};  // non-owning pointer to loaded SeedStore
     const index::GraphStore* graph_store{nullptr};  // non-owning pointer to loaded GraphStore
+
+    // Linearization coordinates (needed for DP chaining)
+    // Non-owning pointer to linearization coords (from in-memory indexing or future deserialization)
+    const std::vector<std::vector<index::LinearCoordinate>>* linearization_coords{nullptr};
 };
 
 struct BatchMapperStats {
