@@ -91,7 +91,7 @@ SeedBuffer KmerSeedExtractor::extract(const FuzzyQuantizedSignal& signal,
                          : ((packed << qbits) | token) & window_mask;  // Normal: pack bits
         }
         const auto hash = hash64(packed, mix_mask);
-        buffer.seeds.push_back(Seed{.hash = hash, .position = start, .span = k});
+        buffer.seeds.push_back(Seed{.hash = hash, .position = start, .length = k});
     }
     return buffer;
 }

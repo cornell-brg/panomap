@@ -24,7 +24,7 @@ void SeedLookup::lookup(const signal::SeedBuffer& seeds, std::vector<SeedHitReco
                 .target = h,
                 .read_pos = seed.position,
                 .hash = seed.hash,
-                .span = seed.span,
+                .span = seed.length,  // Use length (may differ from span after merging)
                 .chain_id = graph_store_ ? graph_store_->chainId(h.node_id) : std::optional<std::int64_t>{},
                 .linear_pos = graph_store_ ? graph_store_->linearPosition(h.node_id) : std::optional<std::int64_t>{},
                 .frequency = hits->size(),

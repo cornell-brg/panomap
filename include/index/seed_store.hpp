@@ -16,6 +16,7 @@ namespace piru::index {
 struct SeedHit {
     std::size_t node_id{0};
     std::size_t offset{0};
+    std::size_t length{0};     // Seed coverage length (from Seed.length)
 };
 
 class SeedStore {

@@ -18,7 +18,7 @@ struct SeedHitRecord {
     index::SeedHit target;      // node_id + offset in graph
     std::size_t read_pos{0};    // seed position in the read
     std::uint64_t hash{0};      // seed hash (for debugging/uniqueness)
-    std::size_t span{0};        // seed span in read bases (k)
+    std::size_t span{0};        // coverage length on query (from Seed.length, may be merged)
     std::optional<std::int64_t> chain_id;
     std::optional<std::int64_t> linear_pos;
     std::size_t frequency{0};   // occurrences of this hash in the index

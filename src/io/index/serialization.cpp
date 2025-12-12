@@ -413,7 +413,7 @@ void write_seeds(const std::string& path, const piru::index::SeedStore& store) {
     // --- Common Header ---
     const char magic[8] = {'P', 'I', 'R', 'U', 'S', 'E', 'E', 'D'};
     out.write(magic, 8);
-    write_pod<uint32_t>(out, 1000); // Format version 1.0
+    write_pod<uint32_t>(out, 1001); // Format version 1.1 (added seed length)
 
     const auto header_size_pos = out.tellp();
     write_pod<uint32_t>(out, 0); // Placeholder for header size
@@ -463,7 +463,7 @@ void write_seeds(const std::string& path, const piru::index::SeedStore& store) {
         write_pod<uint64_t>(out, hash);
         write_pod<uint64_t>(out, current_hit_offset);
         write_pod<uint32_t>(out, hits.size());
-        current_hit_offset += hits.size() * (sizeof(uint32_t) + sizeof(uint32_t));
+        current_hit_offset += hits.size() * (sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t));
     }
 
     out.seekp(hit_list_start);
@@ -472,6 +472,7 @@ void write_seeds(const std::string& path, const piru::index::SeedStore& store) {
         for(const auto& hit : hits) {
             write_pod<uint32_t>(out, static_cast<uint32_t>(hit.node_id));
             write_pod<uint32_t>(out, static_cast<uint32_t>(hit.offset));
+            write_pod<uint32_t>(out, static_cast<uint32_t>(hit.length));
         }
     }
 }
@@ -491,7 +492,7 @@ std::unique_ptr<piru::index::HashSeedStore> read_seeds(const std::string& path) 
 
     uint32_t format_version;
     read_pod(in, format_version);
-    if (format_version > 1000) {
+    if (format_version > 1001) {
         LOG_WARN("Attempting to read a .seeds file with a newer version (" +
                  std::to_string(format_version) + "). Compatibility is not guaranteed.");
     }
@@ -553,19 +554,36 @@ std::unique_ptr<piru::index::HashSeedStore> read_seeds(const std::string& path) 
 
     const auto hit_list_start = in.tellg();
 
+    // Backward compatibility: old format (version 1000) has no length field
+    const bool has_length_field = (format_version >= 1001);
+
+    // For backward compatibility: if old format, use k from params as default length
+    std::size_t default_length = 0;
+    if (!has_length_field && params.count("k")) {
+        default_length = std::stoull(params.at("k"));
+    }
+
     for(const auto& entry : hash_entries) {
         in.seekg(hit_list_start + std::streamoff(entry.offset));
         auto& hits = data[entry.hash];
         hits.reserve(entry.count);
         for(uint32_t j=0; j < entry.count; ++j) {
-            uint32_t node_id, offset;
+            uint32_t node_id, offset, length;
             read_pod(in, node_id);
             read_pod(in, offset);
-            hits.push_back({node_id, offset});
+            if (has_length_field) {
+                read_pod(in, length);
+            } else {
+                length = default_length;
+            }
+            hits.push_back({node_id, offset, length});
         }
     }
-    
-    in.seekg(hit_list_start + std::streamoff(total_hit_count * (sizeof(uint32_t) + sizeof(uint32_t))));
+
+    const std::size_t hit_size = has_length_field ?
+        (sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t)) :
+        (sizeof(uint32_t) + sizeof(uint32_t));
+    in.seekg(hit_list_start + std::streamoff(total_hit_count * hit_size));
     
     if (in.peek() != EOF) {
         throw std::runtime_error("Trailing data found in .seeds file after expected content.");
