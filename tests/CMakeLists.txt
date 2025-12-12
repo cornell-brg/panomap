@@ -56,6 +56,7 @@ if(DOCTEST_AVAILABLE)
         test_serialization.cpp
         test_cli.cpp
         test_gfa_exporter.cpp
+        test_linearizers.cpp
     )
 
     target_include_directories(piru_tests PRIVATE
@@ -103,6 +104,9 @@ if(DOCTEST_AVAILABLE)
         ${CMAKE_SOURCE_DIR}/src/index/path_guided_transform.cpp
         ${CMAKE_SOURCE_DIR}/src/index/vg_transform_factory.cpp
         ${CMAKE_SOURCE_DIR}/src/index/pseudo_linearize.cpp
+        ${CMAKE_SOURCE_DIR}/src/index/linearizer_factory.cpp
+        ${CMAKE_SOURCE_DIR}/src/index/superbubble_linearizer.cpp
+        ${CMAKE_SOURCE_DIR}/src/index/path_walk_linearizer.cpp
         ${CMAKE_SOURCE_DIR}/src/mapping/batch_mapper.cpp
         ${CMAKE_SOURCE_DIR}/src/mapping/seed_clusterer_factory.cpp
     )

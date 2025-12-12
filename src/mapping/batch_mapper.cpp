@@ -143,20 +143,14 @@ void BatchMapper::process_batch(BatchBuffer& batch) {
 
 void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
     batch.events[index] = components_.event_detector->detect(batch.raw_reads[index]);
-    batch.normalized[index] =
-        components_.normalizer->normalize(batch.raw_reads[index], &batch.events[index]);
+    batch.normalized[index] = components_.normalizer->normalize(batch.raw_reads[index], &batch.events[index]);
 
-    batch.fuzzy_quantized[index] =
-        components_.fuzzy_quantizer->quantize(batch.normalized[index], &batch.events[index]);
-    batch.alignment_quantized[index] =
-        components_.alignment_quantizer->quantize(batch.normalized[index], &batch.events[index]);
-    batch.seeds[index] =
-        components_.seed_extractor->extract(batch.fuzzy_quantized[index], &batch.events[index]);
+    batch.fuzzy_quantized[index] = components_.fuzzy_quantizer->quantize(batch.normalized[index], &batch.events[index]);
+    batch.alignment_quantized[index] = components_.alignment_quantizer->quantize(batch.normalized[index], &batch.events[index]);
+    batch.seeds[index] = components_.seed_extractor->extract(batch.fuzzy_quantized[index], &batch.events[index]);
 
     // Lookup seeds in the index and collect hits.
     components_.lookup.lookup(batch.seeds[index], batch.seed_hits[index]);
-
-    // Cluster hits into anchors (FSE/probe/chaining backend).
     batch.clusters[index] = components_.clusterer->cluster(batch.seed_hits[index]);
 
     // Alignment stub: record what would be aligned (backend + anchor count).

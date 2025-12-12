@@ -98,6 +98,9 @@ add_executable(piru
     src/index/path_guided_transform.cpp
     src/index/vg_transform_factory.cpp
     src/index/pseudo_linearize.cpp
+    src/index/linearizer_factory.cpp
+    src/index/superbubble_linearizer.cpp
+    src/index/path_walk_linearizer.cpp
     src/index/squigglize.cpp
     src/index/seed_builder.cpp
     src/mapping/batch_mapper.cpp
