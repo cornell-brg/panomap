@@ -111,6 +111,10 @@ ClusterSummary DPChainClusterer::cluster(const std::vector<Anchor>& anchors) con
         seed_anchor.score = dp[idx];
         seed_anchor.cluster_id = 0;  // Single chain for now
 
+        // Preserve linear coordinates for path-walk debugging
+        seed_anchor.path_id = anchor.path_id;
+        seed_anchor.ref_coord = anchor.ref_coord;
+
         summary.anchors.push_back(seed_anchor);
     }
 

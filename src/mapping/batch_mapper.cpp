@@ -234,13 +234,18 @@ void BatchMapper::output_batch(const BatchBuffer& batch) const {
                 << "\tchains=" << clusters_for_read.anchors.size()
                 << "\tlen=" << read.len_raw_signal;
 
-        // Output chain path (node IDs)
+        // Output chain anchors (query, ref, length, path_id)
         if (!clusters_for_read.anchors.empty()) {
-            output_ << "\tpath=";
+            output_ << "\tanchors_detail=[";
             for (std::size_t j = 0; j < clusters_for_read.anchors.size(); ++j) {
-                if (j > 0) output_ << ",";
-                output_ << clusters_for_read.anchors[j].target.node_id;
+                const auto& anchor = clusters_for_read.anchors[j];
+                if (j > 0) output_ << ";";
+                output_ << "q=" << anchor.read_pos
+                        << ",r=" << anchor.ref_coord
+                        << ",l=" << anchor.target.length
+                        << ",p=" << anchor.path_id;
             }
+            output_ << "]";
         }
 
         output_ << "\n";

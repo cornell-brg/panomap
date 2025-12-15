@@ -38,6 +38,10 @@ struct SeedAnchor {
     std::size_t read_pos{0};        // position in read
     double score{0.0};              // backend-specific score
     std::size_t cluster_id{0};      // which cluster this anchor belongs to
+
+    // Optional: linear coordinates (for path-walk pipeline debugging)
+    std::size_t path_id{0};         // reference path ID
+    std::int64_t ref_coord{0};      // linear position on reference path
 };
 
 // Group of anchors from a single cluster (for probe-based alignment)
