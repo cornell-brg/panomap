@@ -49,7 +49,7 @@ public:
     std::string name() const override { return "dp-chain"; }
 
 private:
-    AnchorExpander expander_;
+    PathWalkExpander expander_;
     DPChainClustererConfig config_;
 
     // Check if anchor j can chain to anchor i.

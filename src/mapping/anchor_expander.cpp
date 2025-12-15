@@ -4,11 +4,15 @@
 
 namespace piru::mapping {
 
-AnchorExpander::AnchorExpander(
+// ============================================================================
+// PathWalkExpander Implementation
+// ============================================================================
+
+PathWalkExpander::PathWalkExpander(
     const std::vector<std::vector<index::LinearCoordinate>>& coords)
     : coords_(coords) {}
 
-std::vector<Anchor> AnchorExpander::expand(const std::vector<SeedHitRecord>& hits) const {
+std::vector<Anchor> PathWalkExpander::expand(const std::vector<SeedHitRecord>& hits) const {
     std::vector<Anchor> anchors;
 
     // Pre-allocate approximate space (assume average 1-2 anchors per hit)
@@ -41,6 +45,46 @@ std::vector<Anchor> AnchorExpander::expand(const std::vector<SeedHitRecord>& hit
 
             anchors.push_back(anchor);
         }
+    }
+
+    return anchors;
+}
+
+// ============================================================================
+// SuperbubbleExpander Implementation
+// ============================================================================
+
+SuperbubbleExpander::SuperbubbleExpander(const index::GraphStore* graph_store)
+    : graph_store_(graph_store) {}
+
+std::vector<Anchor> SuperbubbleExpander::expand(const std::vector<SeedHitRecord>& hits) const {
+    std::vector<Anchor> anchors;
+
+    // 1:1 mapping for superbubble (no multi-path expansion)
+    anchors.reserve(hits.size());
+
+    for (const auto& hit : hits) {
+        const std::size_t node_id = hit.target.node_id;
+
+        // Get chain_id and linear_position from GraphStore
+        auto chain_id = graph_store_->chainId(node_id);
+        auto linear_pos = graph_store_->linearPosition(node_id);
+
+        // Skip nodes without linearization (unmapped/uncovered nodes)
+        if (!chain_id.has_value() || !linear_pos.has_value()) {
+            continue;
+        }
+
+        // Trivial 1:1 mapping to anchor
+        Anchor anchor;
+        anchor.query_pos = hit.read_pos;
+        anchor.ref_coord = linear_pos.value() + static_cast<std::int64_t>(hit.target.offset);
+        anchor.length = hit.span;
+        anchor.path_id = static_cast<std::size_t>(chain_id.value());
+        anchor.node_id = node_id;
+        anchor.node_offset = hit.target.offset;
+
+        anchors.push_back(anchor);
     }
 
     return anchors;
