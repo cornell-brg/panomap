@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "mapping/anchor_expander.hpp"
+#include "mapping/anchor_merger.hpp"
 #include "util/logging.hpp"
 
 namespace piru::mapping {
@@ -207,6 +208,9 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
     // Expand seed hits to anchors (explicit expansion stage)
     auto anchors = components_.expander->expand(batch.seed_hits[index]);
 
+    // Merge adjacent/overlapping anchors on same path (optional optimization)
+    anchors = AnchorMerger::merge(anchors, AnchorMergerConfig{});
+
     // Store anchors for debugging (optional field)
     batch.anchors[index] = anchors;
 
@@ -223,14 +227,22 @@ void BatchMapper::output_batch(const BatchBuffer& batch) const {
         const auto& seeds_for_read = batch.seeds[i].seeds;
         const auto& hits_for_read = batch.seed_hits[i];
         const auto& clusters_for_read = batch.clusters[i];
-        output_ << read.read_id << "\tseeds=" << seeds_for_read.size()
+        output_ << read.read_id
+                << "\tseeds=" << seeds_for_read.size()
                 << "\thits=" << hits_for_read.size()
                 << "\tanchors=" << clusters_for_read.expanded_anchor_count
                 << "\tchains=" << clusters_for_read.anchors.size()
                 << "\tlen=" << read.len_raw_signal;
-        if (!batch.alignment_notes[i].empty()) {
-            output_ << "\t" << batch.alignment_notes[i];
+
+        // Output chain path (node IDs)
+        if (!clusters_for_read.anchors.empty()) {
+            output_ << "\tpath=";
+            for (std::size_t j = 0; j < clusters_for_read.anchors.size(); ++j) {
+                if (j > 0) output_ << ",";
+                output_ << clusters_for_read.anchors[j].target.node_id;
+            }
         }
+
         output_ << "\n";
     }
 }

@@ -114,6 +114,7 @@ if(DOCTEST_AVAILABLE)
         ${CMAKE_SOURCE_DIR}/src/mapping/seed_clusterer_factory.cpp
         ${CMAKE_SOURCE_DIR}/src/mapping/seed_merger.cpp
         ${CMAKE_SOURCE_DIR}/src/mapping/anchor_expander.cpp
+        ${CMAKE_SOURCE_DIR}/src/mapping/anchor_merger.cpp
         ${CMAKE_SOURCE_DIR}/src/mapping/dp_chain_clusterer.cpp
     )
 

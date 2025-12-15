@@ -16,6 +16,10 @@
 #include "util/timing.hpp"
 #include "version.hpp"
 
+#ifdef PIRU_DUMP_GRAPHS
+#include "io/graphs/gfa_exporter.hpp"
+#endif
+
 namespace {
 
 piru::io::ModelPtr load_model_or_file(const std::string& model_arg) {

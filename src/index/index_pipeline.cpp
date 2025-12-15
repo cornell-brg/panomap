@@ -17,6 +17,10 @@
 #include "signal/seed_extractors/seed_extractor_factory.hpp"
 #include "util/logging.hpp"
 
+#ifdef PIRU_DUMP_GRAPHS
+#include "io/graphs/gfa_exporter.hpp"
+#endif
+
 namespace piru::index {
 
 IndexPipelineResult run_index_pipeline(
@@ -64,6 +68,10 @@ IndexPipelineResult run_index_pipeline(
     if (!aln_graph.validate()) {
         throw std::runtime_error("AlnGraph validation failed after transformation");
     }
+
+#ifdef PIRU_DUMP_GRAPHS
+    GfaExporter::dumpAlnGraph(aln_graph, "transformed_graph.gfa", AlnGraphDumpMode::Bases);
+#endif
 
     LOG_INFO("[1/4] transformed: " + std::to_string(aln_graph.nodeCount()) +
              " directional nodes (originally " + std::to_string(imported.nodes.size()) +
@@ -121,6 +129,15 @@ IndexPipelineResult run_index_pipeline(
 
     const auto squiggle_result = squigglizeAndQuantize(
         aln_graph, model, *fuzzy_quantizer, *alignment_quantizer);
+
+#ifdef PIRU_DUMP_GRAPHS
+    GfaExporter::dumpAlnGraph(aln_graph, "raw_signals.gfa", AlnGraphDumpMode::RawSignal,
+                              &squiggle_result.raw_signals);
+    GfaExporter::dumpAlnGraph(aln_graph, "fuzzy_quantized.gfa", AlnGraphDumpMode::FuzzyQuantized,
+                              &squiggle_result.fuzzy_signals);
+    GfaExporter::dumpAlnGraph(aln_graph, "aln_quantized.gfa", AlnGraphDumpMode::AlnQuantized,
+                              &squiggle_result.alignment_signals);
+#endif
 
     std::size_t total_samples = 0;
     std::set<std::int16_t> unique_tokens;
