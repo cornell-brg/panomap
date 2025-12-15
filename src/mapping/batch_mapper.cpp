@@ -7,6 +7,7 @@
 #include <string>
 #include <utility>
 
+#include "mapping/anchor_expander.hpp"
 #include "util/logging.hpp"
 
 namespace piru::mapping {
@@ -41,6 +42,7 @@ void BatchBuffer::resize(std::size_t capacity) {
     alignment_quantized.resize(capacity);
     seeds.resize(capacity);
     seed_hits.resize(capacity);
+    anchors.resize(capacity);
     clusters.resize(capacity);
     alignment_notes.resize(capacity);
     num_reads = 0;
@@ -55,6 +57,7 @@ void BatchBuffer::clear() {
         alignment_quantized[i] = signal::AlignmentQuantizedSignal{};
         seeds[i].seeds.clear();
         seed_hits[i].clear();
+        anchors[i].clear();
         clusters[i] = ClusterSummary{};
         alignment_notes[i].clear();
     }
@@ -80,13 +83,44 @@ PipelineComponents BatchMapper::create_components() const {
     if (!comps.seed_store) {
         throw std::runtime_error("BatchMapper requires a SeedStore for lookup");
     }
-    comps.clusterer = make_seed_clusterer(
+
+    // Create AnchorExpander based on linearization type
+    if (config_.linearization_coords) {
+        // Path-walk linearization → PathWalkExpander
+        comps.expander = std::make_unique<PathWalkExpander>(*config_.linearization_coords);
+    } else {
+        // Superbubble linearization → SuperbubbleExpander
+        if (!config_.graph_store) {
+            throw std::runtime_error("BatchMapper requires GraphStore for superbubble expansion");
+        }
+        comps.expander = std::make_unique<SuperbubbleExpander>(config_.graph_store);
+    }
+
+    comps.clusterer = make_anchor_clusterer(
         config_.clusterer_config,
-        config_.linearization_coords,
         config_.graph_store);
     const std::size_t freq_threshold = comps.seed_store->frequency_threshold();
     // Limit the lookup helper to what the SeedStore exposes.
     comps.lookup = SeedLookup(comps.seed_store, comps.graph_store, freq_threshold);
+
+    // Pipeline validation warnings
+    const bool is_path_walk = (config_.linearization_coords != nullptr);
+    const std::string clusterer_name = comps.clusterer->name();
+    const bool is_dp_chain = (clusterer_name == "dp-chain");
+
+    if (is_path_walk && !is_dp_chain) {
+        LOG_WARN("Using path-walk linearization with '" + clusterer_name +
+                 "' clusterer. Consider --clusterer dp-chain for optimal path-walk support.");
+    }
+    if (!is_path_walk && is_dp_chain) {
+        LOG_WARN("Using DP chaining with superbubble linearization. " +
+                 std::string("DP chaining works best with path-walk linearization."));
+    }
+
+    // Log pipeline configuration
+    LOG_INFO("Pipeline: " + comps.expander->name() + " expansion + " +
+             clusterer_name + " clustering");
+
     return comps;
 }
 
@@ -169,7 +203,16 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
 
     // Lookup seeds in the index and collect hits.
     components_.lookup.lookup(batch.seeds[index], batch.seed_hits[index]);
-    batch.clusters[index] = components_.clusterer->cluster(batch.seed_hits[index]);
+
+    // Expand seed hits to anchors (explicit expansion stage)
+    auto anchors = components_.expander->expand(batch.seed_hits[index]);
+
+    // Store anchors for debugging (optional field)
+    batch.anchors[index] = anchors;
+
+    // Cluster anchors
+    batch.clusters[index] = components_.clusterer->cluster(anchors);
+
     // Alignment stub: record what would be aligned (backend + anchor count).
     run_alignment_stub(batch.clusters[index], batch.raw_reads[index], batch.alignment_notes[index]);
 }

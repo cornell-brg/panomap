@@ -8,6 +8,7 @@
 #include <cmath>
 #include <unordered_map>
 
+#include "mapping/anchor.hpp"
 #include "mapping/dp_chain_clusterer.hpp"
 #include "util/logging.hpp"
 
@@ -15,37 +16,30 @@ namespace piru::mapping {
 
 namespace {
 
-// Helper: select top seed per read position (legacy logic)
-std::vector<const SeedHitRecord*> select_top_seeds_per_position(
-    const std::vector<const SeedHitRecord*>& seeds) {
-    if (seeds.empty()) return {};
+// Helper: select top anchor per query position (for probe sampling)
+std::vector<const Anchor*> select_top_anchors_per_position(
+    const std::vector<const Anchor*>& anchors) {
+    if (anchors.empty()) return {};
 
-    // Sort by read_pos ascending, with score/frequency/hash tie-breaking
-    std::vector<const SeedHitRecord*> sorted = seeds;
+    // Sort by query_pos ascending (deterministic by ref_coord for ties)
+    std::vector<const Anchor*> sorted = anchors;
     std::sort(sorted.begin(), sorted.end(),
-              [](const SeedHitRecord* a, const SeedHitRecord* b) {
-                  if (a->read_pos == b->read_pos) {
-                      // Higher score first on ties
-                      if (a->score == b->score) {
-                          // Lower frequency preferred (more unique)
-                          if (a->frequency == b->frequency) {
-                              return a->hash < b->hash;  // Determinism
-                          }
-                          return a->frequency < b->frequency;
-                      }
-                      return a->score > b->score;
+              [](const Anchor* a, const Anchor* b) {
+                  if (a->query_pos == b->query_pos) {
+                      // Tie-break by ref_coord for determinism
+                      return a->ref_coord < b->ref_coord;
                   }
-                  return a->read_pos < b->read_pos;
+                  return a->query_pos < b->query_pos;
               });
 
-    std::vector<const SeedHitRecord*> top;
+    std::vector<const Anchor*> top;
     top.reserve(sorted.size());
 
     std::size_t current_pos = std::numeric_limits<std::size_t>::max();
-    for (const auto* s : sorted) {
-        if (s->read_pos != current_pos) {
-            top.push_back(s);
-            current_pos = s->read_pos;
+    for (const auto* a : sorted) {
+        if (a->query_pos != current_pos) {
+            top.push_back(a);
+            current_pos = a->query_pos;
         }
     }
     return top;
@@ -59,46 +53,46 @@ std::size_t compute_probe_stride(std::size_t query_length, std::size_t max_probe
     return (query_length + probes - 1) / probes;  // Ceil division
 }
 
-// Helper: sample probe seeds with stride (legacy logic)
-std::vector<const SeedHitRecord*> sample_probe_seeds(
-    const std::vector<const SeedHitRecord*>& seeds,
+// Helper: sample probe anchors with stride
+std::vector<const Anchor*> sample_probe_anchors(
+    const std::vector<const Anchor*>& anchors,
     std::size_t query_length,
     std::size_t max_probes,
     std::size_t stride_override) {
-    if (seeds.empty() || max_probes == 0) return {};
+    if (anchors.empty() || max_probes == 0) return {};
 
     const std::size_t stride = (stride_override > 0)
                                    ? stride_override
                                    : compute_probe_stride(query_length, max_probes);
 
-    // Reduce to top seed per read position
-    auto top_per_pos = select_top_seeds_per_position(seeds);
+    // Reduce to top anchor per query position
+    auto top_per_pos = select_top_anchors_per_position(anchors);
     if (top_per_pos.empty()) return {};
 
     // Sample at stride intervals
-    std::vector<const SeedHitRecord*> sampled;
+    std::vector<const Anchor*> sampled;
     sampled.reserve(std::min(top_per_pos.size(), max_probes));
 
     std::size_t next_target = 0;
-    for (const auto* s : top_per_pos) {
+    for (const auto* a : top_per_pos) {
         if (sampled.empty()) {
-            sampled.push_back(s);
-            next_target = s->read_pos + stride;
+            sampled.push_back(a);
+            next_target = a->query_pos + stride;
             if (sampled.size() >= max_probes) break;
             continue;
         }
-        if (s->read_pos >= next_target) {
-            sampled.push_back(s);
-            next_target = s->read_pos + stride;
+        if (a->query_pos >= next_target) {
+            sampled.push_back(a);
+            next_target = a->query_pos + stride;
             if (sampled.size() >= max_probes) break;
         }
     }
 
     // Ensure last position is considered if undersampled
     if (!top_per_pos.empty() && sampled.size() < max_probes) {
-        const auto* last_seed = top_per_pos.back();
-        if (sampled.empty() || sampled.back()->read_pos != last_seed->read_pos) {
-            sampled.push_back(last_seed);
+        const auto* last_anchor = top_per_pos.back();
+        if (sampled.empty() || sampled.back()->query_pos != last_anchor->query_pos) {
+            sampled.push_back(last_anchor);
         }
     }
 
@@ -110,16 +104,16 @@ std::vector<const SeedHitRecord*> sample_probe_seeds(
     return sampled;
 }
 
-// Helper to calculate coverage with interval merging (legacy logic)
-std::size_t calculate_cluster_coverage(const std::vector<const SeedHitRecord*>& cluster) {
+// Helper to calculate coverage with interval merging
+std::size_t calculate_cluster_coverage(const std::vector<const Anchor*>& cluster) {
     if (cluster.empty()) return 0;
 
     // Build coverage intervals [start, end]
     std::vector<std::pair<std::size_t, std::size_t>> intervals;
     intervals.reserve(cluster.size());
-    for (const auto* h : cluster) {
-        std::size_t start = h->read_pos;
-        std::size_t end = h->read_pos + h->span - 1;
+    for (const auto* a : cluster) {
+        std::size_t start = a->query_pos;
+        std::size_t end = a->query_pos + a->length - 1;
         intervals.emplace_back(start, end);
     }
 
@@ -149,50 +143,49 @@ std::size_t calculate_cluster_coverage(const std::vector<const SeedHitRecord*>& 
 }
 
 struct ScoredCluster {
-    std::vector<const SeedHitRecord*> hits;  // All seeds in cluster
+    std::vector<const Anchor*> anchors;  // All anchors in cluster
     std::size_t coverage{0};
-    SeedAnchor top_seed{};
-    double top_seed_score{0.0};
+    SeedAnchor top_anchor{};
+    double top_anchor_score{0.0};
 };
 
 // Shared clustering logic (used by both FSE and Probe)
-std::vector<ScoredCluster> cluster_and_score_seeds(
-    const std::vector<SeedHitRecord>& hits,
+std::vector<ScoredCluster> cluster_and_score_anchors(
+    const std::vector<Anchor>& anchors,
     const SeedClustererConfig& config) {
 
-    if (hits.empty()) return {};
+    if (anchors.empty()) return {};
 
-    // 1. Group seeds by chain_id (legacy logic: ignore seeds without chain)
-    std::unordered_map<std::int64_t, std::vector<const SeedHitRecord*>> by_chain;
-    by_chain.reserve(hits.size());
-    for (const auto& h : hits) {
-        if (!h.chain_id.has_value()) continue;  // Skip non-chained seeds
-        by_chain[*h.chain_id].push_back(&h);
+    // 1. Group anchors by path_id
+    std::unordered_map<std::size_t, std::vector<const Anchor*>> by_path;
+    by_path.reserve(anchors.size());
+    for (const auto& a : anchors) {
+        by_path[a.path_id].push_back(&a);
     }
 
-    // 2. Within each chain, cluster by diagonal with gap tolerance
-    std::vector<std::vector<const SeedHitRecord*>> all_clusters;
+    // 2. Within each path, cluster by diagonal with gap tolerance
+    std::vector<std::vector<const Anchor*>> all_clusters;
 
-    for (auto& [chain_id, chain_hits] : by_chain) {
-        // Sort by diagonal (GA-style: ref_pos - read_pos)
-        std::sort(chain_hits.begin(), chain_hits.end(),
-                  [](const SeedHitRecord* a, const SeedHitRecord* b) {
-                      const std::int64_t da = a->linear_pos.value() - static_cast<std::int64_t>(a->read_pos);
-                      const std::int64_t db = b->linear_pos.value() - static_cast<std::int64_t>(b->read_pos);
-                      if (da == db) return a->read_pos < b->read_pos;  // Tie-break
+    for (auto& [path_id, path_anchors] : by_path) {
+        // Sort by diagonal (GA-style: ref_coord - query_pos)
+        std::sort(path_anchors.begin(), path_anchors.end(),
+                  [](const Anchor* a, const Anchor* b) {
+                      const std::int64_t da = a->ref_coord - static_cast<std::int64_t>(a->query_pos);
+                      const std::int64_t db = b->ref_coord - static_cast<std::int64_t>(b->query_pos);
+                      if (da == db) return a->query_pos < b->query_pos;  // Tie-break
                       return da < db;
                   });
 
         // Split clusters when diagonal gap > cutoff
-        std::vector<const SeedHitRecord*> current;
-        current.reserve(chain_hits.size());
+        std::vector<const Anchor*> current;
+        current.reserve(path_anchors.size());
         std::int64_t last_diag = 0;
         bool first = true;
 
-        for (const auto* h : chain_hits) {
-            const std::int64_t diag = h->linear_pos.value() - static_cast<std::int64_t>(h->read_pos);
+        for (const auto* a : path_anchors) {
+            const std::int64_t diag = a->ref_coord - static_cast<std::int64_t>(a->query_pos);
             if (first) {
-                current.push_back(h);
+                current.push_back(a);
                 last_diag = diag;
                 first = false;
                 continue;
@@ -204,7 +197,7 @@ std::vector<ScoredCluster> cluster_and_score_seeds(
                 }
                 current.clear();
             }
-            current.push_back(h);
+            current.push_back(a);
             last_diag = diag;
         }
         // Add final cluster if meets min size
@@ -215,55 +208,47 @@ std::vector<ScoredCluster> cluster_and_score_seeds(
 
     if (all_clusters.empty()) return {};
 
-    // 3. Score ALL seeds in each cluster and find top seed
+    // 3. Score anchors in each cluster and find top anchor
     std::vector<ScoredCluster> scored_clusters;
     scored_clusters.reserve(all_clusters.size());
 
-    for (const auto& cluster_hits : all_clusters) {
-        const std::size_t coverage = calculate_cluster_coverage(cluster_hits);
+    for (const auto& cluster_anchors : all_clusters) {
+        const std::size_t coverage = calculate_cluster_coverage(cluster_anchors);
 
-        // Score ALL seeds in this cluster (legacy behavior for probe sampling)
-        double best_score = -std::numeric_limits<double>::infinity();
-        SeedAnchor best_anchor{};
+        // Score based on coverage (anchors don't have frequency info)
+        const double score = static_cast<double>(coverage);
 
-        for (const auto* h : cluster_hits) {
-            const std::size_t uniqueness =
-                (config.max_hash_frequency > h->frequency)
-                    ? (config.max_hash_frequency - h->frequency)
-                    : 0;
-            const double score = static_cast<double>(coverage + uniqueness);
+        // Select first anchor as representative (they're already sorted by diagonal)
+        const auto* best_anchor = cluster_anchors.front();
 
-            // Populate score in the hit record (for probe sampling helpers)
-            h->score = score;
-
-            if (score > best_score) {
-                best_score = score;
-                best_anchor = SeedAnchor{
-                    .target = h->target,
-                    .read_pos = h->read_pos,
-                    .score = score,
-                    .cluster_id = 0,  // Will be set later after sorting
-                };
-            }
-        }
+        SeedAnchor seed_anchor{
+            .target = index::SeedHit{
+                .node_id = best_anchor->node_id,
+                .offset = best_anchor->node_offset,
+                .length = best_anchor->length
+            },
+            .read_pos = best_anchor->query_pos,
+            .score = score,
+            .cluster_id = 0,  // Will be set later after sorting
+        };
 
         scored_clusters.push_back(ScoredCluster{
-            .hits = cluster_hits,
+            .anchors = cluster_anchors,
             .coverage = coverage,
-            .top_seed = best_anchor,
-            .top_seed_score = best_score,
+            .top_anchor = seed_anchor,
+            .top_anchor_score = score,
         });
     }
 
-    // 4. Rank clusters by top seed score
+    // 4. Rank clusters by top anchor score
     std::sort(scored_clusters.begin(), scored_clusters.end(),
               [](const ScoredCluster& a, const ScoredCluster& b) {
-                  return a.top_seed_score > b.top_seed_score;
+                  return a.top_anchor_score > b.top_anchor_score;
               });
 
     // 5. Assign cluster IDs based on rank
     for (std::size_t i = 0; i < scored_clusters.size(); ++i) {
-        scored_clusters[i].top_seed.cluster_id = i;
+        scored_clusters[i].top_anchor.cluster_id = i;
     }
 
     // 6. Cap to max_clusters if specified
@@ -274,28 +259,28 @@ std::vector<ScoredCluster> cluster_and_score_seeds(
     return scored_clusters;
 }
 
-class FseClusterer : public SeedClusterer {
+class FseClusterer : public AnchorClusterer {
 public:
     explicit FseClusterer(SeedClustererConfig cfg) : config_(std::move(cfg)) {}
 
-    ClusterSummary cluster(const std::vector<SeedHitRecord>& hits) const override {
+    ClusterSummary cluster(const std::vector<Anchor>& anchors) const override {
         ClusterSummary summary;
 
-        // For FSE/superbubble: 1:1 expansion (hits have chain_id already)
-        summary.expanded_anchor_count = hits.size();
+        // Anchors already expanded by caller
+        summary.expanded_anchor_count = anchors.size();
 
         // Use shared clustering logic
-        auto scored_clusters = cluster_and_score_seeds(hits, config_);
+        auto scored_clusters = cluster_and_score_anchors(anchors, config_);
         if (scored_clusters.empty()) return summary;
 
-        // Return top seeds from selected clusters (multi-mapping support)
+        // Return top anchors from selected clusters (multi-mapping support)
         summary.anchors.reserve(scored_clusters.size());
         for (const auto& cluster : scored_clusters) {
-            summary.anchors.push_back(cluster.top_seed);
+            summary.anchors.push_back(cluster.top_anchor);
         }
 
         // Overall score is the best cluster score
-        summary.score = scored_clusters[0].top_seed_score;
+        summary.score = scored_clusters[0].top_anchor_score;
 
         return summary;
     }
@@ -306,16 +291,20 @@ private:
     SeedClustererConfig config_;
 };
 
-class NoopClusterer : public SeedClusterer {
+class NoopClusterer : public AnchorClusterer {
 public:
-    ClusterSummary cluster(const std::vector<SeedHitRecord>& hits) const override {
+    ClusterSummary cluster(const std::vector<Anchor>& anchors) const override {
         ClusterSummary summary;
-        summary.expanded_anchor_count = hits.size();
-        summary.anchors.reserve(hits.size());
-        for (const auto& h : hits) {
+        summary.expanded_anchor_count = anchors.size();
+        summary.anchors.reserve(anchors.size());
+        for (const auto& a : anchors) {
             summary.anchors.push_back(SeedAnchor{
-                .target = h.target,
-                .read_pos = h.read_pos,
+                .target = index::SeedHit{
+                    .node_id = a.node_id,
+                    .offset = a.node_offset,
+                    .length = a.length
+                },
+                .read_pos = a.query_pos,
                 .score = 0.0,
             });
         }
@@ -325,34 +314,34 @@ public:
     std::string name() const override { return "noop"; }
 };
 
-class ProbeClusterer : public SeedClusterer {
+class ProbeClusterer : public AnchorClusterer {
 public:
     explicit ProbeClusterer(SeedClustererConfig cfg) : config_(std::move(cfg)) {}
 
-    ClusterSummary cluster(const std::vector<SeedHitRecord>& hits) const override {
+    ClusterSummary cluster(const std::vector<Anchor>& anchors) const override {
         ClusterSummary summary;
 
-        // For Probe/superbubble: 1:1 expansion (hits have chain_id already)
-        summary.expanded_anchor_count = hits.size();
+        // Anchors already expanded by caller
+        summary.expanded_anchor_count = anchors.size();
 
         // Use shared clustering logic (same as FSE)
-        auto scored_clusters = cluster_and_score_seeds(hits, config_);
+        auto scored_clusters = cluster_and_score_anchors(anchors, config_);
         if (scored_clusters.empty()) return summary;
 
-        // Estimate query length from seed hits (for probe stride calculation)
+        // Estimate query length from anchors (for probe stride calculation)
         std::size_t query_length = 0;
-        for (const auto& h : hits) {
-            query_length = std::max(query_length, h.read_pos + h.span);
+        for (const auto& a : anchors) {
+            query_length = std::max(query_length, a.query_pos + a.length);
         }
-        if (query_length == 0) query_length = 1000;  // Fallback if no hits
+        if (query_length == 0) query_length = 1000;  // Fallback if no anchors
 
         // Sample probes from each cluster and return as grouped clusters
         summary.clusters.reserve(scored_clusters.size());
 
         for (const auto& scored_cluster : scored_clusters) {
-            // Sample probe seeds from this cluster
-            auto probes = sample_probe_seeds(
-                scored_cluster.hits,
+            // Sample probe anchors from this cluster
+            auto probes = sample_probe_anchors(
+                scored_cluster.anchors,
                 query_length,
                 config_.max_probes_per_cluster,
                 config_.probe_stride);
@@ -361,15 +350,19 @@ public:
 
             // Build ClusterGroup with sampled probes
             ClusterGroup group;
-            group.cluster_score = scored_cluster.top_seed_score;
+            group.cluster_score = scored_cluster.top_anchor_score;
             group.anchors.reserve(probes.size());
 
             for (const auto* probe : probes) {
                 group.anchors.push_back(SeedAnchor{
-                    .target = probe->target,
-                    .read_pos = probe->read_pos,
-                    .score = scored_cluster.top_seed_score,  // Use cluster score
-                    .cluster_id = scored_cluster.top_seed.cluster_id,
+                    .target = index::SeedHit{
+                        .node_id = probe->node_id,
+                        .offset = probe->node_offset,
+                        .length = probe->length
+                    },
+                    .read_pos = probe->query_pos,
+                    .score = scored_cluster.top_anchor_score,  // Use cluster score
+                    .cluster_id = scored_cluster.top_anchor.cluster_id,
                 });
             }
 
@@ -378,7 +371,7 @@ public:
 
         // Overall score is the best cluster score
         if (!scored_clusters.empty()) {
-            summary.score = scored_clusters[0].top_seed_score;
+            summary.score = scored_clusters[0].top_anchor_score;
         }
 
         // Also populate flat anchors list for compatibility (all probes from all clusters)
@@ -398,10 +391,12 @@ private:
 
 }  // namespace
 
-SeedClustererPtr make_seed_clusterer(
+AnchorClustererPtr make_anchor_clusterer(
     const SeedClustererConfig& config,
-    const std::vector<std::vector<index::LinearCoordinate>>* linearization_coords,
     const index::GraphStore* graph_store) {
+
+    // Suppress unused parameter warning (kept for potential future use)
+    (void)graph_store;
 
     if (config.backend == "fse" || config.backend.empty()) {
         return std::make_unique<FseClusterer>(config);
@@ -410,14 +405,10 @@ SeedClustererPtr make_seed_clusterer(
         return std::make_unique<ProbeClusterer>(config);
     }
     if (config.backend == "dp-chain") {
-        if (!linearization_coords) {
-            LOG_ERROR("DP chaining requires linearization_coords (use --linearizer path-walk)");
-            return std::make_unique<NoopClusterer>();
-        }
         // Use default DPChainClustererConfig for MVP (parameters can be exposed via CLI later)
         DPChainClustererConfig dp_config;
         dp_config.min_chain_score = 0;  // MVP: accept any chain for testing
-        return std::make_unique<DPChainClusterer>(*linearization_coords, dp_config);
+        return std::make_unique<DPChainClusterer>(dp_config);
     }
     if (config.backend == "chaining" || config.backend == "noop") {
         // Placeholder: chaining to be implemented; fallback to noop for now.

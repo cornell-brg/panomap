@@ -31,25 +31,25 @@ struct DPChainClustererConfig {
 // DP-based colinear chaining clusterer.
 //
 // Algorithm:
-// 1. Expand seed hits to anchors using linearization coordinates
-// 2. Sort anchors by (path_id, ref_coord, query_pos)
-// 3. DP: dp[i] = max_j(dp[j] + score(i) - gap_cost(j, i))
+// 1. Sort anchors by (path_id, ref_coord, query_pos)
+// 2. DP: dp[i] = max_j(dp[j] + score(i) - gap_cost(j, i))
 //    where j is a valid predecessor (same/allowed path, within distance, diagonal constraints)
-// 4. Backtrack from best scoring anchor to extract chain
-// 5. Optionally extract multiple chains for multi-mapping
+// 3. Backtrack from best scoring anchor to extract chain
+// 4. Optionally extract multiple chains for multi-mapping
 //
 // Returns ClusterSummary with anchors from extracted chain(s).
-class DPChainClusterer : public SeedClusterer {
+//
+// Note: Operates on anchors (linear space). Expansion from seed hits must be done
+// by caller using AnchorExpander.
+class DPChainClusterer : public AnchorClusterer {
 public:
-    // Construct with linearization coordinates and config.
-    DPChainClusterer(const std::vector<std::vector<index::LinearCoordinate>>& coords,
-                     DPChainClustererConfig config);
+    // Construct with config (no longer needs linearization_coords).
+    explicit DPChainClusterer(DPChainClustererConfig config);
 
-    ClusterSummary cluster(const std::vector<SeedHitRecord>& hits) const override;
+    ClusterSummary cluster(const std::vector<Anchor>& anchors) const override;
     std::string name() const override { return "dp-chain"; }
 
 private:
-    PathWalkExpander expander_;
     DPChainClustererConfig config_;
 
     // Check if anchor j can chain to anchor i.

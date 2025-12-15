@@ -18,7 +18,9 @@
 #include "index/seed_store.hpp"
 #include "index/graph_store.hpp"
 #include "index/linearizer.hpp"
+#include "mapping/anchor.hpp"
 #include "mapping/seed_clusterer.hpp"
+#include "mapping/anchor_expander.hpp"
 
 namespace piru::mapping {
 
@@ -69,6 +71,7 @@ struct BatchBuffer {
     std::vector<signal::AlignmentQuantizedSignal> alignment_quantized;
     std::vector<signal::SeedBuffer> seeds;
     std::vector<std::vector<SeedHitRecord>> seed_hits;
+    std::vector<std::vector<Anchor>> anchors;  // Debug: anchors after expansion
     std::vector<ClusterSummary> clusters;
     std::vector<std::string> alignment_notes;
     std::size_t num_reads{0};
@@ -86,6 +89,7 @@ struct PipelineComponents {
     const index::SeedStore* seed_store{nullptr};  // non-owning; loaded index
     const index::GraphStore* graph_store{nullptr};  // non-owning; loaded index
     SeedLookup lookup{nullptr, nullptr, 0};
+    AnchorExpanderPtr expander;  // Expands SeedHits to Anchors
     SeedClustererPtr clusterer;
 };
 

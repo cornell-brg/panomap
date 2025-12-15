@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Interfaces for seed clustering/chaining backends.
+// Interfaces for anchor clustering/chaining backends.
 
 #pragma once
 
@@ -17,6 +17,8 @@ namespace piru::index {
 }
 
 namespace piru::mapping {
+
+struct Anchor;  // Forward declaration (defined in anchor.hpp)
 
 // Minimal hit record used for clustering/chaining.
 struct SeedHitRecord {
@@ -65,20 +67,59 @@ struct SeedClustererConfig {
     std::size_t probe_stride{0};             // Override stride (0 = auto-compute from query length)
 };
 
-class SeedClusterer {
+// Abstract interface for anchor clustering/chaining.
+//
+// Clusterers operate on anchors (linear reference space) and select
+// an optimal subset for alignment extension. All clusterers take the same input
+// (std::vector<Anchor>) enabling uniform pipeline architecture.
+//
+// Different implementations:
+// - FSE/Probe: Diagonal clustering (group by path_id, cluster by ref_coord - query_pos)
+// - DPChain: Colinear chaining via dynamic programming
+// - Noop: Pass-through for debugging
+//
+// When to use:
+// - FSE/Probe: Superbubble pipeline, fast O(n log n) clustering, simple variation graphs
+// - DPChain: Path-walk pipeline, complex graphs with cycles, haplotype-aware chaining
+//
+// Recommended pairings (validated by BatchMapper):
+// - Superbubble linearization + FSE/Probe clustering
+// - Path-walk linearization + DPChain clustering
+//
+// Mixing pipelines is allowed but issues a warning (e.g., path-walk + FSE).
+class AnchorClusterer {
 public:
-    virtual ~SeedClusterer() = default;
+    virtual ~AnchorClusterer() = default;
 
-    // Process seed hits for one read and return selected anchors/summary.
-    virtual ClusterSummary cluster(const std::vector<SeedHitRecord>& hits) const = 0;
+    // Cluster/chain anchors and return selected subset.
+    // Input: Anchors in linear space (from AnchorExpander)
+    // Output: Selected anchors with scores and cluster IDs
+    virtual ClusterSummary cluster(const std::vector<Anchor>& anchors) const = 0;
+
     virtual std::string name() const = 0;
 };
 
-using SeedClustererPtr = std::unique_ptr<SeedClusterer>;
+using AnchorClustererPtr = std::unique_ptr<AnchorClusterer>;
 
-SeedClustererPtr make_seed_clusterer(
+// Factory function for creating anchor clusterers.
+// Note: Expansion is now separate, so linearization_coords is NOT needed here.
+// - DiagonalClusterer (FSE/Probe): Operates on anchors directly
+// - DPChainClusterer: Operates on anchors directly
+// - graph_store parameter kept for potential future use
+AnchorClustererPtr make_anchor_clusterer(
+    const SeedClustererConfig& config,
+    const index::GraphStore* graph_store = nullptr);
+
+// Legacy alias for backward compatibility (deprecated, will be removed in future)
+using SeedClusterer = AnchorClusterer;
+using SeedClustererPtr = AnchorClustererPtr;
+inline AnchorClustererPtr make_seed_clusterer(
     const SeedClustererConfig& config,
     const std::vector<std::vector<index::LinearCoordinate>>* linearization_coords = nullptr,
-    const index::GraphStore* graph_store = nullptr);
+    const index::GraphStore* graph_store = nullptr) {
+    // Ignore linearization_coords - expansion is now separate
+    (void)linearization_coords;
+    return make_anchor_clusterer(config, graph_store);
+}
 
 }  // namespace piru::mapping

@@ -4,6 +4,8 @@
 
 #include <doctest/doctest.h>
 
+#include "mapping/anchor_expander.hpp"
+
 using namespace piru::mapping;
 using namespace piru::index;
 
@@ -29,10 +31,13 @@ TEST_CASE("DPChainClusterer: Empty input returns empty output") {
     std::vector<std::vector<LinearCoordinate>> coords(1);
     coords[0] = {{0, 100}};
 
-    DPChainClustererConfig config;
-    DPChainClusterer clusterer(coords, config);
+    PathWalkExpander expander(coords);
+    auto anchors = expander.expand({});
 
-    auto summary = clusterer.cluster({});
+    DPChainClustererConfig config;
+    DPChainClusterer clusterer(config);
+
+    auto summary = clusterer.cluster(anchors);
 
     CHECK(summary.anchors.empty());
     CHECK(summary.score == 0.0);
@@ -43,15 +48,17 @@ TEST_CASE("DPChainClusterer: Single seed produces single anchor chain") {
     std::vector<std::vector<LinearCoordinate>> coords(1);
     coords[0] = {{0, 100}};
 
+    PathWalkExpander expander(coords);
     DPChainClustererConfig config;
     config.min_chain_score = 10;  // Lower threshold
 
-    DPChainClusterer clusterer(coords, config);
+    DPChainClusterer clusterer(config);
 
     // Single seed hit
     std::vector<SeedHitRecord> hits = {make_hit(0, 0, 50, 20)};
+    auto anchors = expander.expand(hits);
 
-    auto summary = clusterer.cluster(hits);
+    auto summary = clusterer.cluster(anchors);
 
     REQUIRE(summary.anchors.size() == 1);
     CHECK(summary.anchors[0].read_pos == 50);
@@ -65,12 +72,13 @@ TEST_CASE("DPChainClusterer: Linear colinear chain selects all anchors") {
     coords[1] = {{0, 200}};   // Node 1 at ref 200
     coords[2] = {{0, 300}};   // Node 2 at ref 300
 
+    PathWalkExpander expander(coords);
     DPChainClustererConfig config;
     config.max_dist = 5000;
     config.max_diag_dev = 500;
     config.min_chain_score = 10;
 
-    DPChainClusterer clusterer(coords, config);
+    DPChainClusterer clusterer(config);
 
     // Three colinear seeds (diagonal: ref +100, query +100)
     std::vector<SeedHitRecord> hits = {
@@ -78,8 +86,9 @@ TEST_CASE("DPChainClusterer: Linear colinear chain selects all anchors") {
         make_hit(1, 0, 150, 20),   // ref 200, query 150 (Δr=100, Δq=100, diag=0)
         make_hit(2, 0, 250, 20)    // ref 300, query 250 (Δr=100, Δq=100, diag=0)
     };
+    auto anchors = expander.expand(hits);
 
-    auto summary = clusterer.cluster(hits);
+    auto summary = clusterer.cluster(anchors);
 
     // All three should be chained
     REQUIRE(summary.anchors.size() == 3);
@@ -94,12 +103,13 @@ TEST_CASE("DPChainClusterer: Large diagonal deviation breaks chain") {
     coords[0] = {{0, 100}};
     coords[1] = {{0, 200}};
 
+    PathWalkExpander expander(coords);
     DPChainClustererConfig config;
     config.max_dist = 5000;
     config.max_diag_dev = 50;  // Strict diagonal constraint
     config.min_chain_score = 10;
 
-    DPChainClusterer clusterer(coords, config);
+    DPChainClusterer clusterer(config);
 
     // Two seeds with large diagonal deviation
     // Δr = 100, Δq = 200, |Δr - Δq| = 100 > max_diag_dev
@@ -107,8 +117,9 @@ TEST_CASE("DPChainClusterer: Large diagonal deviation breaks chain") {
         make_hit(0, 0, 50, 20),    // ref 100, query 50
         make_hit(1, 0, 250, 20)    // ref 200, query 250 (diagonal dev = 100)
     };
+    auto anchors = expander.expand(hits);
 
-    auto summary = clusterer.cluster(hits);
+    auto summary = clusterer.cluster(anchors);
 
     // Should only select one anchor (cannot chain due to diagonal constraint)
     CHECK(summary.anchors.size() == 1);
@@ -120,20 +131,22 @@ TEST_CASE("DPChainClusterer: Distance filter prevents chaining far-apart anchors
     coords[0] = {{0, 100}};
     coords[1] = {{0, 10000}};  // Far away
 
+    PathWalkExpander expander(coords);
     DPChainClustererConfig config;
     config.max_dist = 1000;  // Strict distance limit
     config.max_diag_dev = 500;
     config.min_chain_score = 10;
 
-    DPChainClusterer clusterer(coords, config);
+    DPChainClusterer clusterer(config);
 
     // Two seeds far apart (Δr = 9900 > max_dist)
     std::vector<SeedHitRecord> hits = {
         make_hit(0, 0, 50, 20),
         make_hit(1, 0, 9950, 20)
     };
+    auto anchors = expander.expand(hits);
 
-    auto summary = clusterer.cluster(hits);
+    auto summary = clusterer.cluster(anchors);
 
     // Should only select one anchor (too far to chain)
     CHECK(summary.anchors.size() == 1);
@@ -145,21 +158,23 @@ TEST_CASE("DPChainClusterer: Single-path mode rejects cross-path chains") {
     coords[0] = {{0, 100}};
     coords[1] = {{1, 200}};  // Different path
 
+    PathWalkExpander expander(coords);
     DPChainClustererConfig config;
     config.allow_cross_haplotypes = false;  // Single-path mode
     config.max_dist = 5000;
     config.max_diag_dev = 500;
     config.min_chain_score = 10;
 
-    DPChainClusterer clusterer(coords, config);
+    DPChainClusterer clusterer(config);
 
     // Two seeds on different paths
     std::vector<SeedHitRecord> hits = {
         make_hit(0, 0, 50, 20),
         make_hit(1, 0, 150, 20)
     };
+    auto anchors = expander.expand(hits);
 
-    auto summary = clusterer.cluster(hits);
+    auto summary = clusterer.cluster(anchors);
 
     // Should only select one anchor (cannot cross paths)
     CHECK(summary.anchors.size() == 1);
@@ -171,6 +186,7 @@ TEST_CASE("DPChainClusterer: Cross-path mode allows path switching with penalty"
     coords[0] = {{0, 100}};
     coords[1] = {{1, 200}};
 
+    PathWalkExpander expander(coords);
     DPChainClustererConfig config;
     config.allow_cross_haplotypes = true;  // Cross-path mode
     config.path_switch_cost = 10.0;  // Lower cost to make chaining favorable
@@ -180,15 +196,16 @@ TEST_CASE("DPChainClusterer: Cross-path mode allows path switching with penalty"
     config.min_chain_score = 10;
     config.anchor_weight = 1.0;
 
-    DPChainClusterer clusterer(coords, config);
+    DPChainClusterer clusterer(config);
 
     // Two seeds on different paths with longer spans to increase score
     std::vector<SeedHitRecord> hits = {
         make_hit(0, 0, 50, 30),   // Higher score
         make_hit(1, 0, 150, 30)   // Higher score
     };
+    auto anchors = expander.expand(hits);
 
-    auto summary = clusterer.cluster(hits);
+    auto summary = clusterer.cluster(anchors);
 
     // Should chain both (cross-path allowed and beneficial)
     CHECK(summary.anchors.size() == 2);
@@ -201,13 +218,14 @@ TEST_CASE("DPChainClusterer: Prefers higher-scoring chain") {
     coords[1] = {{0, 200}};
     coords[2] = {{0, 300}};
 
+    PathWalkExpander expander(coords);
     DPChainClustererConfig config;
     config.max_dist = 5000;
     config.max_diag_dev = 500;
     config.min_chain_score = 10;
     config.anchor_weight = 1.0;
 
-    DPChainClusterer clusterer(coords, config);
+    DPChainClusterer clusterer(config);
 
     // Three seeds: 0→1 is good, 0→2 skips 1 but has larger span
     std::vector<SeedHitRecord> hits = {
@@ -215,8 +233,9 @@ TEST_CASE("DPChainClusterer: Prefers higher-scoring chain") {
         make_hit(1, 0, 150, 10),   // Score = 10 (smaller)
         make_hit(2, 0, 250, 30)    // Score = 30 (larger)
     };
+    auto anchors = expander.expand(hits);
 
-    auto summary = clusterer.cluster(hits);
+    auto summary = clusterer.cluster(anchors);
 
     // Should select chain that maximizes total score
     // Best chain is likely all three: 20 + 10 + 30 - penalties
@@ -228,16 +247,18 @@ TEST_CASE("DPChainClusterer: Min chain score threshold filters weak chains") {
     std::vector<std::vector<LinearCoordinate>> coords(1);
     coords[0] = {{0, 100}};
 
+    PathWalkExpander expander(coords);
     DPChainClustererConfig config;
     config.min_chain_score = 1000;  // Very high threshold
     config.anchor_weight = 1.0;
 
-    DPChainClusterer clusterer(coords, config);
+    DPChainClusterer clusterer(config);
 
     // Single small seed (score = 20 < threshold)
     std::vector<SeedHitRecord> hits = {make_hit(0, 0, 50, 20)};
+    auto anchors = expander.expand(hits);
 
-    auto summary = clusterer.cluster(hits);
+    auto summary = clusterer.cluster(anchors);
 
     // Should return empty (chain score below threshold)
     CHECK(summary.anchors.empty());
@@ -249,13 +270,14 @@ TEST_CASE("DPChainClusterer: Overlapping anchors incur penalty") {
     coords[0] = {{0, 100}};
     coords[1] = {{0, 150}};  // Close together (potential overlap)
 
+    PathWalkExpander expander(coords);
     DPChainClustererConfig config;
     config.max_dist = 5000;
     config.max_diag_dev = 500;
     config.overlap_penalty_factor = 2.0;
     config.min_chain_score = 10;
 
-    DPChainClusterer clusterer(coords, config);
+    DPChainClusterer clusterer(config);
 
     // Two seeds that overlap in reference space
     // Seed 0: ref 100-120, query 50-70
@@ -264,8 +286,9 @@ TEST_CASE("DPChainClusterer: Overlapping anchors incur penalty") {
         make_hit(0, 0, 50, 20),
         make_hit(1, 0, 60, 20)
     };
+    auto anchors = expander.expand(hits);
 
-    auto summary = clusterer.cluster(hits);
+    auto summary = clusterer.cluster(anchors);
 
     // Should still chain (overlap is allowed, just penalized)
     CHECK(summary.anchors.size() >= 1);
@@ -277,20 +300,22 @@ TEST_CASE("DPChainClusterer: Backward query positions are rejected") {
     coords[0] = {{0, 100}};
     coords[1] = {{0, 200}};
 
+    PathWalkExpander expander(coords);
     DPChainClustererConfig config;
     config.max_dist = 5000;
     config.max_diag_dev = 500;
     config.min_chain_score = 10;
 
-    DPChainClusterer clusterer(coords, config);
+    DPChainClusterer clusterer(config);
 
     // Second seed has earlier query position (backward)
     std::vector<SeedHitRecord> hits = {
         make_hit(0, 0, 150, 20),   // query 150
         make_hit(1, 0, 50, 20)     // query 50 (backward!)
     };
+    auto anchors = expander.expand(hits);
 
-    auto summary = clusterer.cluster(hits);
+    auto summary = clusterer.cluster(anchors);
 
     // Should only select one (cannot chain backward in query)
     CHECK(summary.anchors.size() == 1);
@@ -301,18 +326,20 @@ TEST_CASE("DPChainClusterer: Node appearing on multiple paths expands correctly"
     std::vector<std::vector<LinearCoordinate>> coords(1);
     coords[0] = {{0, 100}, {1, 500}};  // Same node on path 0 and path 1
 
+    PathWalkExpander expander(coords);
     DPChainClustererConfig config;
     config.allow_cross_haplotypes = false;  // Single-path mode
     config.max_dist = 5000;
     config.max_diag_dev = 500;
     config.min_chain_score = 10;
 
-    DPChainClusterer clusterer(coords, config);
+    DPChainClusterer clusterer(config);
 
     // Single seed hit (expands to 2 anchors on different paths)
     std::vector<SeedHitRecord> hits = {make_hit(0, 0, 50, 20)};
+    auto anchors = expander.expand(hits);
 
-    auto summary = clusterer.cluster(hits);
+    auto summary = clusterer.cluster(anchors);
 
     // Should return 1 anchor (from best path)
     REQUIRE(summary.anchors.size() == 1);
@@ -326,12 +353,13 @@ TEST_CASE("DPChainClusterer: Chain preserves order from backtracking") {
     coords[1] = {{0, 200}};
     coords[2] = {{0, 300}};
 
+    PathWalkExpander expander(coords);
     DPChainClustererConfig config;
     config.max_dist = 5000;
     config.max_diag_dev = 500;
     config.min_chain_score = 10;
 
-    DPChainClusterer clusterer(coords, config);
+    DPChainClusterer clusterer(config);
 
     // Seeds in order
     std::vector<SeedHitRecord> hits = {
@@ -339,8 +367,9 @@ TEST_CASE("DPChainClusterer: Chain preserves order from backtracking") {
         make_hit(1, 0, 150, 20),
         make_hit(2, 0, 250, 20)
     };
+    auto anchors = expander.expand(hits);
 
-    auto summary = clusterer.cluster(hits);
+    auto summary = clusterer.cluster(anchors);
 
     REQUIRE(summary.anchors.size() == 3);
     // Check anchors are in forward query order

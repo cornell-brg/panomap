@@ -25,32 +25,26 @@ struct AnchorComparator {
 
 }  // namespace
 
-DPChainClusterer::DPChainClusterer(
-    const std::vector<std::vector<index::LinearCoordinate>>& coords,
-    DPChainClustererConfig config)
-    : expander_(coords), config_(std::move(config)) {}
+DPChainClusterer::DPChainClusterer(DPChainClustererConfig config)
+    : config_(std::move(config)) {}
 
-ClusterSummary DPChainClusterer::cluster(const std::vector<SeedHitRecord>& hits) const {
+ClusterSummary DPChainClusterer::cluster(const std::vector<Anchor>& anchors) const {
     ClusterSummary summary;
-
-    if (hits.empty()) {
-        return summary;
-    }
-
-    // Step 1: Expand seed hits to anchors
-    auto anchors = expander_.expand(hits);
-
-    // Track expanded anchor count for output
-    summary.expanded_anchor_count = anchors.size();
 
     if (anchors.empty()) {
         return summary;
     }
 
-    // Step 2: Sort anchors by (path_id, ref_coord, query_pos)
-    std::sort(anchors.begin(), anchors.end(), AnchorComparator{});
+    // Anchors already expanded by caller (AnchorExpander)
+    // Track count for output (already expanded)
+    summary.expanded_anchor_count = anchors.size();
 
-    const std::size_t n = anchors.size();
+    // Step 2: Sort anchors by (path_id, ref_coord, query_pos)
+    // Make a mutable copy since we need to sort
+    std::vector<Anchor> sorted_anchors = anchors;
+    std::sort(sorted_anchors.begin(), sorted_anchors.end(), AnchorComparator{});
+
+    const std::size_t n = sorted_anchors.size();
 
     // Step 3: DP initialization
     std::vector<double> dp(n, 0.0);
@@ -58,13 +52,13 @@ ClusterSummary DPChainClusterer::cluster(const std::vector<SeedHitRecord>& hits)
 
     // Step 4: DP loop - compute best score for each anchor
     for (std::size_t i = 0; i < n; ++i) {
-        const auto& anchor_i = anchors[i];
+        const auto& anchor_i = sorted_anchors[i];
         double best_score = anchor_score(anchor_i);  // Start new chain at i
         int best_pred = -1;
 
         // Check all potential predecessors j < i
         for (std::size_t j = 0; j < i; ++j) {
-            const auto& anchor_j = anchors[j];
+            const auto& anchor_j = sorted_anchors[j];
 
             // Check if j can chain to i
             if (!can_chain(anchor_j, anchor_i)) {
@@ -108,7 +102,7 @@ ClusterSummary DPChainClusterer::cluster(const std::vector<SeedHitRecord>& hits)
     summary.anchors.reserve(chain_indices.size());
 
     for (std::size_t idx : chain_indices) {
-        const auto& anchor = anchors[idx];
+        const auto& anchor = sorted_anchors[idx];
         SeedAnchor seed_anchor;
         seed_anchor.target.node_id = anchor.node_id;
         seed_anchor.target.offset = anchor.node_offset;

@@ -16,9 +16,16 @@ namespace piru::mapping {
 
 // Abstract interface for expanding seed hits (graph space) to anchors (linear space).
 //
+// This is the key transformation stage that converts graph-based coordinates (node_id, offset)
+// into linear reference coordinates (path_id, ref_coord) to enable efficient clustering/chaining.
+//
 // Different implementations handle different linearization strategies:
-// - PathWalkExpander: Uses linearization_coords (1 hit → N anchors)
-// - SuperbubbleExpander: Uses GraphStore chain_id (1 hit → 1 anchor)
+// - SuperbubbleExpander: Trivial 1:1 mapping using GraphStore chain_id (superbubble pipeline)
+// - PathWalkExpander: 1:N mapping via path occurrence coordinates (path-walk pipeline)
+//
+// When to use:
+// - Superbubble: Simple variation graphs, local coordinates within bubbles, fast O(n) clustering
+// - Path-walk: Complex graphs with cycles, haplotype-aware mapping, colinear chaining
 class AnchorExpander {
 public:
     virtual ~AnchorExpander() = default;
@@ -30,6 +37,8 @@ public:
     // Backend name for logging and debugging.
     virtual std::string name() const = 0;
 };
+
+using AnchorExpanderPtr = std::unique_ptr<AnchorExpander>;
 
 // Path-walk expansion: uses linearization coordinates to expand seed hits.
 //
