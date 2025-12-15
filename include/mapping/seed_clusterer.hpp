@@ -11,6 +11,11 @@
 
 #include "index/seed_store.hpp"
 
+namespace piru::index {
+    struct LinearCoordinate;
+    class GraphStore;
+}
+
 namespace piru::mapping {
 
 // Minimal hit record used for clustering/chaining.
@@ -41,8 +46,9 @@ struct ClusterGroup {
 
 struct ClusterSummary {
     double score{0.0};                      // overall best score
-    std::vector<SeedAnchor> anchors;        // flat list (for FSE)
+    std::vector<SeedAnchor> anchors;        // flat list (for FSE) - selected/chained anchors
     std::vector<ClusterGroup> clusters;     // grouped by cluster (for Probe)
+    std::size_t expanded_anchor_count{0};   // total anchors after expansion (before clustering)
 };
 
 struct SeedClustererConfig {
@@ -70,6 +76,9 @@ public:
 
 using SeedClustererPtr = std::unique_ptr<SeedClusterer>;
 
-SeedClustererPtr make_seed_clusterer(const SeedClustererConfig& config);
+SeedClustererPtr make_seed_clusterer(
+    const SeedClustererConfig& config,
+    const std::vector<std::vector<index::LinearCoordinate>>* linearization_coords = nullptr,
+    const index::GraphStore* graph_store = nullptr);
 
 }  // namespace piru::mapping

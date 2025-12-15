@@ -80,7 +80,10 @@ PipelineComponents BatchMapper::create_components() const {
     if (!comps.seed_store) {
         throw std::runtime_error("BatchMapper requires a SeedStore for lookup");
     }
-    comps.clusterer = make_seed_clusterer(config_.clusterer_config);
+    comps.clusterer = make_seed_clusterer(
+        config_.clusterer_config,
+        config_.linearization_coords,
+        config_.graph_store);
     const std::size_t freq_threshold = comps.seed_store->frequency_threshold();
     // Limit the lookup helper to what the SeedStore exposes.
     comps.lookup = SeedLookup(comps.seed_store, comps.graph_store, freq_threshold);
@@ -94,7 +97,7 @@ void BatchMapper::run_alignment_stub(const ClusterSummary& summary, const io::Ra
         return;
     }
     const auto backend = components_.clusterer ? components_.clusterer->name() : "unknown";
-    note = "align=" + backend + " anchors=" + std::to_string(summary.anchors.size());
+    note = "align=" + backend + " chains=" + std::to_string(summary.anchors.size());
     if (!read.read_id.empty()) {
         note += " read=" + read.read_id;
     }
@@ -179,7 +182,8 @@ void BatchMapper::output_batch(const BatchBuffer& batch) const {
         const auto& clusters_for_read = batch.clusters[i];
         output_ << read.read_id << "\tseeds=" << seeds_for_read.size()
                 << "\thits=" << hits_for_read.size()
-                << "\tanchors=" << clusters_for_read.anchors.size()
+                << "\tanchors=" << clusters_for_read.expanded_anchor_count
+                << "\tchains=" << clusters_for_read.anchors.size()
                 << "\tlen=" << read.len_raw_signal;
         if (!batch.alignment_notes[i].empty()) {
             output_ << "\t" << batch.alignment_notes[i];

@@ -8,6 +8,7 @@
 #include <cmath>
 #include <unordered_map>
 
+#include "mapping/dp_chain_clusterer.hpp"
 #include "util/logging.hpp"
 
 namespace piru::mapping {
@@ -280,6 +281,9 @@ public:
     ClusterSummary cluster(const std::vector<SeedHitRecord>& hits) const override {
         ClusterSummary summary;
 
+        // For FSE/superbubble: 1:1 expansion (hits have chain_id already)
+        summary.expanded_anchor_count = hits.size();
+
         // Use shared clustering logic
         auto scored_clusters = cluster_and_score_seeds(hits, config_);
         if (scored_clusters.empty()) return summary;
@@ -306,6 +310,7 @@ class NoopClusterer : public SeedClusterer {
 public:
     ClusterSummary cluster(const std::vector<SeedHitRecord>& hits) const override {
         ClusterSummary summary;
+        summary.expanded_anchor_count = hits.size();
         summary.anchors.reserve(hits.size());
         for (const auto& h : hits) {
             summary.anchors.push_back(SeedAnchor{
@@ -326,6 +331,9 @@ public:
 
     ClusterSummary cluster(const std::vector<SeedHitRecord>& hits) const override {
         ClusterSummary summary;
+
+        // For Probe/superbubble: 1:1 expansion (hits have chain_id already)
+        summary.expanded_anchor_count = hits.size();
 
         // Use shared clustering logic (same as FSE)
         auto scored_clusters = cluster_and_score_seeds(hits, config_);
@@ -390,12 +398,26 @@ private:
 
 }  // namespace
 
-SeedClustererPtr make_seed_clusterer(const SeedClustererConfig& config) {
+SeedClustererPtr make_seed_clusterer(
+    const SeedClustererConfig& config,
+    const std::vector<std::vector<index::LinearCoordinate>>* linearization_coords,
+    const index::GraphStore* graph_store) {
+
     if (config.backend == "fse" || config.backend.empty()) {
         return std::make_unique<FseClusterer>(config);
     }
     if (config.backend == "probe") {
         return std::make_unique<ProbeClusterer>(config);
+    }
+    if (config.backend == "dp-chain") {
+        if (!linearization_coords) {
+            LOG_ERROR("DP chaining requires linearization_coords (use --linearizer path-walk)");
+            return std::make_unique<NoopClusterer>();
+        }
+        // Use default DPChainClustererConfig for MVP (parameters can be exposed via CLI later)
+        DPChainClustererConfig dp_config;
+        dp_config.min_chain_score = 0;  // MVP: accept any chain for testing
+        return std::make_unique<DPChainClusterer>(*linearization_coords, dp_config);
     }
     if (config.backend == "chaining" || config.backend == "noop") {
         // Placeholder: chaining to be implemented; fallback to noop for now.

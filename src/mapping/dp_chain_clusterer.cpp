@@ -40,6 +40,9 @@ ClusterSummary DPChainClusterer::cluster(const std::vector<SeedHitRecord>& hits)
     // Step 1: Expand seed hits to anchors
     auto anchors = expander_.expand(hits);
 
+    // Track expanded anchor count for output
+    summary.expanded_anchor_count = anchors.size();
+
     if (anchors.empty()) {
         return summary;
     }

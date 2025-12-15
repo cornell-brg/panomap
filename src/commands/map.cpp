@@ -74,6 +74,7 @@ int handle_map(const std::vector<std::string>& args) {
         {'\0', "graph-k", true, "DBG k-mer size (default: auto-detect from overlap)"},
         {'\0', "", false, "\nMapping Options:"},
         {'\0', "max-seed-freq", true, "Maximum seed frequency for lookup (default: use index threshold)"},
+        {'\0', "clusterer", true, "Clusterer backend: fse (default), probe, dp-chain"},
     };
     config.on_error = [](const std::string&) { std::cerr << "map: invalid option\n"; };
 
@@ -322,6 +323,12 @@ int handle_map(const std::vector<std::string>& args) {
     map_config.clusterer_config.max_hash_frequency = hash_seed_store->max_hash_frequency();
     LOG_INFO("Using clustering config from index: max_hash_frequency=" +
              std::to_string(map_config.clusterer_config.max_hash_frequency));
+
+    // Configure clusterer backend (default: fse for backward compatibility)
+    const std::string clusterer = parsed.values.count("clusterer")
+                                   ? parsed.values.at("clusterer")
+                                   : "fse";
+    map_config.clusterer_config.backend = clusterer;
 
     // Override seed frequency threshold if specified
     if (parsed.values.count("max-seed-freq")) {
