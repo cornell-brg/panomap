@@ -230,6 +230,7 @@ ScrappieEventDetector::ScrappieEventDetector(EventDetectorConfig config)
 
 EventSeries ScrappieEventDetector::detect(const io::RawRead& read) const {
     EventSeries series;
+    series.sampling_rate_hz = read.sampling_rate_hz;
 
     // Convert raw ADC values to picoamps
     const float raw_unit = (read.digitisation == 0.0f) ? 1.0f : (read.range / read.digitisation);

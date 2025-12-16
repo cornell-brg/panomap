@@ -53,9 +53,7 @@ std::uint32_t dynamic_quantize(float value, const FuzzyQuantizerConfig& cfg) {
 Rh2FuzzyQuantizer::Rh2FuzzyQuantizer(FuzzyQuantizerConfig config)
     : config_(std::move(config)) {}
 
-FuzzyQuantizedSignal Rh2FuzzyQuantizer::quantize(const NormalizedSignal& signal,
-                                                 const EventSeries* events) const {
-    (void)events;
+FuzzyQuantizedSignal Rh2FuzzyQuantizer::quantize(const NormalizedSignal& signal) const {
     FuzzyQuantizedSignal quantized;
     quantized.tokens.reserve(signal.samples.size());
     const std::int16_t sentinel = std::numeric_limits<std::int16_t>::min();

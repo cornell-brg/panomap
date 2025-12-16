@@ -9,9 +9,7 @@ namespace piru::signal {
 PassthroughAlignmentQuantizer::PassthroughAlignmentQuantizer(AlignmentQuantizerConfig config)
     : config_(std::move(config)) {}
 
-AlignmentQuantizedSignal PassthroughAlignmentQuantizer::quantize(const NormalizedSignal& signal,
-                                                                 const EventSeries* events) const {
-    (void)events;
+AlignmentQuantizedSignal PassthroughAlignmentQuantizer::quantize(const NormalizedSignal& signal) const {
     AlignmentQuantizedSignal quantized;
     quantized.kind = AlignmentQuantizationKind::kFloat32;
     quantized.data = signal.samples;

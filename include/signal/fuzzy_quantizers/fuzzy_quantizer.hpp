@@ -24,8 +24,7 @@ class FuzzyQuantizer {
 public:
     virtual ~FuzzyQuantizer() = default;
 
-    virtual FuzzyQuantizedSignal quantize(const NormalizedSignal& signal,
-                                          const EventSeries* events) const = 0;
+    virtual FuzzyQuantizedSignal quantize(const NormalizedSignal& signal) const = 0;
     virtual const FuzzyQuantizerConfig& config() const = 0;
     virtual std::string name() const = 0;
 };

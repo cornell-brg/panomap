@@ -7,14 +7,15 @@ namespace piru::signal {
 IdentityNormalizer::IdentityNormalizer(SignalNormalizerConfig config)
     : config_(std::move(config)) {}
 
-NormalizedSignal IdentityNormalizer::normalize(const io::RawRead& read, const EventSeries* events) const {
-    (void)events;  // Unused for now
+NormalizedSignal IdentityNormalizer::normalize(const EventSeries& events) const {
     NormalizedSignal normalized;
-    normalized.samples.reserve(read.raw_signal.size());
-    for (const auto value : read.raw_signal) {
-        normalized.samples.push_back(static_cast<float>(value));
+    normalized.sampling_rate_hz = events.sampling_rate_hz;
+
+    // Pass through event means (no normalization)
+    normalized.samples.reserve(events.events.size());
+    for (const auto& event : events.events) {
+        normalized.samples.push_back(event.mean);
     }
-    normalized.sampling_rate_hz = read.sampling_rate_hz;
     return normalized;
 }
 

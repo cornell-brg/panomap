@@ -36,7 +36,7 @@ HashSeedStore buildSeedStore(const std::vector<piru::signal::FuzzyQuantizedSigna
     std::size_t total_seeds_extracted = 0;
     for (std::size_t node_id = 0; node_id < signals.size(); ++node_id) {
         const auto& signal = signals[node_id];
-        const auto seeds = extractor.extract(signal, nullptr);
+        const auto seeds = extractor.extract(signal);
         total_seeds_extracted += seeds.seeds.size();
         for (const auto& seed : seeds.seeds) {
             store.insert(seed.hash, SeedHit{node_id, seed.position, seed.length});

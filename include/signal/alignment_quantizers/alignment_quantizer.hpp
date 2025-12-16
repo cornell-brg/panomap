@@ -25,9 +25,7 @@ public:
 
 
 
-    virtual AlignmentQuantizedSignal quantize(const NormalizedSignal& signal,
-
-                                              const EventSeries* events) const = 0;
+    virtual AlignmentQuantizedSignal quantize(const NormalizedSignal& signal) const = 0;
 
 
 

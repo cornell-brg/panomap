@@ -18,7 +18,7 @@ TEST_CASE("RH2 quantizer bins within fine range") {
     cfg.qbits = 4;
 
     auto quantizer = make_fuzzy_quantizer(cfg);
-    auto out = quantizer->quantize(norm, nullptr);
+    auto out = quantizer->quantize(norm);
 
     REQUIRE(out.tokens.size() == 1);
     CHECK(out.tokens[0] == 3);  // rawhash2 formula -> bucket ~3 for 0.0
@@ -36,7 +36,7 @@ TEST_CASE("RH2 quantizer clamps and maps extremes") {
     cfg.qbits = 4;
 
     auto quantizer = make_fuzzy_quantizer(cfg);
-    auto out = quantizer->quantize(norm, nullptr);
+    auto out = quantizer->quantize(norm);
 
     REQUIRE(out.tokens.size() == 2);
     CHECK(out.tokens[0] == 6);   // lower extreme maps to coarse bucket

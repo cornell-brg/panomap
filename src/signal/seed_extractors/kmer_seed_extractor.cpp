@@ -32,9 +32,7 @@ std::uint64_t make_mask(std::uint32_t bits) {
 
 KmerSeedExtractor::KmerSeedExtractor(SeedExtractorConfig config) : config_(std::move(config)) {}
 
-SeedBuffer KmerSeedExtractor::extract(const FuzzyQuantizedSignal& signal,
-                                      const EventSeries* events) const {
-    (void)events;
+SeedBuffer KmerSeedExtractor::extract(const FuzzyQuantizedSignal& signal) const {
     SeedBuffer buffer;
     const auto& tokens = signal.tokens;
     const std::size_t k = config_.k;

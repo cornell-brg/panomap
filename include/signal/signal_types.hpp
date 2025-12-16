@@ -24,6 +24,7 @@ struct SignalEvent {
 
 struct EventSeries {
     std::vector<SignalEvent> events;
+    float sampling_rate_hz{0.0f};
 };
 
 struct FuzzyQuantizedSignal {

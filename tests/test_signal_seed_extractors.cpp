@@ -13,7 +13,7 @@ TEST_CASE("K-mer seed extractor emits sliding window hashes") {
 
     auto extractor = make_seed_extractor(
         SeedExtractorConfig{.backend = "kmer", .k = 2, .stride = 1, .qbits = 4});
-    auto seeds = extractor->extract(quantized, nullptr);
+    auto seeds = extractor->extract(quantized);
 
     REQUIRE(seeds.seeds.size() == 2);
     CHECK(seeds.seeds[0].hash == 3911557750ULL);  // hash([1,2])
@@ -30,7 +30,7 @@ TEST_CASE("Seed struct length field is initialized correctly") {
 
     auto extractor = make_seed_extractor(
         SeedExtractorConfig{.backend = "kmer", .k = 3, .stride = 2, .qbits = 4});
-    auto seeds = extractor->extract(quantized, nullptr);
+    auto seeds = extractor->extract(quantized);
 
     REQUIRE(seeds.seeds.size() == 2);
 

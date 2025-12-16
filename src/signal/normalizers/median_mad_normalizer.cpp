@@ -17,12 +17,22 @@ constexpr float kMadScale = 1.4826f;
 MedianMadNormalizer::MedianMadNormalizer(SignalNormalizerConfig config)
     : config_(std::move(config)) {}
 
-NormalizedSignal MedianMadNormalizer::normalize(const io::RawRead& read, const EventSeries* events) const {
-    (void)events;  // Unused for now
+NormalizedSignal MedianMadNormalizer::normalize(const EventSeries& events) const {
     NormalizedSignal normalized;
-    auto values = detail::to_picoamps(read);
+    normalized.sampling_rate_hz = events.sampling_rate_hz;
+
+    if (events.events.empty()) {
+        return normalized;
+    }
+
+    // Collect event means (events already in picoamps)
+    std::vector<float> values;
+    values.reserve(events.events.size());
+    for (const auto& event : events.events) {
+        values.push_back(event.mean);
+    }
+
     if (values.empty()) {
-        normalized.sampling_rate_hz = read.sampling_rate_hz;
         return normalized;
     }
 
@@ -48,7 +58,6 @@ NormalizedSignal MedianMadNormalizer::normalize(const io::RawRead& read, const E
 
         normalized.samples.push_back(norm_value);
     }
-    normalized.sampling_rate_hz = read.sampling_rate_hz;
     return normalized;
 }
 

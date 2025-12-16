@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "signal/alignment_quantizers/alignment_quantizer_factory.hpp"
+#include "signal/event_detectors/event_detector_factory.hpp"
 #include "signal/fuzzy_quantizers/fuzzy_quantizer_factory.hpp"
 #include "signal/normalizers/normalizer_factory.hpp"
 #include "signal/seed_extractors/seed_extractor_factory.hpp"
@@ -10,15 +11,19 @@
 
 using namespace piru::signal;
 
-TEST_CASE("Identity normalizer copies raw signal to floats") {
+TEST_CASE("Identity normalizer copies event signal to floats") {
     piru::io::RawRead read;
     read.raw_signal = {1, -2, 3};
     read.sampling_rate_hz = 4000.0f;
     read.range = 1.0f;
     read.digitisation = 1.0f;
 
+    // Detect events first (normalizer now takes EventSeries)
+    auto event_detector = make_event_detector(EventDetectorConfig{.backend = "passthrough"});
+    auto events = event_detector->detect(read);
+
     auto normalizer = make_signal_normalizer(SignalNormalizerConfig{.backend = "identity"});
-    auto normalized = normalizer->normalize(read, nullptr);
+    auto normalized = normalizer->normalize(events);
 
     REQUIRE(normalized.samples.size() == 3);
     CHECK(normalized.samples[0] == doctest::Approx(1.0f));
@@ -32,7 +37,7 @@ TEST_CASE("Passthrough fuzzy quantizer truncates to int16 tokens") {
     norm.samples = {1.7f, -2.5f, 0.2f};
 
     auto quantizer = make_fuzzy_quantizer(FuzzyQuantizerConfig{.backend = "passthrough"});
-    auto quantized = quantizer->quantize(norm, nullptr);
+    auto quantized = quantizer->quantize(norm);
 
     REQUIRE(quantized.tokens.size() == 3);
     // static_cast<int16_t> truncates toward zero
@@ -46,7 +51,7 @@ TEST_CASE("Passthrough alignment quantizer emits float32 payload") {
     norm.samples = {5.9f, -1.1f};
 
     auto quantizer = make_alignment_quantizer(AlignmentQuantizerConfig{.backend = "passthrough"});
-    auto quantized = quantizer->quantize(norm, nullptr);
+    auto quantized = quantizer->quantize(norm);
 
     CHECK(quantized.kind == AlignmentQuantizationKind::kFloat32);
     auto* vec_ptr = std::get_if<std::vector<float>>(&quantized.data);

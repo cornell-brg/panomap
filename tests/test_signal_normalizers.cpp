@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 
+#include "signal/event_detectors/event_detector_factory.hpp"
 #include "signal/normalizers/normalizer_factory.hpp"
 
 #include <doctest/doctest.h>
@@ -13,8 +14,11 @@ TEST_CASE("Z-score normalizer scales to zero mean unit variance") {
     read.digitisation = 1.0f;
     read.offset = 0.0f;
 
+    auto event_detector = make_event_detector(EventDetectorConfig{.backend = "passthrough"});
+    auto events = event_detector->detect(read);
+
     auto normalizer = make_signal_normalizer(SignalNormalizerConfig{.backend = "zscore"});
-    auto normalized = normalizer->normalize(read, nullptr);
+    auto normalized = normalizer->normalize(events);
 
     REQUIRE(normalized.samples.size() == 3);
     const float mean =
@@ -29,8 +33,11 @@ TEST_CASE("Median-MAD normalizer centers at median and scales by MAD") {
     read.digitisation = 1.0f;
     read.offset = 0.0f;
 
+    auto event_detector = make_event_detector(EventDetectorConfig{.backend = "passthrough"});
+    auto events = event_detector->detect(read);
+
     auto normalizer = make_signal_normalizer(SignalNormalizerConfig{.backend = "median_mad"});
-    auto normalized = normalizer->normalize(read, nullptr);
+    auto normalized = normalizer->normalize(events);
 
     REQUIRE(normalized.samples.size() == 5);
     // Median is 0, MAD of deviations [0,0,10,0,0] is 0 so we clamp divisor to 1.
@@ -60,8 +67,11 @@ TEST_CASE("Z-score normalizer with outlier clipping") {
     config.clip_min = -2.0f;
     config.clip_max =  2.0f;
 
+    auto event_detector = make_event_detector(EventDetectorConfig{.backend = "passthrough"});
+    auto events = event_detector->detect(read);
+
     auto normalizer = make_signal_normalizer(config);
-    auto normalized = normalizer->normalize(read, nullptr);
+    auto normalized = normalizer->normalize(events);
 
     REQUIRE(normalized.samples.size() == 10);
 
@@ -99,8 +109,11 @@ TEST_CASE("Median-MAD normalizer with outlier clipping") {
     config.clip_min = -3.0f;
     config.clip_max =  3.0f;
 
+    auto event_detector = make_event_detector(EventDetectorConfig{.backend = "passthrough"});
+    auto events = event_detector->detect(read);
+
     auto normalizer = make_signal_normalizer(config);
-    auto normalized = normalizer->normalize(read, nullptr);
+    auto normalized = normalizer->normalize(events);
 
     REQUIRE(normalized.samples.size() == 10);
 

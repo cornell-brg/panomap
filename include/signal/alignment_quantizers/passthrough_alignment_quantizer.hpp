@@ -12,8 +12,7 @@ class PassthroughAlignmentQuantizer : public AlignmentQuantizer {
 public:
     explicit PassthroughAlignmentQuantizer(AlignmentQuantizerConfig config);
 
-    AlignmentQuantizedSignal quantize(const NormalizedSignal& signal,
-                                      const EventSeries* events) const override;
+    AlignmentQuantizedSignal quantize(const NormalizedSignal& signal) const override;
     const AlignmentQuantizerConfig& config() const override;
     std::string name() const override;
     float scale() const override;

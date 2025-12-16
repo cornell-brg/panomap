@@ -23,20 +23,28 @@ struct AnchorComparator {
 // Check if two anchors can be merged based on tolerance.
 bool can_merge(const Anchor& a, const Anchor& b, std::size_t tolerance) {
     // Compute gap between END of a and START of b
-    // If b starts before a ends, gap is 0 (overlap)
     const std::int64_t a_query_end = static_cast<std::int64_t>(a.query_pos + a.length);
     const std::int64_t a_ref_end = a.ref_coord + static_cast<std::int64_t>(a.length);
 
     const std::int64_t query_gap_signed = static_cast<std::int64_t>(b.query_pos) - a_query_end;
     const std::int64_t ref_gap_signed = b.ref_coord - a_ref_end;
 
-    // Gap is 0 if there's overlap (negative gap)
+    // Reject merging if query position goes backwards (large negative gap)
+    // Allow small overlaps (within tolerance) but not large backward jumps
+    if (query_gap_signed < -static_cast<std::int64_t>(tolerance)) {
+        return false;
+    }
+    if (ref_gap_signed < -static_cast<std::int64_t>(tolerance)) {
+        return false;
+    }
+
+    // Compute absolute gap (0 for overlaps within tolerance)
     const std::size_t query_gap = (query_gap_signed > 0) ?
                                   static_cast<std::size_t>(query_gap_signed) : 0;
     const std::size_t ref_gap = (ref_gap_signed > 0) ?
                                 static_cast<std::size_t>(ref_gap_signed) : 0;
 
-    // Allow merging if gaps are within tolerance
+    // Allow merging if forward gaps are within tolerance
     return query_gap <= tolerance && ref_gap <= tolerance;
 }
 

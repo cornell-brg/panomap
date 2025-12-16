@@ -3,6 +3,9 @@
 #include "mapping/batch_mapper.hpp"
 
 #include <algorithm>
+#include <atomic>
+#include <fstream>
+#include <iostream>
 #include <ostream>
 #include <string>
 #include <utility>
@@ -195,12 +198,76 @@ void BatchMapper::process_batch(BatchBuffer& batch) {
 }
 
 void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
-    batch.events[index] = components_.event_detector->detect(batch.raw_reads[index]);
-    batch.normalized[index] = components_.normalizer->normalize(batch.raw_reads[index], &batch.events[index]);
+    const auto& read = batch.raw_reads[index];
 
-    batch.fuzzy_quantized[index] = components_.fuzzy_quantizer->quantize(batch.normalized[index], &batch.events[index]);
-    batch.alignment_quantized[index] = components_.alignment_quantizer->quantize(batch.normalized[index], &batch.events[index]);
-    batch.seeds[index] = components_.seed_extractor->extract(batch.fuzzy_quantized[index], &batch.events[index]);
+#ifdef PIRU_DUMP_GRAPHS
+    // Dump read signal processing stages to file (first read only)
+    static std::atomic<int> dump_count{0};
+    const int dump_idx = dump_count.fetch_add(1);
+    const bool should_dump = (dump_idx < 1);  // Only dump first read
+
+    std::ofstream signal_file;
+    if (should_dump) {
+        std::string filename = "signal_dump_" + std::to_string(dump_idx) + ".txt";
+        signal_file.open(filename);
+        if (!signal_file.is_open()) {
+            LOG_WARN("Failed to open signal dump file: " + filename);
+        }
+    }
+#endif
+
+    batch.events[index] = components_.event_detector->detect(batch.raw_reads[index]);
+    batch.normalized[index] = components_.normalizer->normalize(batch.events[index]);
+    batch.fuzzy_quantized[index] = components_.fuzzy_quantizer->quantize(batch.normalized[index]);
+    batch.alignment_quantized[index] = components_.alignment_quantizer->quantize(batch.normalized[index]);
+    batch.seeds[index] = components_.seed_extractor->extract(batch.fuzzy_quantized[index]);
+
+#ifdef PIRU_DUMP_GRAPHS
+    if (should_dump && signal_file.is_open()) {
+        // Line 1: Metadata (read name)
+        signal_file << read.read_id << "\n";
+
+        // Line 2: Raw signal (ADC values converted to picoamps)
+        // Convert ADC to picoamps the same way event detector does
+        const auto& raw = read.raw_signal;
+        const float digitisation = read.digitisation;
+        const float offset = read.offset;
+        const float range = read.range;
+
+        for (std::size_t i = 0; i < read.len_raw_signal; ++i) {
+            if (i > 0) signal_file << ",";
+            float pA = ((raw[i] + offset) * range) / digitisation;
+            signal_file << pA;
+        }
+        signal_file << "\n";
+
+        // Line 3: Event signal (event means in picoamps)
+        const auto& events = batch.events[index].events;
+        for (std::size_t i = 0; i < events.size(); ++i) {
+            if (i > 0) signal_file << ",";
+            signal_file << events[i].mean;
+        }
+        signal_file << "\n";
+
+        // Line 4: Normalized signal
+        const auto& normalized = batch.normalized[index].samples;
+        for (std::size_t i = 0; i < normalized.size(); ++i) {
+            if (i > 0) signal_file << ",";
+            signal_file << normalized[i];
+        }
+        signal_file << "\n";
+
+        // Line 5: Fuzzy quantized tokens
+        const auto& fuzzy = batch.fuzzy_quantized[index].tokens;
+        for (std::size_t i = 0; i < fuzzy.size(); ++i) {
+            if (i > 0) signal_file << ",";
+            signal_file << static_cast<int>(fuzzy[i]);
+        }
+        signal_file << "\n";
+
+        signal_file.close();
+    }
+#endif
 
     // Lookup seeds in the index and collect hits.
     components_.lookup.lookup(batch.seeds[index], batch.seed_hits[index]);
@@ -210,9 +277,6 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
 
     // Merge adjacent/overlapping anchors on same path (optional optimization)
     anchors = AnchorMerger::merge(anchors, AnchorMergerConfig{});
-
-    // Store anchors for debugging (optional field)
-    batch.anchors[index] = anchors;
 
     // Cluster anchors
     batch.clusters[index] = components_.clusterer->cluster(anchors);

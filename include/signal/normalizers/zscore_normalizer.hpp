@@ -10,7 +10,7 @@ class ZScoreNormalizer : public SignalNormalizer {
 public:
     explicit ZScoreNormalizer(SignalNormalizerConfig config);
 
-    NormalizedSignal normalize(const io::RawRead& read, const EventSeries* events) const override;
+    NormalizedSignal normalize(const EventSeries& events) const override;
     const SignalNormalizerConfig& config() const override;
     std::string name() const override;
 

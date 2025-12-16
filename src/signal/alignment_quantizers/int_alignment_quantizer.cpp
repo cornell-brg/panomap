@@ -53,9 +53,7 @@ IntAlignmentQuantizer::IntAlignmentQuantizer(AlignmentQuantizerConfig config)
     }
 }
 
-AlignmentQuantizedSignal IntAlignmentQuantizer::quantize(const NormalizedSignal& signal,
-                                                         const EventSeries* events) const {
-    (void)events;
+AlignmentQuantizedSignal IntAlignmentQuantizer::quantize(const NormalizedSignal& signal) const {
     AlignmentQuantizedSignal quantized;
     const int bits = (config_.target_bits == 8) ? 8 : 16;
     

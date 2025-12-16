@@ -118,8 +118,8 @@ SquiggleResult squigglizeAndQuantize(const AlnGraph& graph,
             }
         }
 
-        result.fuzzy_signals[node_id] = fuzzy_quantizer.quantize(normalized, nullptr);
-        result.alignment_signals[node_id] = alignment_quantizer.quantize(normalized, nullptr);
+        result.fuzzy_signals[node_id] = fuzzy_quantizer.quantize(normalized);
+        result.alignment_signals[node_id] = alignment_quantizer.quantize(normalized);
     }
 
     result.raw_signals = std::move(raw_signals);

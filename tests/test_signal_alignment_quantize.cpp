@@ -17,7 +17,7 @@ TEST_CASE("Int16 alignment quantizer rounds and clamps with dynamic scale") {
     cfg.backend = "int16";
 
     auto quantizer = make_alignment_quantizer(cfg);
-    auto out = quantizer->quantize(norm, nullptr);
+    auto out = quantizer->quantize(norm);
 
     CHECK(out.kind == AlignmentQuantizationKind::kInt16);
     auto* vec = std::get_if<std::vector<std::int16_t>>(&out.data);
@@ -40,7 +40,7 @@ TEST_CASE("Int8 alignment quantizer uses dynamic scale") {
     cfg.backend = "int8";
 
     auto quantizer = make_alignment_quantizer(cfg);
-    auto out = quantizer->quantize(norm, nullptr);
+    auto out = quantizer->quantize(norm);
 
     CHECK(out.kind == AlignmentQuantizationKind::kInt8);
     auto* vec = std::get_if<std::vector<std::int8_t>>(&out.data);
@@ -62,7 +62,7 @@ TEST_CASE("Passthrough alignment quantizer keeps floats") {
     cfg.backend = "passthrough";
 
     auto quantizer = make_alignment_quantizer(cfg);
-    auto out = quantizer->quantize(norm, nullptr);
+    auto out = quantizer->quantize(norm);
 
     CHECK(out.kind == AlignmentQuantizationKind::kFloat32);
     auto* vec = std::get_if<std::vector<float>>(&out.data);

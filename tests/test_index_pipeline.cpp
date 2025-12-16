@@ -366,7 +366,7 @@ TEST_CASE("End-to-end DBG indexing pipeline") {
     // Verify we can look up seeds
     // Extract seeds from node 0 and verify they're in the store
     if (!squiggle_result.fuzzy_signals[0].tokens.empty()) {
-        const auto seeds = extractor->extract(squiggle_result.fuzzy_signals[0], nullptr);
+        const auto seeds = extractor->extract(squiggle_result.fuzzy_signals[0]);
         if (!seeds.seeds.empty()) {
             const auto first_hash = seeds.seeds[0].hash;
             const auto* hits = seed_store.lookup(first_hash);

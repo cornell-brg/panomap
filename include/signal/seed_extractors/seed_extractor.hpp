@@ -25,8 +25,7 @@ class SeedExtractor {
 public:
     virtual ~SeedExtractor() = default;
 
-    virtual SeedBuffer extract(const FuzzyQuantizedSignal& signal,
-                               const EventSeries* events) const = 0;
+    virtual SeedBuffer extract(const FuzzyQuantizedSignal& signal) const = 0;
     virtual const SeedExtractorConfig& config() const = 0;
     virtual std::string name() const = 0;
 };

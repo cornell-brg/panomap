@@ -12,8 +12,7 @@ class PassthroughFuzzyQuantizer : public FuzzyQuantizer {
 public:
     explicit PassthroughFuzzyQuantizer(FuzzyQuantizerConfig config);
 
-    FuzzyQuantizedSignal quantize(const NormalizedSignal& signal,
-                                  const EventSeries* events) const override;
+    FuzzyQuantizedSignal quantize(const NormalizedSignal& signal) const override;
     const FuzzyQuantizerConfig& config() const override;
     std::string name() const override;
 

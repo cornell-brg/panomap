@@ -7,9 +7,7 @@ namespace piru::signal {
 PassthroughFuzzyQuantizer::PassthroughFuzzyQuantizer(FuzzyQuantizerConfig config)
     : config_(std::move(config)) {}
 
-FuzzyQuantizedSignal PassthroughFuzzyQuantizer::quantize(const NormalizedSignal& signal,
-                                                        const EventSeries* events) const {
-    (void)events;
+FuzzyQuantizedSignal PassthroughFuzzyQuantizer::quantize(const NormalizedSignal& signal) const {
     FuzzyQuantizedSignal quantized;
     quantized.tokens.reserve(signal.samples.size());
     for (const auto sample : signal.samples) {
