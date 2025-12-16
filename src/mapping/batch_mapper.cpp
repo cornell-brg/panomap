@@ -4,10 +4,12 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cstdlib>
 #include <fstream>
 #include <iostream>
 #include <ostream>
 #include <string>
+#include <unordered_map>
 #include <utility>
 
 #include "mapping/anchor_expander.hpp"
@@ -15,6 +17,148 @@
 #include "util/logging.hpp"
 
 namespace piru::mapping {
+
+namespace {
+
+// Compute path length by walking path steps and summing (node_length - overlap).
+std::int64_t computePathLength(const index::AlnGraph& graph, const index::AlnPath& path) {
+    // Build label → node index mapping
+    std::unordered_map<std::string, std::size_t> label_to_idx;
+    for (std::size_t i = 0; i < graph.nodeCount(); ++i) {
+        label_to_idx[graph.node(i).label] = i;
+    }
+
+    std::int64_t cumulative = 0;
+    for (std::size_t step_idx = 0; step_idx < path.steps.size(); ++step_idx) {
+        const auto& step = path.steps[step_idx];
+        auto it = label_to_idx.find(step.node_id);
+        if (it == label_to_idx.end()) continue;
+
+        const auto& node = graph.node(it->second);
+        const std::size_t node_len = node.sequence.size();
+        std::size_t overlap = 0;
+
+        if (step_idx < path.steps.size() - 1 && step_idx < path.overlaps.size()) {
+            overlap = path.overlaps[step_idx];
+        }
+
+        cumulative += static_cast<std::int64_t>(node_len) - static_cast<std::int64_t>(overlap);
+    }
+    return cumulative;
+}
+
+// Dump anchors to file for visualization (first read only).
+void dumpAnchorsToFile(const char* filename,
+                       const std::vector<Anchor>& anchors,
+                       const std::string& read_id,
+                       const index::GraphStore* graph_store) {
+    std::ofstream out(filename);
+    if (!out.is_open()) {
+        LOG_WARN("Failed to open anchor dump file: " + std::string(filename));
+        return;
+    }
+
+    // Try to get graph for path metadata
+    const auto* adj_store = dynamic_cast<const index::AdjListGraphStore*>(graph_store);
+    if (!adj_store) {
+        LOG_WARN("Cannot dump anchors: graph_store is not AdjListGraphStore");
+        return;
+    }
+
+    const auto& graph = adj_store->graph();
+    const auto& paths = graph.paths();
+
+    // Write path metadata header
+    for (std::size_t path_id = 0; path_id < paths.size(); ++path_id) {
+        const auto& path = paths[path_id];
+        std::int64_t length = computePathLength(graph, path);
+        out << "#PATH\t" << path_id << "\t" << path.name << "\t" << length << "\n";
+    }
+
+    // Write anchors header
+    out << "#ANCHORS\tread_id\tpath_id\tpath_name\tquery_pos\tref_coord\tlength\tnode_id\n";
+
+    // Write anchor data
+    for (const auto& anchor : anchors) {
+        std::string path_name;
+        if (anchor.path_id < paths.size()) {
+            path_name = paths[anchor.path_id].name;
+        } else {
+            path_name = "path" + std::to_string(anchor.path_id);
+        }
+
+        out << read_id << "\t"
+            << anchor.path_id << "\t"
+            << path_name << "\t"
+            << anchor.query_pos << "\t"
+            << anchor.ref_coord << "\t"
+            << anchor.length << "\t"
+            << anchor.node_id << "\n";
+    }
+
+    out.close();
+    LOG_INFO("Dumped " + std::to_string(anchors.size()) + " anchors to " + std::string(filename));
+}
+
+// Dump chain (DP output) to file for visualization (first read only).
+void dumpChainToFile(const char* filename,
+                     const ClusterSummary& chain,
+                     const std::string& read_id,
+                     const index::GraphStore* graph_store) {
+    std::ofstream out(filename);
+    if (!out.is_open()) {
+        LOG_WARN("Failed to open chain dump file: " + std::string(filename));
+        return;
+    }
+
+    // Try to get graph for path metadata
+    const auto* adj_store = dynamic_cast<const index::AdjListGraphStore*>(graph_store);
+    if (!adj_store) {
+        LOG_WARN("Cannot dump chain: graph_store is not AdjListGraphStore");
+        return;
+    }
+
+    const auto& graph = adj_store->graph();
+    const auto& paths = graph.paths();
+
+    // Write chain metadata header
+    out << "#CHAIN\tread_id\tscore\tchained_anchors\n";
+    out << "#CHAIN\t" << read_id << "\t" << chain.score << "\t" << chain.anchors.size() << "\n";
+
+    // Write path metadata header
+    for (std::size_t path_id = 0; path_id < paths.size(); ++path_id) {
+        const auto& path = paths[path_id];
+        std::int64_t length = computePathLength(graph, path);
+        out << "#PATH\t" << path_id << "\t" << path.name << "\t" << length << "\n";
+    }
+
+    // Write chained anchors header
+    out << "#ANCHORS\tread_id\tpath_id\tpath_name\tquery_pos\tref_coord\tlength\tnode_id\tscore\n";
+
+    // Write chained anchor data
+    for (const auto& anchor : chain.anchors) {
+        std::string path_name;
+        if (anchor.path_id < paths.size()) {
+            path_name = paths[anchor.path_id].name;
+        } else {
+            path_name = "path" + std::to_string(anchor.path_id);
+        }
+
+        out << read_id << "\t"
+            << anchor.path_id << "\t"
+            << path_name << "\t"
+            << anchor.read_pos << "\t"
+            << anchor.ref_coord << "\t"
+            << anchor.target.length << "\t"
+            << anchor.target.node_id << "\t"
+            << anchor.score << "\n";
+    }
+
+    out.close();
+    LOG_INFO("Dumped chain with " + std::to_string(chain.anchors.size()) + " anchors to " + std::string(filename));
+}
+
+}  // namespace
 
 void SeedLookup::lookup(const signal::SeedBuffer& seeds, std::vector<SeedHitRecord>& out_hits) const {
     if (!store_) return;
@@ -135,7 +279,7 @@ void BatchMapper::run_alignment_stub(const ClusterSummary& summary, const io::Ra
         return;
     }
     const auto backend = components_.clusterer ? components_.clusterer->name() : "unknown";
-    note = "align=" + backend + " chains=" + std::to_string(summary.anchors.size());
+    note = "align=" + backend + " chained_anchors=" + std::to_string(summary.anchors.size());
     if (!read.read_id.empty()) {
         note += " read=" + read.read_id;
     }
@@ -278,14 +422,32 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
     // Merge adjacent/overlapping anchors on same path (optional optimization)
     anchors = AnchorMerger::merge(anchors, AnchorMergerConfig{});
 
+    // Dump anchors for first read if PIRU_DUMP_ANCHORS is set
+    static std::atomic<bool> anchor_dump_done{false};
+    const char* anchor_dump_file = std::getenv("PIRU_DUMP_ANCHORS");
+    if (anchor_dump_file && !anchor_dump_done.exchange(true)) {
+        dumpAnchorsToFile(anchor_dump_file, anchors, read.read_id, config_.graph_store);
+    }
+
     // Cluster anchors
     batch.clusters[index] = components_.clusterer->cluster(anchors);
+
+    // Dump chain for first read if PIRU_DUMP_CHAIN is set
+    static std::atomic<bool> chain_dump_done{false};
+    const char* chain_dump_file = std::getenv("PIRU_DUMP_CHAIN");
+    if (chain_dump_file && !chain_dump_done.exchange(true)) {
+        dumpChainToFile(chain_dump_file, batch.clusters[index], read.read_id, config_.graph_store);
+    }
 
     // Alignment stub: record what would be aligned (backend + anchor count).
     run_alignment_stub(batch.clusters[index], batch.raw_reads[index], batch.alignment_notes[index]);
 }
 
 void BatchMapper::output_batch(const BatchBuffer& batch) const {
+    // Try to get path names from graph store
+    const index::AdjListGraphStore* adj_store =
+        dynamic_cast<const index::AdjListGraphStore*>(config_.graph_store);
+
     for (std::size_t i = 0; i < batch.num_reads; ++i) {
         const auto& read = batch.raw_reads[i];
         const auto& seeds_for_read = batch.seeds[i].seeds;
@@ -295,23 +457,41 @@ void BatchMapper::output_batch(const BatchBuffer& batch) const {
                 << "\tseeds=" << seeds_for_read.size()
                 << "\thits=" << hits_for_read.size()
                 << "\tanchors=" << clusters_for_read.expanded_anchor_count
-                << "\tchains=" << clusters_for_read.anchors.size()
-                << "\tlen=" << read.len_raw_signal;
+                << "\tchains=" << clusters_for_read.clusters.size()
+                << "\tlen=" << read.len_raw_signal
+                << "\n";
 
-        // Output chain anchors (query, ref, length, path_id)
-        if (!clusters_for_read.anchors.empty()) {
-            output_ << "\tanchors_detail=[";
-            for (std::size_t j = 0; j < clusters_for_read.anchors.size(); ++j) {
-                const auto& anchor = clusters_for_read.anchors[j];
-                if (j > 0) output_ << ";";
-                output_ << "q=" << anchor.read_pos
-                        << ",r=" << anchor.ref_coord
-                        << ",l=" << anchor.target.length
-                        << ",p=" << anchor.path_id;
+        // Output all chains (one per line)
+        for (std::size_t chain_idx = 0; chain_idx < clusters_for_read.clusters.size(); ++chain_idx) {
+            const auto& chain = clusters_for_read.clusters[chain_idx];
+            if (chain.anchors.empty()) continue;
+
+            const auto& first_anchor = chain.anchors.front();
+            const auto& last_anchor = chain.anchors.back();
+
+            // Get path name
+            std::string path_name;
+            if (adj_store && first_anchor.path_id < adj_store->graph().pathCount()) {
+                path_name = adj_store->graph().paths()[first_anchor.path_id].name;
+            } else {
+                path_name = "path" + std::to_string(first_anchor.path_id);
             }
-            output_ << "]";
+
+            // Compute intervals (start of first anchor to end of last anchor)
+            const auto q_start = first_anchor.read_pos;
+            const auto q_end = last_anchor.read_pos + last_anchor.target.length;
+            const auto r_start = first_anchor.ref_coord;
+            const auto r_end = last_anchor.ref_coord + last_anchor.target.length;
+
+            output_ << "  chain" << chain_idx << "\t"
+                    << path_name << "\t"
+                    << "score=" << static_cast<int>(chain.cluster_score) << "\t"
+                    << "n=" << chain.anchors.size() << "\t"
+                    << "q[" << q_start << "-" << q_end << "]\t"
+                    << "r[" << r_start << "-" << r_end << "]\n";
         }
 
+        // Blank line between reads
         output_ << "\n";
     }
 }

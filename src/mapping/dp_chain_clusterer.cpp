@@ -6,10 +6,27 @@
 #include <cmath>
 #include <iostream>
 #include <limits>
+#include <map>
+#include <unordered_set>
+#include <vector>
 
 namespace piru::mapping {
 
 namespace {
+
+// Check if a coordinate falls within any interval in the list.
+// Extends each interval by the specified margin on both ends to catch
+// endpoints that are just past the boundary (reducing redundant chains).
+bool isInCoveredInterval(std::int64_t coord,
+                         const std::vector<std::pair<std::int64_t, std::int64_t>>& intervals,
+                         std::int64_t margin = 0) {
+    for (const auto& interval : intervals) {
+        if (coord >= (interval.first - margin) && coord <= (interval.second + margin)) {
+            return true;
+        }
+    }
+    return false;
+}
 
 // Comparator for sorting anchors by (path_id, ref_coord, query_pos).
 struct AnchorComparator {
@@ -80,47 +97,100 @@ ClusterSummary DPChainClusterer::cluster(const std::vector<Anchor>& anchors) con
         pred[i] = best_pred;
     }
 
-    // Step 5: Find anchor with best DP score
-    std::size_t best_idx = 0;
-    double best_dp_score = dp[0];
-    for (std::size_t i = 1; i < n; ++i) {
-        if (dp[i] > best_dp_score) {
-            best_dp_score = dp[i];
-            best_idx = i;
+    // Step 5: Multi-chain extraction
+    // Extract up to max_chains chains, each with a unique endpoint.
+    // Chains can share predecessors (common prefixes).
+    // Skip endpoints that fall within already-covered intervals on the same path
+    // to avoid redundant same-path chains.
+    std::unordered_set<std::size_t> used_in_chain;
+    std::map<std::size_t, std::vector<std::pair<std::int64_t, std::int64_t>>> covered_intervals;
+    std::size_t chain_id = 0;
+
+    while (chain_id < config_.max_chains) {
+        // Find best endpoint among UNUSED anchors, also skipping endpoints
+        // that fall within covered intervals on the same path
+        std::size_t best_idx = 0;
+        double best_dp_score = -std::numeric_limits<double>::infinity();
+        bool found = false;
+
+        for (std::size_t i = 0; i < n; ++i) {
+            // Skip if anchor already used in a chain
+            if (used_in_chain.find(i) != used_in_chain.end()) {
+                continue;
+            }
+
+            // Skip if endpoint falls within (or near) a covered interval on this path.
+            // Use a margin to filter chains that differ only slightly at the boundary.
+            constexpr std::int64_t kCoveredMargin = 200;  // bp margin around covered intervals
+            const auto& anchor = sorted_anchors[i];
+            auto it = covered_intervals.find(anchor.path_id);
+            if (it != covered_intervals.end() &&
+                isInCoveredInterval(anchor.ref_coord, it->second, kCoveredMargin)) {
+                continue;
+            }
+
+            if (dp[i] > best_dp_score) {
+                best_dp_score = dp[i];
+                best_idx = i;
+                found = true;
+            }
         }
+
+        // Stop if no valid anchors or best score below threshold
+        if (!found || best_dp_score < static_cast<double>(config_.min_chain_score)) {
+            break;
+        }
+
+        // Backtrack to extract chain (can follow pred to used anchors)
+        auto chain_indices = backtrack_chain(pred, best_idx);
+
+        // Mark ALL anchors in this chain as used
+        for (std::size_t idx : chain_indices) {
+            used_in_chain.insert(idx);
+        }
+
+        // Compute chain's reference interval for covered tracking
+        const auto& first_anchor = sorted_anchors[chain_indices.front()];
+        const auto& last_anchor = sorted_anchors[chain_indices.back()];
+        std::int64_t ref_start = first_anchor.ref_coord;
+        std::int64_t ref_end = last_anchor.ref_coord + static_cast<std::int64_t>(last_anchor.length);
+
+        // Add this chain's interval to covered intervals for its path
+        covered_intervals[first_anchor.path_id].emplace_back(ref_start, ref_end);
+
+        // Convert chain anchors to ClusterGroup format
+        ClusterGroup group;
+        group.cluster_score = best_dp_score;
+        group.anchors.reserve(chain_indices.size());
+
+        for (std::size_t idx : chain_indices) {
+            const auto& anchor = sorted_anchors[idx];
+            SeedAnchor seed_anchor;
+            seed_anchor.target.node_id = anchor.node_id;
+            seed_anchor.target.offset = anchor.node_offset;
+            seed_anchor.target.length = anchor.length;
+            seed_anchor.read_pos = anchor.query_pos;
+            seed_anchor.score = dp[idx];
+            seed_anchor.cluster_id = chain_id;
+
+            // Preserve linear coordinates for path-walk debugging
+            seed_anchor.path_id = anchor.path_id;
+            seed_anchor.ref_coord = anchor.ref_coord;
+
+            group.anchors.push_back(seed_anchor);
+        }
+
+        summary.clusters.push_back(std::move(group));
+        ++chain_id;
     }
 
-    // Check if best chain meets minimum score threshold
-    if (best_dp_score < static_cast<double>(config_.min_chain_score)) {
-        return summary;  // No chain meets threshold
+    // Set summary score to best chain score (first chain)
+    if (!summary.clusters.empty()) {
+        summary.score = summary.clusters[0].cluster_score;
+
+        // Also populate flat anchors list with best chain for backward compatibility
+        summary.anchors = summary.clusters[0].anchors;
     }
-
-    // Step 6: Backtrack to extract chain
-    auto chain_indices = backtrack_chain(pred, best_idx);
-
-    // Step 7: Convert chain anchors to SeedAnchor format
-    summary.score = best_dp_score;
-    summary.anchors.reserve(chain_indices.size());
-
-    for (std::size_t idx : chain_indices) {
-        const auto& anchor = sorted_anchors[idx];
-        SeedAnchor seed_anchor;
-        seed_anchor.target.node_id = anchor.node_id;
-        seed_anchor.target.offset = anchor.node_offset;
-        seed_anchor.target.length = anchor.length;
-        seed_anchor.read_pos = anchor.query_pos;
-        seed_anchor.score = dp[idx];
-        seed_anchor.cluster_id = 0;  // Single chain for now
-
-        // Preserve linear coordinates for path-walk debugging
-        seed_anchor.path_id = anchor.path_id;
-        seed_anchor.ref_coord = anchor.ref_coord;
-
-        summary.anchors.push_back(seed_anchor);
-    }
-
-    // TODO: Multi-chain extraction (Phase 5 optional subtask)
-    // For now, just return the best chain
 
     return summary;
 }
