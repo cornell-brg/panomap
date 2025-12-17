@@ -5,6 +5,7 @@
 #include "io/results/gaf_writer.hpp"
 #include "io/results/gam_writer.hpp"
 #include "io/results/json_writer.hpp"
+#include "io/results/paf_writer.hpp"
 #include "util/logging.hpp"
 
 namespace piru::io {
@@ -26,16 +27,24 @@ std::string extension_of(const std::string& path) {
 
 ResultWriterPtr make_result_writer(const std::string& path) {
     const std::string ext = extension_of(path);
-    if (ext == "gaf") {
+    return make_result_writer(path, ext);
+}
+
+ResultWriterPtr make_result_writer(const std::string& path, const std::string& format) {
+    const std::string fmt = to_lower(format);
+    if (fmt == "paf") {
+        return std::make_unique<PafWriter>(path);
+    }
+    if (fmt == "gaf") {
         return std::make_unique<GafWriter>(path);
     }
-    if (ext == "gam") {
+    if (fmt == "gam") {
         return std::make_unique<GamWriter>(path);
     }
-    if (ext == "json") {
+    if (fmt == "json") {
         return std::make_unique<JsonWriter>(path);
     }
-    LOG_ERROR("Unsupported result format for '" + path + "'");
+    LOG_ERROR("Unsupported result format '" + format + "' for '" + path + "'");
     return nullptr;
 }
 

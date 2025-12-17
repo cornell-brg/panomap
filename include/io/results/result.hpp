@@ -19,7 +19,8 @@ struct AlignmentResult {
 
     char strand{'+'};  // '+' or '-'.
 
-    std::string target_path;  // path/name in the reference graph.
+    std::string target_path;  // path/name in the reference graph (for PAF column 6).
+    std::string graph_path;   // graph traversal like ">n1>n2>n3" (for GAF column 6).
     std::uint64_t target_length{0};
     std::uint64_t target_start{0};
     std::uint64_t target_end{0};

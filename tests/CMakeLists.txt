@@ -81,6 +81,7 @@ if(DOCTEST_AVAILABLE)
         ${CMAKE_SOURCE_DIR}/src/io/results/gaf_writer.cpp
         ${CMAKE_SOURCE_DIR}/src/io/results/gam_writer.cpp
         ${CMAKE_SOURCE_DIR}/src/io/results/json_writer.cpp
+        ${CMAKE_SOURCE_DIR}/src/io/results/paf_writer.cpp
         ${CMAKE_SOURCE_DIR}/src/io/results/alignment_conversion.cpp
         ${CMAKE_SOURCE_DIR}/src/io/results/result_writer_factory.cpp
         ${CMAKE_SOURCE_DIR}/src/io/models/builtin_models.cpp
@@ -116,6 +117,7 @@ if(DOCTEST_AVAILABLE)
         ${CMAKE_SOURCE_DIR}/src/mapping/anchor_expander.cpp
         ${CMAKE_SOURCE_DIR}/src/mapping/anchor_merger.cpp
         ${CMAKE_SOURCE_DIR}/src/mapping/dp_chain_clusterer.cpp
+        ${CMAKE_SOURCE_DIR}/src/mapping/chain_result_converter.cpp
     )
 
     target_link_libraries(piru_tests PRIVATE doctest::doctest)

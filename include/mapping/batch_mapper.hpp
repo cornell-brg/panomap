@@ -21,6 +21,8 @@
 #include "mapping/anchor.hpp"
 #include "mapping/seed_clusterer.hpp"
 #include "mapping/anchor_expander.hpp"
+#include "mapping/chain_result_converter.hpp"
+#include "io/results/result_writer.hpp"
 
 namespace piru::mapping {
 
@@ -56,6 +58,9 @@ struct BatchMapperConfig {
     // Linearization coordinates (needed for DP chaining)
     // Non-owning pointer to linearization coords (from in-memory indexing or future deserialization)
     const std::vector<std::vector<index::LinearCoordinate>>* linearization_coords{nullptr};
+
+    // Result writer for output (non-owning, optional)
+    io::ResultWriter* result_writer{nullptr};
 };
 
 struct BatchMapperStats {
@@ -91,6 +96,7 @@ struct PipelineComponents {
     SeedLookup lookup{nullptr, nullptr, 0};
     AnchorExpanderPtr expander;  // Expands SeedHits to Anchors
     SeedClustererPtr clusterer;
+    std::unique_ptr<ChainResultConverter> result_converter;  // Converts chains to AlignmentResult
 };
 
 class BatchMapper {

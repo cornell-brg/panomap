@@ -269,6 +269,13 @@ PipelineComponents BatchMapper::create_components() const {
     LOG_INFO("Pipeline: " + comps.expander->name() + " expansion + " +
              clusterer_name + " clustering");
 
+    // Create result converter if we have a graph store (needed for result output)
+    const auto* adj_store = dynamic_cast<const index::AdjListGraphStore*>(config_.graph_store);
+    if (adj_store && config_.result_writer) {
+        comps.result_converter = std::make_unique<ChainResultConverter>(adj_store->graph());
+        LOG_INFO("Result converter enabled for output");
+    }
+
     return comps;
 }
 
@@ -453,6 +460,17 @@ void BatchMapper::output_batch(const BatchBuffer& batch) const {
         const auto& seeds_for_read = batch.seeds[i].seeds;
         const auto& hits_for_read = batch.seed_hits[i];
         const auto& clusters_for_read = batch.clusters[i];
+
+        // Write to result file if configured
+        if (config_.result_writer && components_.result_converter) {
+            auto results = components_.result_converter->convert(
+                clusters_for_read, read.read_id, read.len_raw_signal);
+            for (const auto& result : results) {
+                config_.result_writer->write(result);
+            }
+        }
+
+        // Debug output to stdout
         output_ << read.read_id
                 << "\tseeds=" << seeds_for_read.size()
                 << "\thits=" << hits_for_read.size()

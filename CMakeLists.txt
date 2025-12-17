@@ -68,6 +68,7 @@ add_executable(piru
     src/io/graphs/vg_loader.cpp
     src/io/graphs/gfa_exporter.cpp
     src/io/results/gaf_writer.cpp
+    src/io/results/paf_writer.cpp
     src/io/results/gam_writer.cpp
     src/io/results/json_writer.cpp
     src/io/results/alignment_conversion.cpp
@@ -110,6 +111,7 @@ add_executable(piru
     src/mapping/anchor_expander.cpp
     src/mapping/anchor_merger.cpp
     src/mapping/dp_chain_clusterer.cpp
+    src/mapping/chain_result_converter.cpp
     src/util/signal_handlers.cpp
     src/util/timing.cpp
 )

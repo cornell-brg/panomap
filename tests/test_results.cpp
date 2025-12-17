@@ -40,8 +40,9 @@ TEST_CASE("GAF writer writes basic record") {
     while (std::getline(in, line)) {
         lines.push_back(line);
     }
-    REQUIRE(lines.size() == 1);
-    CHECK(lines.front() ==
+    REQUIRE(lines.size() == 2);  // header + data
+    CHECK(lines[0][0] == '#');   // header starts with #
+    CHECK(lines[1] ==
           "read1\t100\t10\t90\t+\tchr1\t1000\t100\t180\t70\t80\t60\ttp:A:P");
 }
 

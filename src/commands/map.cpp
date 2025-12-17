@@ -13,6 +13,7 @@
 #include "io/index/serialization.hpp"
 #include "io/models/model_factory.hpp"
 #include "io/reads/read_provider_factory.hpp"
+#include "io/results/result_writer_factory.hpp"
 #include "mapping/batch_mapper.hpp"
 #include "util/logging.hpp"
 #include "util/timing.hpp"
@@ -75,6 +76,9 @@ int handle_map(const std::vector<std::string>& args) {
         {'\0', "", false, "\nMapping Options:"},
         {'\0', "max-seed-freq", true, "Maximum seed frequency for lookup (default: use index threshold)"},
         {'\0', "clusterer", true, "Clusterer backend: fse (default), probe, dp-chain"},
+        {'\0', "", false, "\nOutput Options:"},
+        {'o', "output", true, "Output file path (format auto-detected from extension: .paf, .gaf, .gam, .json)"},
+        {'\0', "output-format", true, "Override output format (paf, gaf, gam, json)"},
     };
     config.on_error = [](const std::string&) { std::cerr << "map: invalid option\n"; };
 
@@ -128,6 +132,31 @@ int handle_map(const std::vector<std::string>& args) {
             return -1;
         }
     }();
+
+    // Extract output options
+    const std::string output_path = parsed.values.count("output")
+                                        ? parsed.values.at("output")
+                                        : "";
+    const std::string output_format = parsed.values.count("output-format")
+                                          ? parsed.values.at("output-format")
+                                          : "";
+
+    // Create result writer if output specified
+    piru::io::ResultWriterPtr result_writer;
+    if (!output_path.empty()) {
+        if (!output_format.empty()) {
+            // Use explicit format override
+            result_writer = piru::io::make_result_writer(output_path, output_format);
+        } else {
+            // Auto-detect from extension
+            result_writer = piru::io::make_result_writer(output_path);
+        }
+        if (!result_writer) {
+            LOG_ERROR("map: failed to create output writer for '" + output_path + "'");
+            return 1;
+        }
+        LOG_INFO("Writing results to: " + output_path);
+    }
 
     PIRU_PROFILE_START(profile, "map");
 
@@ -335,6 +364,11 @@ int handle_map(const std::vector<std::string>& args) {
         const std::size_t override_threshold = std::stoull(parsed.values.at("max-seed-freq"));
         const_cast<piru::index::HashSeedStore*>(hash_seed_store)->set_frequency_threshold(override_threshold);
         LOG_INFO("Overriding seed frequency threshold to " + std::to_string(override_threshold));
+    }
+
+    // Configure result writer if specified
+    if (result_writer) {
+        map_config.result_writer = result_writer.get();
     }
 
     // =========================================================================
