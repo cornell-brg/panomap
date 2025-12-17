@@ -143,25 +143,25 @@ GraphStore SignalStore SeedStore
  └──────────────┘       │
       │                 │
       ▼                 ▼
-   RawRead         ┌──────────┐
- (raw signal)      │  Index   │
-      │            │  Loader  │
-      ▼            └──────────┘
- ┌──────────────┐
- │Event Detect  │
- └──────────────┘
-      │
-      ▼
- ┌──────────────┐
- │ Normalize    │
- └──────────────┘
-      │
-      ▼
- Cleaned Signal
-      │
-      ├────────────────┐
-      │                │
-      ▼                ▼
+   RawRead         ┌──────────────┐
+ (raw signal)      │  Index       │
+      │            │  Loader      │
+      ▼            │ (GraphStore, │
+ ┌──────────────┐  │  SeedStore,  │
+ │Event Detect  │  │  SignalStore,│
+ └──────────────┘  │  LinearCoords│
+      │            └──────────────┘
+      ▼                 │
+ ┌──────────────┐       │
+ │ Normalize    │       │
+ └──────────────┘       │
+      │                 │
+      ▼                 │
+ Cleaned Signal         │
+      │                 │
+      ├────────────────┐│
+      │                ││
+      ▼                ▼▼
   Fuzzy Quant     Alignment Quant
   (for seeding)   (for scoring)
       │                │
@@ -171,13 +171,37 @@ GraphStore SignalStore SeedStore
  └──────────────┘      │
       │                │
       ▼                │
-  Seeds per read       │
- (current output)      │
-      │                │
-      └─── future: lookup → cluster → chain → align → results ───┘
+ ┌──────────────┐      │
+ │ Seed Lookup  │◀─────┘ (SeedStore)
+ └──────────────┘
+      │
+      ▼
+  Seed Hits
+(graph space: node_id, offset)
+      │
+      ▼
+ ┌──────────────┐
+ │   Anchor     │◀────── (LinearCoords)
+ │  Expansion   │
+ └──────────────┘
+      │
+      ▼
+    Anchors
+(linear space: path_id, ref_coord)
+      │
+      ▼
+ ┌──────────────┐
+ │  Clustering  │
+ │  /Chaining   │
+ └──────────────┘
+      │
+      ▼
+Selected Anchors/Chains
+      │
+      └─── future: align → score → results ───┘
 ```
 
-**Current status:** Read parsing, signal preprocessing, quantization, and seed extraction are implemented and exposed via `piru map` (currently reports per-read seed counts). Index loading exists but seed lookup, clustering/chaining, alignment scoring, and result writing are not yet wired.
+**Current status (DEV012 - 2025-12-15):** Uniform 4-stage mapping pipeline implemented. Seed lookup, anchor expansion, and clustering/chaining are complete. Alignment scoring and result writing remain for future work.
 
 **Component status:**
 - [x] Read parse (ReadProvider)
@@ -188,39 +212,51 @@ GraphStore SignalStore SeedStore
 - [x] Seed extraction
 - [x] Index Loader
 - [x] SeedStore lookup
-- [ ] Clustering/chaining (future)
+- [x] Anchor expansion (SuperbubbleExpander, PathWalkExpander)
+- [x] Clustering/chaining (FSE, Probe, DPChain)
 - [ ] Alignment scoring (future)
 - [ ] ResultWriter integration in map path (future)
 
-**Mapping algorithm (planned):**
-1. **Signal preprocessing**:
+**Mapping algorithm (implemented DEV012):**
+
+**Stage 1: Linearization** (done during indexing)
+   - Superbubble: Assign chain IDs and local linear positions to nodes
+   - Path-walk: Assign global positions along reference paths
+
+**Stage 2: Signal preprocessing**
    - **Event detection**: Segment raw signal into events or use raw samples directly
    - **Normalize**: Scale/shift signal to standard range
-   - Result: Cleaned signal ready for downstream processing
-2. **Parallel quantization paths** (cleaned signal branches into two paths):
-   - **Path A - Fuzzy quantization**: Apply fuzzy binning (e.g., rawhash2-style) to encourage collision of similar signals for seed discovery
-   - **Path B - Alignment quantization**: Convert to format compatible with SignalStore (e.g., float32→int16 if SignalStore uses int16)
-3. **Seed extraction & lookup** (using fuzzy quantized signal):
-   - Extract signal seeds (k-mer or minimizer) from fuzzy quantized signal
-   - Lookup in SeedStore → candidate seed hits (node_id, offset)
-4. **Seed clustering** (using GraphStore chain IDs):
-   - Group seed hits by chain ID (from pseudo-linearization)
-   - Enables O(n) clustering by chain rather than O(n²) all-pairs comparisons
-5. **Colinear chaining** (within each cluster):
-   - Use linear coordinates from GraphStore for efficient colinear chaining
-   - Apply gap costs and scoring to find high-scoring anchor chains
-   - Seeds on nodes without chain IDs are handled separately or filtered
-6. **Alignment scoring** (using alignment quantized signal):
-   - Compare alignment quantized query signal against SignalStore reference signals along chains
+   - **Parallel quantization**: Cleaned signal branches into two paths:
+     - **Fuzzy quantization** (for seeding): Apply fuzzy binning to encourage seed collision
+     - **Alignment quantization** (for scoring): Convert to SignalStore format
+
+**Stage 3: Seed extraction & lookup**
+   - Extract signal seeds from fuzzy quantized signal
+   - Lookup in SeedStore → candidate seed hits (graph space: node_id, offset)
+
+**Stage 4: Anchor expansion** (graph → linear transformation)
+   - **SuperbubbleExpander**: 1:1 mapping using chain_id from GraphStore
+   - **PathWalkExpander**: 1:N mapping via path occurrence coordinates
+   - Result: Anchors in linear space (path_id, ref_coord)
+
+**Stage 5: Clustering/Chaining** (select optimal anchor subset)
+   - **FSE/Probe clusterers**: Group by path_id, cluster by diagonal (superbubble pipeline)
+   - **DPChain clusterer**: Colinear chaining via dynamic programming (path-walk pipeline)
+   - Result: Selected anchors/chains for alignment extension
+
+**Stage 6: Alignment scoring** (future work)
+   - Compare alignment quantized query signal against SignalStore reference signals
    - Produces final alignment coordinates, scores, and statistics
 
-**Note on two quantizations:**
-- **Fuzzy quantization** (step 2A): Intentional binning to make similar signals collide for seed discovery. Lossy by design.
-- **Alignment quantization** (step 2B): Format conversion to match SignalStore representation (e.g., float32→int16). Lossless or near-lossless for scoring accuracy.
+**Note on quantization:**
+- **Fuzzy quantization** (Stage 2): Intentional binning to make similar signals collide for seed discovery. Lossy by design.
+- **Alignment quantization** (Stage 2): Format conversion to match SignalStore representation (e.g., float32→int16). Lossless or near-lossless for scoring accuracy.
 - **Storage quantization** (SignalStore, done during indexing): Compression for memory efficiency on disk/in-memory.
 
-**Note on pseudo-linearization:**
-- Chain IDs and linear coordinates (assigned during indexing) enable efficient seed clustering (step 4) and colinear chaining (step 5)
+**Note on linearization:**
+- **Superbubble linearization** (Stage 1): Assigns chain IDs and local linear positions to nodes within superbubbles. Fast O(n) clustering. Best for simple variation graphs.
+- **Path-walk linearization** (Stage 1): Assigns global positions along reference paths. Enables haplotype-aware chaining. Best for complex graphs with cycles.
+- Both linearization strategies enable the same uniform 4-stage pipeline (Stage 2-5)
 
 ---
 
