@@ -66,6 +66,11 @@ struct BatchMapperConfig {
 struct BatchMapperStats {
     std::size_t batches{0};
     std::size_t reads_processed{0};
+    std::size_t reads_mapped{0};      // reads with at least one chain
+    std::size_t reads_unmapped{0};    // reads with no chains
+    std::size_t results_written{0};   // total alignment results written
+    std::size_t primary_alignments{0};
+    std::size_t secondary_alignments{0};
 };
 
 struct BatchBuffer {
@@ -108,7 +113,7 @@ public:
 private:
     void load_batch(BatchBuffer& batch);
     void process_batch(BatchBuffer& batch);
-    void output_batch(const BatchBuffer& batch) const;
+    BatchMapperStats output_batch(const BatchBuffer& batch) const;
     void process_read(BatchBuffer& batch, std::size_t index) const;
     void lookup_seed_hits(const signal::SeedBuffer& seeds,
                           std::vector<SeedHitRecord>& hits_out) const;

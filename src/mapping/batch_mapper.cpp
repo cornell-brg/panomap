@@ -310,12 +310,28 @@ BatchMapperStats BatchMapper::process_all() {
         ++stats.batches;
         stats.reads_processed += batch.num_reads;
         process_batch(batch);
-        output_batch(batch);
+
+        // Accumulate output stats
+        auto batch_stats = output_batch(batch);
+        stats.reads_mapped += batch_stats.reads_mapped;
+        stats.reads_unmapped += batch_stats.reads_unmapped;
+        stats.results_written += batch_stats.results_written;
+        stats.primary_alignments += batch_stats.primary_alignments;
+        stats.secondary_alignments += batch_stats.secondary_alignments;
+
         batch.clear();
     }
 
+    // Log detailed summary
     LOG_INFO("BatchMapper finished: batches=" + std::to_string(stats.batches) +
-             ", reads=" + std::to_string(stats.reads_processed));
+             ", reads=" + std::to_string(stats.reads_processed) +
+             ", mapped=" + std::to_string(stats.reads_mapped) +
+             ", unmapped=" + std::to_string(stats.reads_unmapped));
+    if (config_.result_writer) {
+        LOG_INFO("Results written: " + std::to_string(stats.results_written) +
+                 " (primary=" + std::to_string(stats.primary_alignments) +
+                 ", secondary=" + std::to_string(stats.secondary_alignments) + ")");
+    }
     return stats;
 }
 
@@ -450,7 +466,9 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
     run_alignment_stub(batch.clusters[index], batch.raw_reads[index], batch.alignment_notes[index]);
 }
 
-void BatchMapper::output_batch(const BatchBuffer& batch) const {
+BatchMapperStats BatchMapper::output_batch(const BatchBuffer& batch) const {
+    BatchMapperStats stats;
+
     // Try to get path names from graph store
     const index::AdjListGraphStore* adj_store =
         dynamic_cast<const index::AdjListGraphStore*>(config_.graph_store);
@@ -461,57 +479,78 @@ void BatchMapper::output_batch(const BatchBuffer& batch) const {
         const auto& hits_for_read = batch.seed_hits[i];
         const auto& clusters_for_read = batch.clusters[i];
 
+        // Track mapped/unmapped
+        const bool is_mapped = !clusters_for_read.clusters.empty();
+        if (is_mapped) {
+            ++stats.reads_mapped;
+        } else {
+            ++stats.reads_unmapped;
+        }
+
         // Write to result file if configured
         if (config_.result_writer && components_.result_converter) {
             auto results = components_.result_converter->convert(
                 clusters_for_read, read.read_id, read.len_raw_signal);
-            for (const auto& result : results) {
-                config_.result_writer->write(result);
+            for (std::size_t r = 0; r < results.size(); ++r) {
+                config_.result_writer->write(results[r]);
+                ++stats.results_written;
+                if (r == 0) {
+                    ++stats.primary_alignments;
+                } else {
+                    ++stats.secondary_alignments;
+                }
             }
         }
 
-        // Debug output to stdout
-        output_ << read.read_id
-                << "\tseeds=" << seeds_for_read.size()
-                << "\thits=" << hits_for_read.size()
-                << "\tanchors=" << clusters_for_read.expanded_anchor_count
-                << "\tchains=" << clusters_for_read.clusters.size()
-                << "\tlen=" << read.len_raw_signal
-                << "\n";
+        // Debug output to stdout (disabled - use -o for PAF/GAF output)
+        // output_ << read.read_id
+        //         << "\tseeds=" << seeds_for_read.size()
+        //         << "\thits=" << hits_for_read.size()
+        //         << "\tanchors=" << clusters_for_read.expanded_anchor_count
+        //         << "\tchains=" << clusters_for_read.clusters.size()
+        //         << "\tlen=" << read.len_raw_signal
+        //         << "\n";
+        //
+        // // Output all chains (one per line)
+        // for (std::size_t chain_idx = 0; chain_idx < clusters_for_read.clusters.size(); ++chain_idx) {
+        //     const auto& chain = clusters_for_read.clusters[chain_idx];
+        //     if (chain.anchors.empty()) continue;
+        //
+        //     const auto& first_anchor = chain.anchors.front();
+        //     const auto& last_anchor = chain.anchors.back();
+        //
+        //     // Get path name
+        //     std::string path_name;
+        //     if (adj_store && first_anchor.path_id < adj_store->graph().pathCount()) {
+        //         path_name = adj_store->graph().paths()[first_anchor.path_id].name;
+        //     } else {
+        //         path_name = "path" + std::to_string(first_anchor.path_id);
+        //     }
+        //
+        //     // Compute intervals (start of first anchor to end of last anchor)
+        //     const auto q_start = first_anchor.read_pos;
+        //     const auto q_end = last_anchor.read_pos + last_anchor.target.length;
+        //     const auto r_start = first_anchor.ref_coord;
+        //     const auto r_end = last_anchor.ref_coord + last_anchor.target.length;
+        //
+        //     output_ << "  chain" << chain_idx << "\t"
+        //             << path_name << "\t"
+        //             << "score=" << static_cast<int>(chain.cluster_score) << "\t"
+        //             << "n=" << chain.anchors.size() << "\t"
+        //             << "q[" << q_start << "-" << q_end << "]\t"
+        //             << "r[" << r_start << "-" << r_end << "]\n";
+        // }
+        //
+        // // Blank line between reads
+        // output_ << "\n";
 
-        // Output all chains (one per line)
-        for (std::size_t chain_idx = 0; chain_idx < clusters_for_read.clusters.size(); ++chain_idx) {
-            const auto& chain = clusters_for_read.clusters[chain_idx];
-            if (chain.anchors.empty()) continue;
-
-            const auto& first_anchor = chain.anchors.front();
-            const auto& last_anchor = chain.anchors.back();
-
-            // Get path name
-            std::string path_name;
-            if (adj_store && first_anchor.path_id < adj_store->graph().pathCount()) {
-                path_name = adj_store->graph().paths()[first_anchor.path_id].name;
-            } else {
-                path_name = "path" + std::to_string(first_anchor.path_id);
-            }
-
-            // Compute intervals (start of first anchor to end of last anchor)
-            const auto q_start = first_anchor.read_pos;
-            const auto q_end = last_anchor.read_pos + last_anchor.target.length;
-            const auto r_start = first_anchor.ref_coord;
-            const auto r_end = last_anchor.ref_coord + last_anchor.target.length;
-
-            output_ << "  chain" << chain_idx << "\t"
-                    << path_name << "\t"
-                    << "score=" << static_cast<int>(chain.cluster_score) << "\t"
-                    << "n=" << chain.anchors.size() << "\t"
-                    << "q[" << q_start << "-" << q_end << "]\t"
-                    << "r[" << r_start << "-" << r_end << "]\n";
-        }
-
-        // Blank line between reads
-        output_ << "\n";
+        // Suppress unused variable warnings
+        (void)seeds_for_read;
+        (void)hits_for_read;
+        (void)adj_store;
     }
+
+    return stats;
 }
 
 }  // namespace piru::mapping
