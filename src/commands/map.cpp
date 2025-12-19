@@ -78,6 +78,10 @@ int handle_map(const std::vector<std::string>& args) {
         {'\0', "clusterer", true, "Clusterer backend: fse (default), probe, dp-chain"},
         {'\0', "align", false, "Enable signal-level alignment for chain evaluation"},
         {'\0', "align-backend", true, "Alignment backend: path-guided (default), radius, auto"},
+        {'\0', "", false, "\nSignal Processing Options (only with --graph):"},
+        {'\0', "fuzzy-backend", true, "Fuzzy quantizer backend (default: rh2)"},
+        {'\0', "seed-k", true, "Seed extractor k-mer size (default: 6)"},
+        {'\0', "seed-stride", true, "Seed extractor stride (default: 1)"},
         {'\0', "", false, "\nDebug Options:"},
         {'\0', "dump-anchors", true, "Dump anchors to directory (one file per read)"},
         {'\0', "dump-chains", true, "Dump chains to directory (one file per read)"},
@@ -212,6 +216,12 @@ int handle_map(const std::vector<std::string>& args) {
         // Note: Linearization coords not serialized yet (Phase 7 TODO)
         // Superbubble uses graph.node.chain_id/linear_position instead
 
+        // Warn if user tries to override seed/fuzzy params with pre-built index
+        if (parsed.values.count("seed-k") || parsed.values.count("seed-stride") ||
+            parsed.values.count("fuzzy-backend")) {
+            LOG_WARN("--seed-* and --fuzzy-* flags are ignored with --index (use --graph for experimentation)");
+        }
+
     } else {
         // ---------------------------------------------------------------------
         // WORKFLOW 2: Run in-memory indexing
@@ -275,6 +285,20 @@ int handle_map(const std::vector<std::string>& args) {
             index_config.graph_k = std::stoul(parsed.values.at("graph-k"));
         }
 
+        // Apply CLI overrides for seed extraction (affects in-memory indexing)
+        if (parsed.values.count("seed-k")) {
+            index_config.seed_k = std::stoull(parsed.values.at("seed-k"));
+            LOG_INFO("Using seed k=" + std::to_string(index_config.seed_k) + " for indexing");
+        }
+        if (parsed.values.count("seed-stride")) {
+            index_config.seed_stride = std::stoull(parsed.values.at("seed-stride"));
+            LOG_INFO("Using seed stride=" + std::to_string(index_config.seed_stride) + " for indexing");
+        }
+        if (parsed.values.count("fuzzy-backend")) {
+            index_config.fuzzy_quantizer = parsed.values.at("fuzzy-backend");
+            LOG_INFO("Using fuzzy quantizer=" + index_config.fuzzy_quantizer + " for indexing");
+        }
+
         // Step 4: Run full indexing pipeline
         // (transform → linearize → squigglize → quantize → seed extraction)
         auto index_result = piru::index::run_index_pipeline(imported, *model, index_config);
@@ -333,6 +357,7 @@ int handle_map(const std::vector<std::string>& args) {
     if (!fuzzy_quantizer_name.empty()) {
         map_config.fuzzy_config.backend = fuzzy_quantizer_name;
     }
+    LOG_INFO("Using fuzzy quantizer: " + map_config.fuzzy_config.backend);
 
     // Configure seed extractor from seed store parameters
     const auto* hash_seed_store = dynamic_cast<piru::index::HashSeedStore*>(seed_store.get());
@@ -347,7 +372,7 @@ int handle_map(const std::vector<std::string>& args) {
         return 1;
     }
 
-    LOG_INFO("Using seed extractor settings from index: backend=" + index_seed_cfg.backend +
+    LOG_INFO("Using seed extractor settings: backend=" + index_seed_cfg.backend +
              ", k=" + std::to_string(index_seed_cfg.k) +
              ", stride=" + std::to_string(index_seed_cfg.stride) +
              ", qbits=" + std::to_string(index_seed_cfg.qbits));
