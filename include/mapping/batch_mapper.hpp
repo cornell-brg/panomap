@@ -21,7 +21,8 @@
 #include "mapping/anchor.hpp"
 #include "mapping/seed_clusterer.hpp"
 #include "mapping/anchor_expander.hpp"
-#include "mapping/chain_result_converter.hpp"
+#include "mapping/map_result.hpp"
+#include "mapping/result_formatter.hpp"
 #include "alignment/chain_aligner.hpp"
 #include "io/results/result_writer.hpp"
 
@@ -67,6 +68,10 @@ struct BatchMapperConfig {
     // Alignment configuration (optional signal-level alignment)
     bool enable_alignment{false};
     alignment::ChainAlignerConfig align_config{};
+
+    // Debug dump directories (empty = disabled)
+    std::string dump_anchors_dir{};  // Dump anchors per read
+    std::string dump_chains_dir{};   // Dump chains per read
 };
 
 struct BatchMapperStats {
@@ -88,8 +93,7 @@ struct BatchBuffer {
     std::vector<signal::SeedBuffer> seeds;
     std::vector<std::vector<SeedHitRecord>> seed_hits;
     std::vector<std::vector<Anchor>> anchors;  // Debug: anchors after expansion
-    std::vector<ClusterSummary> clusters;
-    std::vector<std::string> alignment_notes;
+    std::vector<ReadMapResult> map_results;    // Unified mapping results
     std::size_t num_reads{0};
 
     void resize(std::size_t capacity);
@@ -108,7 +112,7 @@ struct PipelineComponents {
     SeedLookup lookup{nullptr, nullptr, 0};
     AnchorExpanderPtr expander;  // Expands SeedHits to Anchors
     SeedClustererPtr clusterer;
-    std::unique_ptr<ChainResultConverter> result_converter;  // Converts chains to AlignmentResult
+    std::unique_ptr<ResultFormatter> result_formatter;       // Formats map results to PAF/GAF
     std::unique_ptr<alignment::ChainAligner> chain_aligner;  // Optional signal-level alignment
 };
 
@@ -125,8 +129,6 @@ private:
     void process_read(BatchBuffer& batch, std::size_t index) const;
     void lookup_seed_hits(const signal::SeedBuffer& seeds,
                           std::vector<SeedHitRecord>& hits_out) const;
-    void run_alignment_stub(const ClusterSummary& summary, const io::RawRead& read,
-                            std::string& note) const;
     PipelineComponents create_components() const;
 
     BatchMapperConfig config_;

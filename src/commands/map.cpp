@@ -78,6 +78,9 @@ int handle_map(const std::vector<std::string>& args) {
         {'\0', "clusterer", true, "Clusterer backend: fse (default), probe, dp-chain"},
         {'\0', "align", false, "Enable signal-level alignment for chain evaluation"},
         {'\0', "align-backend", true, "Alignment backend: path-guided (default), radius, auto"},
+        {'\0', "", false, "\nDebug Options:"},
+        {'\0', "dump-anchors", true, "Dump anchors to directory (one file per read)"},
+        {'\0', "dump-chains", true, "Dump chains to directory (one file per read)"},
         {'\0', "", false, "\nOutput Options:"},
         {'o', "output", true, "Output file path (format auto-detected from extension: .paf, .gaf, .gam, .json)"},
         {'\0', "output-format", true, "Override output format (paf, gaf, gam, json)"},
@@ -393,6 +396,18 @@ int handle_map(const std::vector<std::string>& args) {
         }
 
         LOG_INFO("Signal-level alignment enabled: backend=" + align_backend);
+    }
+
+    // Configure debug dump directories
+    if (parsed.values.count("dump-anchors")) {
+        map_config.dump_anchors_dir = parsed.values.at("dump-anchors");
+        std::filesystem::create_directories(map_config.dump_anchors_dir);
+        LOG_INFO("Dumping anchors to: " + map_config.dump_anchors_dir);
+    }
+    if (parsed.values.count("dump-chains")) {
+        map_config.dump_chains_dir = parsed.values.at("dump-chains");
+        std::filesystem::create_directories(map_config.dump_chains_dir);
+        LOG_INFO("Dumping chains to: " + map_config.dump_chains_dir);
     }
 
     // =========================================================================

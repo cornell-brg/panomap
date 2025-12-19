@@ -6,9 +6,15 @@ helping diagnose whether anchors are properly distributed or concentrated on
 a single path.
 
 Supports grouped visualization of forward (+) and reverse (-) strands per haplotype.
+
+Input can be either:
+  - A single anchor dump file (legacy)
+  - A directory containing per-read anchor files (<read_id>_anchors.tsv)
 """
 
 import argparse
+import os
+import glob
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import List, Dict, Tuple, Optional
@@ -76,6 +82,31 @@ class HaplotypeGroup:
 # =============================================================================
 # Input Parsing
 # =============================================================================
+
+def list_anchor_files(directory: str) -> List[Tuple[str, str]]:
+    """List all anchor dump files in a directory.
+
+    Returns:
+        List of (read_num, filepath) tuples sorted numerically.
+        Filename format: read_<N>_anchors.tsv
+    """
+    pattern = os.path.join(directory, "read_*_anchors.tsv")
+    files = glob.glob(pattern)
+
+    results = []
+    for filepath in files:
+        filename = os.path.basename(filepath)
+        # Extract number from filename: read_<N>_anchors.tsv
+        # Remove "read_" prefix and "_anchors.tsv" suffix
+        num_str = filename[5:-12]  # len("read_") = 5, len("_anchors.tsv") = 12
+        try:
+            read_num = int(num_str)
+            results.append((str(read_num), filepath))
+        except ValueError:
+            continue
+
+    return sorted(results, key=lambda x: int(x[0]))
+
 
 def parse_anchor_dump(filepath: str) -> Tuple[List[Path], List[Anchor]]:
     """Parse anchor dump TSV file from piru.
@@ -447,6 +478,34 @@ def print_summary_statistics(anchors: List[Anchor], paths: List[Path]):
 # Main Entry Point
 # =============================================================================
 
+def process_single_file(filepath: str, output_file: str, window_size: int, stride: int):
+    """Process a single anchor dump file and generate heatmap."""
+    print(f"Loading anchor dump from {filepath}...")
+    paths, anchors = parse_anchor_dump(filepath)
+
+    if not anchors:
+        print(f"  Warning: No anchors found, skipping")
+        return False
+
+    read_id = anchors[0].read_id
+    print(f"  Read ID: {read_id}")
+    print(f"  Paths: {len(paths)}")
+    print(f"  Anchors: {len(anchors)}")
+
+    # Group and report
+    groups = group_paths_by_haplotype(paths)
+    print(f"  Haplotypes: {len(groups)}")
+
+    # Plot heatmap
+    print(f"  Generating heatmap (window: {window_size} bp, stride: {stride} bp)...")
+    plot_anchor_heatmap_grouped(anchors, paths, output_file,
+                                 window_size=window_size, stride=stride)
+
+    # Print summary statistics
+    print_summary_statistics(anchors, paths)
+    return True
+
+
 def main():
     """Main entry point for the anchor heatmap tool."""
     parser = argparse.ArgumentParser(
@@ -457,23 +516,27 @@ Examples:
   # Run with built-in test data
   python plot_anchor_heatmap.py
 
-  # Load from piru anchor dump
-  python plot_anchor_heatmap.py --input anchors.tsv
+  # Load from single anchor dump file
+  python plot_anchor_heatmap.py --input read_0_anchors.tsv
 
-  # Custom output and window settings
-  python plot_anchor_heatmap.py --input anchors.tsv --output my_heatmap.png --window-size 300
+  # Process all files in a directory (generates one heatmap per read)
+  python plot_anchor_heatmap.py --input /tmp/anchors
+
+  # Custom window settings
+  python plot_anchor_heatmap.py --input /tmp/anchors --window-size 300
 """
     )
 
     parser.add_argument(
         "--input", "-i",
-        help="Input anchor dump file from piru (TSV format). If not provided, uses test data."
+        help="Input anchor dump file or directory from piru. If not provided, uses test data."
     )
 
     parser.add_argument(
         "--output", "-o",
         default="anchor_heatmap.png",
-        help="Output file path for heatmap (default: anchor_heatmap.png)"
+        help="Output file path for heatmap (default: anchor_heatmap.png). "
+             "For directory input, this is ignored and files are named read_<N>_heatmap.png"
     )
 
     parser.add_argument(
@@ -494,30 +557,54 @@ Examples:
 
     # Load data
     if args.input:
-        print(f"Loading anchor dump from {args.input}...")
-        paths, anchors = parse_anchor_dump(args.input)
+        if os.path.isdir(args.input):
+            # Directory mode - process all files
+            anchor_files = list_anchor_files(args.input)
+
+            if not anchor_files:
+                print(f"Error: No anchor files found in {args.input}")
+                print("Expected files matching pattern: read_*_anchors.tsv")
+                return 1
+
+            print(f"Found {len(anchor_files)} anchor files in {args.input}")
+            print("=" * 60)
+
+            success_count = 0
+            for read_num, filepath in anchor_files:
+                output_file = os.path.join(args.input, f"read_{read_num}_heatmap.png")
+                print(f"\n[{int(read_num)+1}/{len(anchor_files)}] Processing read_{read_num}...")
+                if process_single_file(filepath, output_file, args.window_size, args.stride):
+                    success_count += 1
+
+            print("\n" + "=" * 60)
+            print(f"Done. Generated {success_count}/{len(anchor_files)} heatmaps.")
+            return 0
+
+        else:
+            # Single file mode
+            return 0 if process_single_file(args.input, args.output, args.window_size, args.stride) else 1
+
     else:
+        # Test data mode
         print("Generating test data...")
         paths = generate_test_paths()
         anchors = generate_test_anchors()
 
-    read_id = anchors[0].read_id if anchors else "N/A"
-    print(f"  Read ID: {read_id}")
-    print(f"  Paths: {len(paths)}")
-    print(f"  Anchors: {len(anchors)}")
+        read_id = anchors[0].read_id if anchors else "N/A"
+        print(f"  Read ID: {read_id}")
+        print(f"  Paths: {len(paths)}")
+        print(f"  Anchors: {len(anchors)}")
 
-    # Group and report
-    groups = group_paths_by_haplotype(paths)
-    print(f"  Haplotypes: {len(groups)}")
+        groups = group_paths_by_haplotype(paths)
+        print(f"  Haplotypes: {len(groups)}")
 
-    # Plot heatmap
-    print(f"\nGenerating grouped heatmap (window: {args.window_size} bp, stride: {args.stride} bp)...")
-    plot_anchor_heatmap_grouped(anchors, paths, args.output,
-                                 window_size=args.window_size, stride=args.stride)
-
-    # Print summary statistics
-    print_summary_statistics(anchors, paths)
+        print(f"\nGenerating grouped heatmap (window: {args.window_size} bp, stride: {args.stride} bp)...")
+        plot_anchor_heatmap_grouped(anchors, paths, args.output,
+                                     window_size=args.window_size, stride=args.stride)
+        print_summary_statistics(anchors, paths)
+        return 0
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    sys.exit(main() or 0)

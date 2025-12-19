@@ -8,8 +8,8 @@
 #include "index/aln_graph.hpp"
 #include "io/results/result.hpp"
 #include "io/results/result_writer_factory.hpp"
-#include "mapping/chain_result_converter.hpp"
-#include "mapping/seed_clusterer.hpp"
+#include "mapping/result_formatter.hpp"
+#include "mapping/map_result.hpp"
 
 TEST_CASE("GAF writer writes basic record") {
     const auto tmp_path =
@@ -127,7 +127,7 @@ TEST_CASE("PAF writer factory detects .paf extension") {
 }
 
 // =============================================================================
-// DEV015: ChainResultConverter Tests
+// DEV015: ResultFormatter Tests
 // =============================================================================
 
 namespace {
@@ -174,14 +174,14 @@ piru::index::AlnGraph makeTestGraph() {
 
 }  // namespace
 
-TEST_CASE("ChainResultConverter converts single chain") {
+TEST_CASE("ResultFormatter formats single mapping") {
     auto graph = makeTestGraph();
-    piru::mapping::ChainResultConverter converter(graph);
+    piru::mapping::ResultFormatter formatter(graph);
 
-    // Create a cluster summary with one chain
-    piru::mapping::ClusterSummary summary;
-    piru::mapping::ClusterGroup chain;
-    chain.cluster_score = 100.0;
+    // Create a ReadMapResult with one mapping
+    piru::mapping::ReadMapResult map_result;
+    piru::mapping::Mapping mapping;
+    mapping.chain_score = 100.0;
 
     // Add anchors spanning nodes 0, 1, 2
     piru::mapping::SeedAnchor a0;
@@ -189,26 +189,26 @@ TEST_CASE("ChainResultConverter converts single chain") {
     a0.read_pos = 10;
     a0.path_id = 0;
     a0.ref_coord = 2;
-    chain.anchors.push_back(a0);
+    mapping.anchors.push_back(a0);
 
     piru::mapping::SeedAnchor a1;
     a1.target = {1, 0, 4};  // node_id=1, offset=0, length=4
     a1.read_pos = 14;
     a1.path_id = 0;
     a1.ref_coord = 6;
-    chain.anchors.push_back(a1);
+    mapping.anchors.push_back(a1);
 
     piru::mapping::SeedAnchor a2;
     a2.target = {2, 0, 4};  // node_id=2, offset=0, length=4
     a2.read_pos = 18;
     a2.path_id = 0;
     a2.ref_coord = 10;
-    chain.anchors.push_back(a2);
+    mapping.anchors.push_back(a2);
 
-    summary.clusters.push_back(chain);
+    map_result.mappings.push_back(mapping);
 
-    // Convert
-    auto results = converter.convert(summary, "test_read", 100);
+    // Format
+    auto results = formatter.format(map_result, "test_read", 100);
 
     REQUIRE(results.size() == 1);
     CHECK(results[0].query_name == "test_read");
@@ -222,13 +222,13 @@ TEST_CASE("ChainResultConverter converts single chain") {
     CHECK(results[0].mapq == 60);  // No secondary, so high MAPQ
 }
 
-TEST_CASE("ChainResultConverter builds GAF path string") {
+TEST_CASE("ResultFormatter builds GAF path string") {
     auto graph = makeTestGraph();
-    piru::mapping::ChainResultConverter converter(graph);
+    piru::mapping::ResultFormatter formatter(graph);
 
-    piru::mapping::ClusterSummary summary;
-    piru::mapping::ClusterGroup chain;
-    chain.cluster_score = 50.0;
+    piru::mapping::ReadMapResult map_result;
+    piru::mapping::Mapping mapping;
+    mapping.chain_score = 50.0;
 
     // Anchors on nodes 0, 1, 2
     piru::mapping::SeedAnchor a0;
@@ -236,60 +236,60 @@ TEST_CASE("ChainResultConverter builds GAF path string") {
     a0.read_pos = 0;
     a0.path_id = 0;
     a0.ref_coord = 0;
-    chain.anchors.push_back(a0);
+    mapping.anchors.push_back(a0);
 
     piru::mapping::SeedAnchor a1;
     a1.target = {1, 0, 4};
     a1.read_pos = 4;
     a1.path_id = 0;
     a1.ref_coord = 4;
-    chain.anchors.push_back(a1);
+    mapping.anchors.push_back(a1);
 
     piru::mapping::SeedAnchor a2;
     a2.target = {2, 0, 4};
     a2.read_pos = 8;
     a2.path_id = 0;
     a2.ref_coord = 8;
-    chain.anchors.push_back(a2);
+    mapping.anchors.push_back(a2);
 
-    summary.clusters.push_back(chain);
+    map_result.mappings.push_back(mapping);
 
-    auto results = converter.convert(summary, "read1", 50);
+    auto results = formatter.format(map_result, "read1", 50);
 
     REQUIRE(results.size() == 1);
     // Path should be ">s1>s2>s3" (forward direction, original IDs)
     CHECK(results[0].graph_path == ">s1>s2>s3");
 }
 
-TEST_CASE("ChainResultConverter handles primary and secondary chains") {
+TEST_CASE("ResultFormatter handles primary and secondary mappings") {
     auto graph = makeTestGraph();
-    piru::mapping::ChainResultConverter converter(graph);
+    piru::mapping::ResultFormatter formatter(graph);
 
-    piru::mapping::ClusterSummary summary;
+    piru::mapping::ReadMapResult map_result;
 
-    // Primary chain (higher score)
-    piru::mapping::ClusterGroup primary;
-    primary.cluster_score = 100.0;
+    // Primary mapping (higher score)
+    piru::mapping::Mapping primary;
+    primary.chain_score = 100.0;
     piru::mapping::SeedAnchor a0;
     a0.target = {0, 0, 4};
     a0.read_pos = 0;
     a0.path_id = 0;
     a0.ref_coord = 0;
     primary.anchors.push_back(a0);
-    summary.clusters.push_back(primary);
+    map_result.mappings.push_back(primary);
 
-    // Secondary chain (lower score)
-    piru::mapping::ClusterGroup secondary;
-    secondary.cluster_score = 50.0;
+    // Secondary mapping (lower score)
+    piru::mapping::Mapping secondary;
+    secondary.chain_score = 50.0;
     piru::mapping::SeedAnchor a1;
     a1.target = {1, 0, 4};
     a1.read_pos = 0;
     a1.path_id = 0;
     a1.ref_coord = 4;
     secondary.anchors.push_back(a1);
-    summary.clusters.push_back(secondary);
+    map_result.mappings.push_back(secondary);
 
-    auto results = converter.convert(summary, "read1", 50);
+    auto results = formatter.format(map_result, "read1", 50);
 
     REQUIRE(results.size() == 2);
 
@@ -311,49 +311,49 @@ TEST_CASE("ChainResultConverter handles primary and secondary chains") {
     CHECK(secondary_has_tag);
 }
 
-TEST_CASE("ChainResultConverter respects primary_only config") {
+TEST_CASE("ResultFormatter respects primary_only config") {
     auto graph = makeTestGraph();
-    piru::mapping::ChainResultConfig config;
+    piru::mapping::ResultFormatterConfig config;
     config.primary_only = true;
-    piru::mapping::ChainResultConverter converter(graph, config);
+    piru::mapping::ResultFormatter formatter(graph, config);
 
-    piru::mapping::ClusterSummary summary;
+    piru::mapping::ReadMapResult map_result;
 
-    // Add two chains
-    piru::mapping::ClusterGroup c1;
-    c1.cluster_score = 100.0;
+    // Add two mappings
+    piru::mapping::Mapping m1;
+    m1.chain_score = 100.0;
     piru::mapping::SeedAnchor a0;
     a0.target = {0, 0, 4};
     a0.read_pos = 0;
     a0.path_id = 0;
     a0.ref_coord = 0;
-    c1.anchors.push_back(a0);
-    summary.clusters.push_back(c1);
+    m1.anchors.push_back(a0);
+    map_result.mappings.push_back(m1);
 
-    piru::mapping::ClusterGroup c2;
-    c2.cluster_score = 50.0;
+    piru::mapping::Mapping m2;
+    m2.chain_score = 50.0;
     piru::mapping::SeedAnchor a1;
     a1.target = {1, 0, 4};
     a1.read_pos = 0;
     a1.path_id = 0;
     a1.ref_coord = 4;
-    c2.anchors.push_back(a1);
-    summary.clusters.push_back(c2);
+    m2.anchors.push_back(a1);
+    map_result.mappings.push_back(m2);
 
-    auto results = converter.convert(summary, "read1", 50);
+    auto results = formatter.format(map_result, "read1", 50);
 
     // Should only get primary
     CHECK(results.size() == 1);
 }
 
-TEST_CASE("ChainResultConverter handles empty clusters") {
+TEST_CASE("ResultFormatter handles empty mappings") {
     auto graph = makeTestGraph();
-    piru::mapping::ChainResultConverter converter(graph);
+    piru::mapping::ResultFormatter formatter(graph);
 
-    piru::mapping::ClusterSummary summary;
-    // No clusters
+    piru::mapping::ReadMapResult map_result;
+    // No mappings
 
-    auto results = converter.convert(summary, "read1", 50);
+    auto results = formatter.format(map_result, "read1", 50);
 
     CHECK(results.empty());
 }

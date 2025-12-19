@@ -118,7 +118,7 @@ if(DOCTEST_AVAILABLE)
         ${CMAKE_SOURCE_DIR}/src/mapping/anchor_expander.cpp
         ${CMAKE_SOURCE_DIR}/src/mapping/anchor_merger.cpp
         ${CMAKE_SOURCE_DIR}/src/mapping/dp_chain_clusterer.cpp
-        ${CMAKE_SOURCE_DIR}/src/mapping/chain_result_converter.cpp
+        ${CMAKE_SOURCE_DIR}/src/mapping/result_formatter.cpp
         ${CMAKE_SOURCE_DIR}/src/alignment/path_guided_dtw_aligner.cpp
         ${CMAKE_SOURCE_DIR}/src/alignment/radius_gdtw_aligner.cpp
         ${CMAKE_SOURCE_DIR}/src/alignment/chain_aligner.cpp

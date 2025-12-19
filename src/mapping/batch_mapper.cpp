@@ -102,9 +102,14 @@ void dumpAnchorsToFile(const char* filename,
 
 // Dump chain (DP output) to file for visualization (first read only).
 void dumpChainToFile(const char* filename,
-                     const ClusterSummary& chain,
+                     const ReadMapResult& result,
                      const std::string& read_id,
                      const index::GraphStore* graph_store) {
+    if (result.mappings.empty()) {
+        LOG_WARN("Cannot dump chain: no mappings for read " + read_id);
+        return;
+    }
+
     std::ofstream out(filename);
     if (!out.is_open()) {
         LOG_WARN("Failed to open chain dump file: " + std::string(filename));
@@ -121,9 +126,12 @@ void dumpChainToFile(const char* filename,
     const auto& graph = adj_store->graph();
     const auto& paths = graph.paths();
 
+    // Use primary mapping
+    const auto& primary = result.mappings[0];
+
     // Write chain metadata header
     out << "#CHAIN\tread_id\tscore\tchained_anchors\n";
-    out << "#CHAIN\t" << read_id << "\t" << chain.score << "\t" << chain.anchors.size() << "\n";
+    out << "#CHAIN\t" << read_id << "\t" << primary.chain_score << "\t" << primary.anchors.size() << "\n";
 
     // Write path metadata header
     for (std::size_t path_id = 0; path_id < paths.size(); ++path_id) {
@@ -136,7 +144,7 @@ void dumpChainToFile(const char* filename,
     out << "#ANCHORS\tread_id\tpath_id\tpath_name\tquery_pos\tref_coord\tlength\tnode_id\tscore\n";
 
     // Write chained anchor data
-    for (const auto& anchor : chain.anchors) {
+    for (const auto& anchor : primary.anchors) {
         std::string path_name;
         if (anchor.path_id < paths.size()) {
             path_name = paths[anchor.path_id].name;
@@ -155,7 +163,7 @@ void dumpChainToFile(const char* filename,
     }
 
     out.close();
-    LOG_INFO("Dumped chain with " + std::to_string(chain.anchors.size()) + " anchors to " + std::string(filename));
+    LOG_INFO("Dumped chain with " + std::to_string(primary.anchors.size()) + " anchors to " + std::string(filename));
 }
 
 }  // namespace
@@ -191,8 +199,7 @@ void BatchBuffer::resize(std::size_t capacity) {
     seeds.resize(capacity);
     seed_hits.resize(capacity);
     anchors.resize(capacity);
-    clusters.resize(capacity);
-    alignment_notes.resize(capacity);
+    map_results.resize(capacity);
     num_reads = 0;
 }
 
@@ -206,8 +213,7 @@ void BatchBuffer::clear() {
         seeds[i].seeds.clear();
         seed_hits[i].clear();
         anchors[i].clear();
-        clusters[i] = ClusterSummary{};
-        alignment_notes[i].clear();
+        map_results[i] = ReadMapResult{};
     }
     num_reads = 0;
 }
@@ -269,11 +275,11 @@ PipelineComponents BatchMapper::create_components() const {
     LOG_INFO("Pipeline: " + comps.expander->name() + " expansion + " +
              clusterer_name + " clustering");
 
-    // Create result converter if we have a graph store (needed for result output)
+    // Create result formatter if we have a graph store (needed for result output)
     const auto* adj_store = dynamic_cast<const index::AdjListGraphStore*>(config_.graph_store);
     if (adj_store && config_.result_writer) {
-        comps.result_converter = std::make_unique<ChainResultConverter>(adj_store->graph());
-        LOG_INFO("Result converter enabled for output");
+        comps.result_formatter = std::make_unique<ResultFormatter>(adj_store->graph());
+        LOG_INFO("Result formatter enabled for output");
     }
 
     // Create chain aligner if alignment is enabled
@@ -287,19 +293,6 @@ PipelineComponents BatchMapper::create_components() const {
     }
 
     return comps;
-}
-
-void BatchMapper::run_alignment_stub(const ClusterSummary& summary, const io::RawRead& read,
-                                     std::string& note) const {
-    if (summary.anchors.empty()) {
-        note = "align=none";
-        return;
-    }
-    const auto backend = components_.clusterer ? components_.clusterer->name() : "unknown";
-    note = "align=" + backend + " chained_anchors=" + std::to_string(summary.anchors.size());
-    if (!read.read_id.empty()) {
-        note += " read=" + read.read_id;
-    }
 }
 
 BatchMapperStats BatchMapper::process_all() {
@@ -455,25 +448,67 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
     // Merge adjacent/overlapping anchors on same path (optional optimization)
     anchors = AnchorMerger::merge(anchors, AnchorMergerConfig{});
 
-    // Dump anchors for first read if PIRU_DUMP_ANCHORS is set
-    static std::atomic<bool> anchor_dump_done{false};
-    const char* anchor_dump_file = std::getenv("PIRU_DUMP_ANCHORS");
-    if (anchor_dump_file && !anchor_dump_done.exchange(true)) {
-        dumpAnchorsToFile(anchor_dump_file, anchors, read.read_id, config_.graph_store);
+    // Dump anchors if --dump-anchors is set
+    static std::atomic<std::size_t> anchor_dump_counter{0};
+    if (!config_.dump_anchors_dir.empty()) {
+        std::size_t dump_num = anchor_dump_counter.fetch_add(1);
+        std::string anchor_file = config_.dump_anchors_dir + "/read_" + std::to_string(dump_num) + "_anchors.tsv";
+        dumpAnchorsToFile(anchor_file.c_str(), anchors, read.read_id, config_.graph_store);
     }
 
     // Cluster anchors
-    batch.clusters[index] = components_.clusterer->cluster(anchors);
+    ClusterSummary summary = components_.clusterer->cluster(anchors);
 
-    // Dump chain for first read if PIRU_DUMP_CHAIN is set
-    static std::atomic<bool> chain_dump_done{false};
-    const char* chain_dump_file = std::getenv("PIRU_DUMP_CHAIN");
-    if (chain_dump_file && !chain_dump_done.exchange(true)) {
-        dumpChainToFile(chain_dump_file, batch.clusters[index], read.read_id, config_.graph_store);
+    // Build unified map result from cluster summary
+    ReadMapResult& result = batch.map_results[index];
+    result.mappings.clear();
+    result.expanded_anchor_count = summary.expanded_anchor_count;
+
+    for (const auto& cluster : summary.clusters) {
+        Mapping mapping;
+        mapping.anchors = cluster.anchors;
+        mapping.chain_score = cluster.cluster_score;
+
+        // Run alignment if enabled
+        if (components_.chain_aligner && components_.signal_store && config_.graph_store &&
+            cluster.anchors.size() >= 2) {
+            // Convert SeedAnchors to alignment::Anchors
+            std::vector<alignment::Anchor> align_anchors;
+            align_anchors.reserve(cluster.anchors.size());
+            for (const auto& seed_anchor : cluster.anchors) {
+                alignment::Anchor a;
+                a.graph_pos.node_id = static_cast<std::uint32_t>(seed_anchor.target.node_id);
+                a.graph_pos.offset = static_cast<std::uint32_t>(seed_anchor.target.offset);
+                a.query_pos = static_cast<std::uint32_t>(seed_anchor.read_pos);
+                align_anchors.push_back(a);
+            }
+
+            // Run alignment
+            auto align_result = components_.chain_aligner->align(
+                *config_.graph_store, *components_.signal_store,
+                batch.alignment_quantized[index], align_anchors);
+
+            if (align_result.valid()) {
+                mapping.alignment_cost = align_result.total_cost;
+                std::size_t query_len = cluster.anchors.back().read_pos - cluster.anchors.front().read_pos;
+                if (query_len > 0) {
+                    mapping.normalized_alignment_cost = align_result.normalizedCost(query_len);
+                }
+                mapping.alignment_path = std::move(align_result.path);
+                mapping.segments_aligned = align_result.segments_aligned;
+            }
+        }
+
+        result.mappings.push_back(std::move(mapping));
     }
 
-    // Alignment stub: record what would be aligned (backend + anchor count).
-    run_alignment_stub(batch.clusters[index], batch.raw_reads[index], batch.alignment_notes[index]);
+    // Dump chain if --dump-chains is set
+    static std::atomic<std::size_t> chain_dump_counter{0};
+    if (!config_.dump_chains_dir.empty()) {
+        std::size_t dump_num = chain_dump_counter.fetch_add(1);
+        std::string chain_file = config_.dump_chains_dir + "/read_" + std::to_string(dump_num) + "_chain.tsv";
+        dumpChainToFile(chain_file.c_str(), result, read.read_id, config_.graph_store);
+    }
 }
 
 BatchMapperStats BatchMapper::output_batch(const BatchBuffer& batch) const {
@@ -485,12 +520,10 @@ BatchMapperStats BatchMapper::output_batch(const BatchBuffer& batch) const {
 
     for (std::size_t i = 0; i < batch.num_reads; ++i) {
         const auto& read = batch.raw_reads[i];
-        const auto& seeds_for_read = batch.seeds[i].seeds;
-        const auto& hits_for_read = batch.seed_hits[i];
-        const auto& clusters_for_read = batch.clusters[i];
+        const auto& map_result = batch.map_results[i];
 
         // Track mapped/unmapped
-        const bool is_mapped = !clusters_for_read.clusters.empty();
+        const bool is_mapped = map_result.mapped();
         if (is_mapped) {
             ++stats.reads_mapped;
         } else {
@@ -498,19 +531,9 @@ BatchMapperStats BatchMapper::output_batch(const BatchBuffer& batch) const {
         }
 
         // Write to result file if configured
-        if (config_.result_writer && components_.result_converter) {
-            // Build alignment context if alignment is enabled
-            AlignmentContext align_ctx;
-            if (components_.chain_aligner && components_.signal_store) {
-                align_ctx.aligner = components_.chain_aligner.get();
-                align_ctx.graph_store = config_.graph_store;
-                align_ctx.signal_store = components_.signal_store;
-                align_ctx.query_signal = &batch.alignment_quantized[i];
-            }
-
-            auto results = components_.result_converter->convert(
-                clusters_for_read, read.read_id, read.len_raw_signal,
-                (align_ctx.aligner ? &align_ctx : nullptr));
+        if (config_.result_writer && components_.result_formatter) {
+            auto results = components_.result_formatter->format(
+                map_result, read.read_id, read.len_raw_signal);
             for (std::size_t r = 0; r < results.size(); ++r) {
                 config_.result_writer->write(results[r]);
                 ++stats.results_written;
@@ -565,8 +588,6 @@ BatchMapperStats BatchMapper::output_batch(const BatchBuffer& batch) const {
         // output_ << "\n";
 
         // Suppress unused variable warnings
-        (void)seeds_for_read;
-        (void)hits_for_read;
         (void)adj_store;
     }
 
