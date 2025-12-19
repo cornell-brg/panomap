@@ -246,7 +246,7 @@ def generate_test_anchors() -> List[Anchor]:
 # =============================================================================
 
 def plot_anchor_heatmap_grouped(anchors: List[Anchor], paths: List[Path], output_file: str,
-                                 window_size: int = 200, stride: int = 50):
+                                 window_size: int = 200, stride: int = 50, label: str = ""):
     """Generate heatmap with +/- sub-bars grouped by haplotype.
 
     Args:
@@ -255,6 +255,7 @@ def plot_anchor_heatmap_grouped(anchors: List[Anchor], paths: List[Path], output
         output_file: Output file path for the plot
         window_size: Size of sliding window in bp (default: 200)
         stride: Stride/step size for sliding window in bp (default: 50)
+        label: Custom label text to display in top-left corner
     """
     # Group paths by haplotype
     groups = group_paths_by_haplotype(paths)
@@ -318,11 +319,27 @@ def plot_anchor_heatmap_grouped(anchors: List[Anchor], paths: List[Path], output
         if path_max_window < num_windows - 1:
             density_matrix[row_idx, path_max_window + 1:] = np.ma.masked
 
-    # Create colormap
-    cmap = plt.cm.Blues
+    # Create custom blue colormap: light blue (0) → dark blue (30) → darker blue (max)
+    from matplotlib.colors import LinearSegmentedColormap
+
+    data_max = max(np.max(density_matrix), 40)  # Ensure at least 40
+
+    color_stops = [
+        (0 / data_max, '#f7fbff'),
+        (7.5 / data_max, '#c6dbef'),
+        (15 / data_max, '#6baed6'),
+        (22.5 / data_max, '#2171b5'),
+        (30 / data_max, '#08306b'),   # dark blue at 30
+        (1.0, '#041529'),             # darker blue at max
+    ]
+
+    cmap = LinearSegmentedColormap.from_list(
+        "anchor_blue",
+        list(zip([c[0] for c in color_stops], [c[1] for c in color_stops]))
+    )
     cmap.set_bad(color='white')
 
-    vmax = np.max(density_matrix) if np.max(density_matrix) > 0 else 1
+    vmax = data_max
 
     # Drawing parameters
     bar_height = 0.35  # Height of each +/- bar
@@ -341,9 +358,10 @@ def plot_anchor_heatmap_grouped(anchors: List[Anchor], paths: List[Path], output
         im = ax.imshow(row_data,
                        aspect='auto',
                        cmap=cmap,
+                       vmin=0, vmax=vmax,
                        interpolation='nearest',
                        extent=[0, max_length, y_forward + bar_height, y_forward],
-                       vmin=0, vmax=vmax, zorder=1)
+                       zorder=1)
 
         # Draw path length boundary
         ax.plot([group.length, group.length],
@@ -359,9 +377,10 @@ def plot_anchor_heatmap_grouped(anchors: List[Anchor], paths: List[Path], output
         ax.imshow(row_data,
                   aspect='auto',
                   cmap=cmap,
+                  vmin=0, vmax=vmax,
                   interpolation='nearest',
                   extent=[0, max_length, y_reverse + bar_height, y_reverse],
-                  vmin=0, vmax=vmax, zorder=1)
+                  zorder=1)
 
         ax.plot([group.length, group.length],
                 [y_reverse, y_reverse + bar_height],
@@ -419,6 +438,11 @@ def plot_anchor_heatmap_grouped(anchors: List[Anchor], paths: List[Path], output
     # Clean background
     ax.set_facecolor('white')
     fig.patch.set_facecolor('white')
+
+    # Add custom label if provided (top-left of figure, outside plot)
+    if label:
+        fig.text(0.01, 0.99, label, fontsize=11, fontstyle='italic',
+                 color='goldenrod', va='top', ha='left')
 
     plt.tight_layout()
     plt.savefig(output_file, dpi=150, bbox_inches='tight')
@@ -478,7 +502,7 @@ def print_summary_statistics(anchors: List[Anchor], paths: List[Path]):
 # Main Entry Point
 # =============================================================================
 
-def process_single_file(filepath: str, output_file: str, window_size: int, stride: int):
+def process_single_file(filepath: str, output_file: str, window_size: int, stride: int, label: str = ""):
     """Process a single anchor dump file and generate heatmap."""
     print(f"Loading anchor dump from {filepath}...")
     paths, anchors = parse_anchor_dump(filepath)
@@ -499,7 +523,7 @@ def process_single_file(filepath: str, output_file: str, window_size: int, strid
     # Plot heatmap
     print(f"  Generating heatmap (window: {window_size} bp, stride: {stride} bp)...")
     plot_anchor_heatmap_grouped(anchors, paths, output_file,
-                                 window_size=window_size, stride=stride)
+                                 window_size=window_size, stride=stride, label=label)
 
     # Print summary statistics
     print_summary_statistics(anchors, paths)
@@ -553,6 +577,12 @@ Examples:
         help="Sliding window stride in bp (default: 50)"
     )
 
+    parser.add_argument(
+        "--label", "-l",
+        default="",
+        help="Custom label text to display in top-left corner of the plot"
+    )
+
     args = parser.parse_args()
 
     # Load data
@@ -573,7 +603,7 @@ Examples:
             for read_num, filepath in anchor_files:
                 output_file = os.path.join(args.input, f"read_{read_num}_heatmap.png")
                 print(f"\n[{int(read_num)+1}/{len(anchor_files)}] Processing read_{read_num}...")
-                if process_single_file(filepath, output_file, args.window_size, args.stride):
+                if process_single_file(filepath, output_file, args.window_size, args.stride, args.label):
                     success_count += 1
 
             print("\n" + "=" * 60)
@@ -582,7 +612,7 @@ Examples:
 
         else:
             # Single file mode
-            return 0 if process_single_file(args.input, args.output, args.window_size, args.stride) else 1
+            return 0 if process_single_file(args.input, args.output, args.window_size, args.stride, args.label) else 1
 
     else:
         # Test data mode
@@ -600,7 +630,7 @@ Examples:
 
         print(f"\nGenerating grouped heatmap (window: {args.window_size} bp, stride: {args.stride} bp)...")
         plot_anchor_heatmap_grouped(anchors, paths, args.output,
-                                     window_size=args.window_size, stride=args.stride)
+                                     window_size=args.window_size, stride=args.stride, label=args.label)
         print_summary_statistics(anchors, paths)
         return 0
 
