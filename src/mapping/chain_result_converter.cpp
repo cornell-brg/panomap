@@ -6,6 +6,8 @@
 #include <cmath>
 #include <unordered_map>
 
+#include "alignment/signal_utils.hpp"
+
 namespace piru::mapping {
 
 ChainResultConverter::ChainResultConverter(const index::AlnGraph& graph,
@@ -15,7 +17,8 @@ ChainResultConverter::ChainResultConverter(const index::AlnGraph& graph,
 std::vector<io::AlignmentResult> ChainResultConverter::convert(
     const ClusterSummary& summary,
     const std::string& read_id,
-    std::size_t read_length) const {
+    std::size_t read_length,
+    const AlignmentContext* alignment_ctx) const {
 
     std::vector<io::AlignmentResult> results;
 
@@ -41,7 +44,18 @@ std::vector<io::AlignmentResult> ChainResultConverter::convert(
 
     for (std::size_t i = 0; i < num_chains; ++i) {
         bool is_primary = (i == 0);
-        results.push_back(convertChain(summary.clusters[i], read_id, read_length, is_primary));
+        const auto& chain = summary.clusters[i];
+
+        // Optionally run alignment
+        std::optional<alignment::ChainAlignmentResult> align_result;
+        if (alignment_ctx && alignment_ctx->aligner && alignment_ctx->signal_store) {
+            align_result = alignChain(chain, *alignment_ctx);
+        }
+
+        // Convert chain to result
+        results.push_back(convertChain(
+            chain, read_id, read_length, is_primary,
+            align_result.has_value() ? &align_result.value() : nullptr));
 
         // Set MAPQ based on primary vs secondary score gap
         if (is_primary) {
@@ -57,14 +71,20 @@ std::vector<io::AlignmentResult> ChainResultConverter::convert(
 
         // Add chain score tag
         results.back().optional_fields.push_back(
-            "cs:i:" + std::to_string(static_cast<int>(summary.clusters[i].cluster_score)));
+            "cs:i:" + std::to_string(static_cast<int>(chain.cluster_score)));
 
         // Add anchor count tag
         results.back().optional_fields.push_back(
-            "an:i:" + std::to_string(summary.clusters[i].anchors.size()));
+            "an:i:" + std::to_string(chain.anchors.size()));
+
+        // Add alignment score tag if available
+        if (results.back().alignment_score.has_value()) {
+            results.back().optional_fields.push_back(
+                "as:f:" + std::to_string(results.back().alignment_score.value()));
+        }
 
         // Set graph path traversal (for GAF column 6)
-        results.back().graph_path = buildPathString(summary.clusters[i].anchors);
+        results.back().graph_path = buildPathString(chain.anchors);
     }
 
     return results;
@@ -74,7 +94,8 @@ io::AlignmentResult ChainResultConverter::convertChain(
     const ClusterGroup& chain,
     const std::string& read_id,
     std::size_t read_length,
-    bool /*is_primary*/) const {
+    bool /*is_primary*/,
+    const alignment::ChainAlignmentResult* align_result) const {
 
     io::AlignmentResult result;
 
@@ -139,7 +160,42 @@ io::AlignmentResult ChainResultConverter::convertChain(
         result.mappings.push_back(std::move(mapping));
     }
 
+    // Add alignment score if available
+    if (align_result && align_result->valid()) {
+        result.alignment_score = align_result->total_cost;
+        std::size_t query_len = result.query_end - result.query_start;
+        if (query_len > 0) {
+            result.normalized_alignment_score = align_result->normalizedCost(query_len);
+        }
+    }
+
     return result;
+}
+
+alignment::ChainAlignmentResult ChainResultConverter::alignChain(
+    const ClusterGroup& chain,
+    const AlignmentContext& ctx) const {
+
+    if (chain.anchors.size() < 2 || !ctx.aligner || !ctx.graph_store ||
+        !ctx.signal_store || !ctx.query_signal) {
+        return alignment::ChainAlignmentResult{};
+    }
+
+    // Convert SeedAnchors to alignment::Anchors
+    std::vector<alignment::Anchor> anchors;
+    anchors.reserve(chain.anchors.size());
+
+    for (const auto& seed_anchor : chain.anchors) {
+        alignment::Anchor a;
+        a.graph_pos.node_id = static_cast<std::uint32_t>(seed_anchor.target.node_id);
+        a.graph_pos.offset = static_cast<std::uint32_t>(seed_anchor.target.offset);
+        a.query_pos = static_cast<std::uint32_t>(seed_anchor.read_pos);
+        anchors.push_back(a);
+    }
+
+    // Run alignment
+    return ctx.aligner->align(*ctx.graph_store, *ctx.signal_store,
+                               *ctx.query_signal, anchors);
 }
 
 std::string ChainResultConverter::buildPathString(

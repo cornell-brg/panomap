@@ -6,9 +6,12 @@
 #include <string>
 #include <vector>
 
+#include "alignment/chain_aligner.hpp"
 #include "index/aln_graph.hpp"
+#include "index/signal_store.hpp"
 #include "io/results/result.hpp"
 #include "mapping/seed_clusterer.hpp"
+#include "signal/signal_types.hpp"
 
 namespace piru::mapping {
 
@@ -18,6 +21,14 @@ struct ChainResultConfig {
     std::size_t max_secondary{9};   // Max secondary alignments (default: 9, so up to 10 total)
 };
 
+// Optional alignment context for signal-level refinement.
+struct AlignmentContext {
+    alignment::ChainAligner* aligner{nullptr};
+    const index::GraphStore* graph_store{nullptr};
+    const index::SignalStore* signal_store{nullptr};
+    const signal::AlignmentQuantizedSignal* query_signal{nullptr};
+};
+
 // Converts chain results to AlignmentResult format for PAF/GAF output.
 //
 // For chain-only mode (no alignment):
@@ -25,9 +36,17 @@ struct ChainResultConfig {
 // - MAPQ approximated from chain score
 // - No CIGAR (empty mappings or placeholder)
 //
+// With alignment (AlignmentContext provided):
+// - Runs signal-level DTW alignment on each chain
+// - alignment_score field populated
+// - MAPQ refined based on alignment score
+//
 // Usage:
 //   ChainResultConverter converter(aln_graph, config);
 //   auto results = converter.convert(cluster_summary, read_id, read_length);
+//   // Or with alignment:
+//   AlignmentContext ctx{&aligner, &graph, &signals, &query};
+//   auto results = converter.convert(cluster_summary, read_id, read_length, &ctx);
 class ChainResultConverter {
 public:
     explicit ChainResultConverter(const index::AlnGraph& graph,
@@ -35,10 +54,12 @@ public:
 
     // Convert chains to AlignmentResult vector.
     // Returns one result per chain (up to max_secondary + 1).
+    // Optional alignment_ctx enables signal-level alignment.
     std::vector<io::AlignmentResult> convert(
         const ClusterSummary& summary,
         const std::string& read_id,
-        std::size_t read_length) const;
+        std::size_t read_length,
+        const AlignmentContext* alignment_ctx = nullptr) const;
 
 private:
     // Convert a single chain (ClusterGroup) to AlignmentResult.
@@ -46,7 +67,13 @@ private:
         const ClusterGroup& chain,
         const std::string& read_id,
         std::size_t read_length,
-        bool is_primary) const;
+        bool is_primary,
+        const alignment::ChainAlignmentResult* align_result = nullptr) const;
+
+    // Run alignment on a chain and return result.
+    alignment::ChainAlignmentResult alignChain(
+        const ClusterGroup& chain,
+        const AlignmentContext& ctx) const;
 
     // Build GAF-style path string from anchors (">node1>node2>node3").
     std::string buildPathString(const std::vector<SeedAnchor>& anchors) const;

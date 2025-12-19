@@ -76,6 +76,8 @@ int handle_map(const std::vector<std::string>& args) {
         {'\0', "", false, "\nMapping Options:"},
         {'\0', "max-seed-freq", true, "Maximum seed frequency for lookup (default: use index threshold)"},
         {'\0', "clusterer", true, "Clusterer backend: fse (default), probe, dp-chain"},
+        {'\0', "align", false, "Enable signal-level alignment for chain evaluation"},
+        {'\0', "align-backend", true, "Alignment backend: path-guided (default), radius, auto"},
         {'\0', "", false, "\nOutput Options:"},
         {'o', "output", true, "Output file path (format auto-detected from extension: .paf, .gaf, .gam, .json)"},
         {'\0', "output-format", true, "Override output format (paf, gaf, gam, json)"},
@@ -369,6 +371,28 @@ int handle_map(const std::vector<std::string>& args) {
     // Configure result writer if specified
     if (result_writer) {
         map_config.result_writer = result_writer.get();
+    }
+
+    // Configure signal store for alignment (if available)
+    map_config.signal_store = signal_store.get();
+
+    // Configure alignment if enabled
+    if (parsed.values.count("align")) {
+        map_config.enable_alignment = true;
+
+        // Parse alignment backend
+        const std::string align_backend = parsed.values.count("align-backend")
+                                              ? parsed.values.at("align-backend")
+                                              : "path-guided";
+        if (align_backend == "radius") {
+            map_config.align_config.backend = piru::alignment::AlignerBackend::kRadius;
+        } else if (align_backend == "auto") {
+            map_config.align_config.backend = piru::alignment::AlignerBackend::kAuto;
+        } else {
+            map_config.align_config.backend = piru::alignment::AlignerBackend::kPathGuided;
+        }
+
+        LOG_INFO("Signal-level alignment enabled: backend=" + align_backend);
     }
 
     // =========================================================================

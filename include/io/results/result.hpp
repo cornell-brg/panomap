@@ -4,6 +4,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -28,6 +29,11 @@ struct AlignmentResult {
     std::uint64_t matches{0};
     std::uint64_t alignment_block_length{0};
     int mapq{0};
+
+    // Optional alignment score (from signal-level DTW alignment)
+    // Only populated when --align is used
+    std::optional<float> alignment_score{};
+    std::optional<float> normalized_alignment_score{};  // Per-query-position score
 
     struct Edit {
         std::uint32_t from_length{0};

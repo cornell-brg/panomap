@@ -112,6 +112,9 @@ add_executable(piru
     src/mapping/anchor_merger.cpp
     src/mapping/dp_chain_clusterer.cpp
     src/mapping/chain_result_converter.cpp
+    src/alignment/path_guided_dtw_aligner.cpp
+    src/alignment/radius_gdtw_aligner.cpp
+    src/alignment/chain_aligner.cpp
     src/util/signal_handlers.cpp
     src/util/timing.cpp
 )

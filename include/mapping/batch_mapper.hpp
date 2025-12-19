@@ -22,6 +22,7 @@
 #include "mapping/seed_clusterer.hpp"
 #include "mapping/anchor_expander.hpp"
 #include "mapping/chain_result_converter.hpp"
+#include "alignment/chain_aligner.hpp"
 #include "io/results/result_writer.hpp"
 
 namespace piru::mapping {
@@ -54,6 +55,7 @@ struct BatchMapperConfig {
     SeedClustererConfig clusterer_config{};
     const index::SeedStore* seed_store{nullptr};  // non-owning pointer to loaded SeedStore
     const index::GraphStore* graph_store{nullptr};  // non-owning pointer to loaded GraphStore
+    const index::SignalStore* signal_store{nullptr};  // non-owning pointer to loaded SignalStore (for alignment)
 
     // Linearization coordinates (needed for DP chaining)
     // Non-owning pointer to linearization coords (from in-memory indexing or future deserialization)
@@ -61,6 +63,10 @@ struct BatchMapperConfig {
 
     // Result writer for output (non-owning, optional)
     io::ResultWriter* result_writer{nullptr};
+
+    // Alignment configuration (optional signal-level alignment)
+    bool enable_alignment{false};
+    alignment::ChainAlignerConfig align_config{};
 };
 
 struct BatchMapperStats {
@@ -98,10 +104,12 @@ struct PipelineComponents {
     signal::SeedExtractorPtr seed_extractor;
     const index::SeedStore* seed_store{nullptr};  // non-owning; loaded index
     const index::GraphStore* graph_store{nullptr};  // non-owning; loaded index
+    const index::SignalStore* signal_store{nullptr};  // non-owning; for alignment
     SeedLookup lookup{nullptr, nullptr, 0};
     AnchorExpanderPtr expander;  // Expands SeedHits to Anchors
     SeedClustererPtr clusterer;
     std::unique_ptr<ChainResultConverter> result_converter;  // Converts chains to AlignmentResult
+    std::unique_ptr<alignment::ChainAligner> chain_aligner;  // Optional signal-level alignment
 };
 
 class BatchMapper {

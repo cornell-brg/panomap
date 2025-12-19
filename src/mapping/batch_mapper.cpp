@@ -276,6 +276,16 @@ PipelineComponents BatchMapper::create_components() const {
         LOG_INFO("Result converter enabled for output");
     }
 
+    // Create chain aligner if alignment is enabled
+    if (config_.enable_alignment) {
+        comps.chain_aligner = std::make_unique<alignment::ChainAligner>(config_.align_config);
+        comps.signal_store = config_.signal_store;
+        std::string backend_name =
+            config_.align_config.backend == alignment::AlignerBackend::kPathGuided ? "path-guided" :
+            config_.align_config.backend == alignment::AlignerBackend::kRadius ? "radius" : "auto";
+        LOG_INFO("Signal-level alignment enabled: backend=" + backend_name);
+    }
+
     return comps;
 }
 
@@ -489,8 +499,18 @@ BatchMapperStats BatchMapper::output_batch(const BatchBuffer& batch) const {
 
         // Write to result file if configured
         if (config_.result_writer && components_.result_converter) {
+            // Build alignment context if alignment is enabled
+            AlignmentContext align_ctx;
+            if (components_.chain_aligner && components_.signal_store) {
+                align_ctx.aligner = components_.chain_aligner.get();
+                align_ctx.graph_store = config_.graph_store;
+                align_ctx.signal_store = components_.signal_store;
+                align_ctx.query_signal = &batch.alignment_quantized[i];
+            }
+
             auto results = components_.result_converter->convert(
-                clusters_for_read, read.read_id, read.len_raw_signal);
+                clusters_for_read, read.read_id, read.len_raw_signal,
+                (align_ctx.aligner ? &align_ctx : nullptr));
             for (std::size_t r = 0; r < results.size(); ++r) {
                 config_.result_writer->write(results[r]);
                 ++stats.results_written;
