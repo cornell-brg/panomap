@@ -246,16 +246,22 @@ def generate_test_anchors() -> List[Anchor]:
 # =============================================================================
 
 def plot_anchor_heatmap_grouped(anchors: List[Anchor], paths: List[Path], output_file: str,
-                                 window_size: int = 200, stride: int = 50, label: str = ""):
+                                 window_size: int = 200, stride: int = 50, label: str = "",
+                                 ax: Optional[plt.Axes] = None, fig: Optional[plt.Figure] = None,
+                                 show_colorbar: bool = True, title_prefix: str = ""):
     """Generate heatmap with +/- sub-bars grouped by haplotype.
 
     Args:
         anchors: List of anchor mappings (single read)
         paths: List of haplotype paths (forward and reverse)
-        output_file: Output file path for the plot
+        output_file: Output file path for the plot (ignored if ax is provided)
         window_size: Size of sliding window in bp (default: 200)
         stride: Stride/step size for sliding window in bp (default: 50)
         label: Custom label text to display in top-left corner
+        ax: Optional matplotlib Axes to plot on (for subplot mode)
+        fig: Optional matplotlib Figure (for subplot mode)
+        show_colorbar: Whether to show the colorbar (default: True)
+        title_prefix: Optional prefix for the title (e.g., "A) " for subplots)
     """
     # Group paths by haplotype
     groups = group_paths_by_haplotype(paths)
@@ -271,9 +277,13 @@ def plot_anchor_heatmap_grouped(anchors: List[Anchor], paths: List[Path], output
     max_length = max(g.length for g in groups)
     num_windows = int(np.ceil((max_length - window_size) / stride)) + 1
 
-    # Calculate figure height based on number of groups
-    fig_height = max(6, len(groups) * 0.8 + 2)
-    fig, ax = plt.subplots(figsize=(16, fig_height))
+    # Determine if we're in standalone or subplot mode
+    standalone_mode = (ax is None)
+
+    if standalone_mode:
+        # Calculate figure height based on number of groups
+        fig_height = max(6, len(groups) * 0.8 + 2)
+        fig, ax = plt.subplots(figsize=(16, fig_height))
 
     # Build density matrices for forward and reverse
     # We'll have 2 rows per haplotype group
@@ -414,19 +424,24 @@ def plot_anchor_heatmap_grouped(anchors: List[Anchor], paths: List[Path], output
         # Move to next group with spacing
         y_pos = y_reverse + bar_height + group_spacing
 
-    # Add colorbar
-    cbar = plt.colorbar(im, ax=ax, orientation='horizontal',
-                        pad=0.08, fraction=0.04, aspect=30)
-    cbar.set_label('Anchor Count per Bin', fontsize=10, fontweight='bold')
+    # Add colorbar (only in standalone mode or if explicitly requested)
+    if show_colorbar and standalone_mode:
+        cbar = plt.colorbar(im, ax=ax, orientation='horizontal',
+                            pad=0.08, fraction=0.04, aspect=30)
+        cbar.set_label('Anchor Count per Bin', fontsize=10, fontweight='bold')
 
     # Formatting
-    ax.set_xlabel("Reference Coordinate (bp)", fontsize=11)
-    ax.set_ylabel("Haplotype Path", fontsize=11)
+    ax.set_xlabel("Reference Coordinate (bp)", fontsize=11 if standalone_mode else 9)
+    ax.set_ylabel("Haplotype Path", fontsize=11 if standalone_mode else 9)
 
     # Add read ID to title
     read_id = anchors[0].read_id if anchors else "No anchors"
-    ax.set_title(f"Anchor Density Heatmap: {read_id}\n(Window: {window_size} bp, Stride: {stride} bp)",
-                 fontsize=12, pad=15)
+    if standalone_mode:
+        ax.set_title(f"Anchor Density Heatmap: {read_id}\n(Window: {window_size} bp, Stride: {stride} bp)",
+                     fontsize=12, pad=15)
+    else:
+        # Shorter title for subplot mode
+        ax.set_title(f"{title_prefix}{read_id}", fontsize=10, pad=8)
 
     # Set axis limits
     ax.set_xlim(-max_length * 0.15, max_length * 1.12)
@@ -437,16 +452,20 @@ def plot_anchor_heatmap_grouped(anchors: List[Anchor], paths: List[Path], output
 
     # Clean background
     ax.set_facecolor('white')
-    fig.patch.set_facecolor('white')
+    if fig is not None:
+        fig.patch.set_facecolor('white')
 
     # Add custom label if provided (top-left of figure, outside plot)
-    if label:
+    if label and standalone_mode and fig is not None:
         fig.text(0.01, 0.99, label, fontsize=11, fontstyle='italic',
                  color='goldenrod', va='top', ha='left')
 
-    plt.tight_layout()
-    plt.savefig(output_file, dpi=150, bbox_inches='tight')
-    print(f"Saved heatmap to {output_file}")
+    # Only save if in standalone mode
+    if standalone_mode:
+        plt.tight_layout()
+        plt.savefig(output_file, dpi=150, bbox_inches='tight')
+        plt.close(fig)
+        print(f"Saved heatmap to {output_file}")
 
 
 def print_summary_statistics(anchors: List[Anchor], paths: List[Path]):
@@ -498,6 +517,94 @@ def print_summary_statistics(anchors: List[Anchor], paths: List[Path]):
     print()
 
 
+def plot_combined_heatmaps(anchor_files: List[Tuple[str, str]], output_file: str,
+                           window_size: int, stride: int, label: str = ""):
+    """Plot all reads as subplots in a single figure, sorted by read name.
+
+    Args:
+        anchor_files: List of (read_num, filepath) tuples
+        output_file: Output file path for the combined plot
+        window_size: Sliding window size in bp
+        stride: Sliding window stride in bp
+        label: Custom label text to display
+    """
+    # First pass: parse all files to get read_id for sorting
+    read_data = []  # List of (read_id, paths, anchors, filepath)
+
+    print("Parsing all anchor files...")
+    for read_num, filepath in anchor_files:
+        paths, anchors = parse_anchor_dump(filepath)
+        if not anchors:
+            print(f"  Warning: No anchors in {filepath}, skipping")
+            continue
+        read_id = anchors[0].read_id
+        read_data.append((read_id, paths, anchors, filepath))
+        print(f"  {filepath}: {read_id} ({len(anchors)} anchors)")
+
+    if not read_data:
+        print("Error: No valid anchor files found")
+        return False
+
+    # Sort by read_id (alphabetically)
+    read_data.sort(key=lambda x: x[0])
+
+    print(f"\nSorted {len(read_data)} reads by read name")
+
+    # Determine subplot layout: one read per row for easy scrolling
+    n_reads = len(read_data)
+    n_cols = 1
+    n_rows = n_reads
+
+    # Calculate figure size
+    fig_width = 16
+    # Get number of haplotypes from first read to estimate height
+    groups = group_paths_by_haplotype(read_data[0][1])
+    subplot_height = max(4, len(groups) * 0.6 + 1.5)
+    fig_height = subplot_height * n_rows + 1  # Extra space for suptitle
+
+    print(f"Creating figure with {n_rows}x{n_cols} subplots...")
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(fig_width, fig_height))
+
+    # Flatten axes array for easier iteration
+    if n_reads == 1:
+        axes = [axes]
+    elif n_rows == 1 or n_cols == 1:
+        axes = axes.flatten() if hasattr(axes, 'flatten') else [axes]
+    else:
+        axes = axes.flatten()
+
+    # Plot each read
+    for idx, (read_id, paths, anchors, filepath) in enumerate(read_data):
+        ax = axes[idx]
+        print(f"  Plotting [{idx+1}/{n_reads}] {read_id}...")
+        plot_anchor_heatmap_grouped(
+            anchors, paths, output_file,
+            window_size=window_size, stride=stride,
+            ax=ax, fig=fig, show_colorbar=False,
+            title_prefix=""
+        )
+
+    # Hide empty subplots
+    for idx in range(n_reads, len(axes)):
+        axes[idx].set_visible(False)
+
+    # Add overall title
+    fig.suptitle(f"Anchor Density Heatmaps (Window: {window_size} bp, Stride: {stride} bp)",
+                 fontsize=14, fontweight='bold', y=0.99)
+
+    # Add custom label if provided
+    if label:
+        fig.text(0.01, 0.99, label, fontsize=11, fontstyle='italic',
+                 color='goldenrod', va='top', ha='left')
+
+    plt.tight_layout(rect=[0, 0, 1, 0.97])  # Leave room for suptitle
+    plt.savefig(output_file, dpi=150, bbox_inches='tight')
+    plt.close(fig)
+
+    print(f"\nSaved combined heatmap to {output_file}")
+    return True
+
+
 # =============================================================================
 # Main Entry Point
 # =============================================================================
@@ -546,6 +653,9 @@ Examples:
   # Process all files in a directory (generates one heatmap per read)
   python plot_anchor_heatmap.py --input /tmp/anchors
 
+  # Combine all reads into a single image (sorted by read name)
+  python plot_anchor_heatmap.py --input /tmp/anchors --combined -o combined.png
+
   # Custom window settings
   python plot_anchor_heatmap.py --input /tmp/anchors --window-size 300
 """
@@ -583,6 +693,13 @@ Examples:
         help="Custom label text to display in top-left corner of the plot"
     )
 
+    parser.add_argument(
+        "--combined", "-c",
+        action="store_true",
+        help="Combine all reads into a single image as subplots (sorted by read name). "
+             "Only applies when --input is a directory."
+    )
+
     args = parser.parse_args()
 
     # Load data
@@ -599,20 +716,39 @@ Examples:
             print(f"Found {len(anchor_files)} anchor files in {args.input}")
             print("=" * 60)
 
-            success_count = 0
-            for read_num, filepath in anchor_files:
-                output_file = os.path.join(args.input, f"read_{read_num}_heatmap.png")
-                print(f"\n[{int(read_num)+1}/{len(anchor_files)}] Processing read_{read_num}...")
-                if process_single_file(filepath, output_file, args.window_size, args.stride, args.label):
-                    success_count += 1
+            if args.combined:
+                # Combined mode: all reads in one image, sorted by read name
+                # Output in input directory, named after directory unless explicitly specified
+                if args.output != "anchor_heatmap.png":
+                    output_file = args.output
+                else:
+                    dir_name = os.path.basename(os.path.normpath(args.input))
+                    output_file = os.path.join(args.input, f"{dir_name}.png")
+                success = plot_combined_heatmaps(
+                    anchor_files, output_file,
+                    args.window_size, args.stride, args.label
+                )
+                return 0 if success else 1
+            else:
+                # Individual mode: one heatmap per read
+                success_count = 0
+                for read_num, filepath in anchor_files:
+                    output_file = os.path.join(args.input, f"read_{read_num}_heatmap.png")
+                    print(f"\n[{int(read_num)+1}/{len(anchor_files)}] Processing read_{read_num}...")
+                    if process_single_file(filepath, output_file, args.window_size, args.stride, args.label):
+                        success_count += 1
 
-            print("\n" + "=" * 60)
-            print(f"Done. Generated {success_count}/{len(anchor_files)} heatmaps.")
-            return 0
+                print("\n" + "=" * 60)
+                print(f"Done. Generated {success_count}/{len(anchor_files)} heatmaps.")
+                return 0
 
         else:
-            # Single file mode
-            return 0 if process_single_file(args.input, args.output, args.window_size, args.stride, args.label) else 1
+            # Single file mode - name output after input file unless explicitly specified
+            if args.output != "anchor_heatmap.png":
+                output_file = args.output
+            else:
+                output_file = f"{args.input}.png"
+            return 0 if process_single_file(args.input, output_file, args.window_size, args.stride, args.label) else 1
 
     else:
         # Test data mode
