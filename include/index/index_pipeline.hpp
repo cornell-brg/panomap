@@ -54,6 +54,9 @@ struct IndexPipelineConfig {
     // - Converts normalized signal to discrete tokens (default: 4-bit = 16 values)
     // - rh2: Adaptive quantization with fine/coarse regions
     std::string fuzzy_quantizer{"rh2"};
+    float fuzzy_fine_min{-2.0f};   // Minimum value for fine quantization region
+    float fuzzy_fine_max{2.0f};    // Maximum value for fine quantization region
+    float fuzzy_fine_range{0.4f};  // Range per fine quantization bin
 
     // Alignment quantizer: "int16", "int8", or "passthrough"
     // - Converts normalized signal to integer format for alignment

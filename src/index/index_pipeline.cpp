@@ -111,6 +111,9 @@ IndexPipelineResult run_index_pipeline(
 
     signal::FuzzyQuantizerConfig fuzzy_cfg;
     fuzzy_cfg.backend = config.fuzzy_quantizer;
+    fuzzy_cfg.fine_min = config.fuzzy_fine_min;
+    fuzzy_cfg.fine_max = config.fuzzy_fine_max;
+    fuzzy_cfg.fine_range = config.fuzzy_fine_range;
     auto fuzzy_quantizer = signal::make_fuzzy_quantizer(fuzzy_cfg);
     if (!fuzzy_quantizer) {
         throw std::runtime_error("Failed to create fuzzy quantizer: " + config.fuzzy_quantizer);

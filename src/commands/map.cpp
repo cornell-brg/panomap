@@ -80,6 +80,9 @@ int handle_map(const std::vector<std::string>& args) {
         {'\0', "align-backend", true, "Alignment backend: path-guided (default), radius, auto"},
         {'\0', "", false, "\nSignal Processing Options (only with --graph):"},
         {'\0', "fuzzy-backend", true, "Fuzzy quantizer backend (default: rh2)"},
+        {'\0', "fuzzy-fine-min", true, "Fuzzy quantizer fine region min (default: -2.0)"},
+        {'\0', "fuzzy-fine-max", true, "Fuzzy quantizer fine region max (default: 2.0)"},
+        {'\0', "fuzzy-fine-range", true, "Fuzzy quantizer fine bin width (default: 0.4)"},
         {'\0', "seed-k", true, "Seed extractor k-mer size (default: 6)"},
         {'\0', "seed-stride", true, "Seed extractor stride (default: 1)"},
         {'\0', "", false, "\nDebug Options:"},
@@ -185,6 +188,9 @@ int handle_map(const std::vector<std::string>& args) {
     std::unique_ptr<piru::index::SeedStore> seed_store;
     std::vector<std::vector<piru::index::LinearCoordinate>> linearization_coords;
     std::string fuzzy_quantizer_name;
+    float fuzzy_fine_min{-2.0f};
+    float fuzzy_fine_max{2.0f};
+    float fuzzy_fine_range{0.4f};
 
     if (has_index) {
         // ---------------------------------------------------------------------
@@ -218,7 +224,8 @@ int handle_map(const std::vector<std::string>& args) {
 
         // Warn if user tries to override seed/fuzzy params with pre-built index
         if (parsed.values.count("seed-k") || parsed.values.count("seed-stride") ||
-            parsed.values.count("fuzzy-backend")) {
+            parsed.values.count("fuzzy-backend") || parsed.values.count("fuzzy-fine-min") ||
+            parsed.values.count("fuzzy-fine-max") || parsed.values.count("fuzzy-fine-range")) {
             LOG_WARN("--seed-* and --fuzzy-* flags are ignored with --index (use --graph for experimentation)");
         }
 
@@ -298,6 +305,18 @@ int handle_map(const std::vector<std::string>& args) {
             index_config.fuzzy_quantizer = parsed.values.at("fuzzy-backend");
             LOG_INFO("Using fuzzy quantizer=" + index_config.fuzzy_quantizer + " for indexing");
         }
+        if (parsed.values.count("fuzzy-fine-min")) {
+            index_config.fuzzy_fine_min = std::stof(parsed.values.at("fuzzy-fine-min"));
+            LOG_INFO("Using fuzzy fine_min=" + std::to_string(index_config.fuzzy_fine_min));
+        }
+        if (parsed.values.count("fuzzy-fine-max")) {
+            index_config.fuzzy_fine_max = std::stof(parsed.values.at("fuzzy-fine-max"));
+            LOG_INFO("Using fuzzy fine_max=" + std::to_string(index_config.fuzzy_fine_max));
+        }
+        if (parsed.values.count("fuzzy-fine-range")) {
+            index_config.fuzzy_fine_range = std::stof(parsed.values.at("fuzzy-fine-range"));
+            LOG_INFO("Using fuzzy fine_range=" + std::to_string(index_config.fuzzy_fine_range));
+        }
 
         // Step 4: Run full indexing pipeline
         // (transform → linearize → squigglize → quantize → seed extraction)
@@ -308,6 +327,11 @@ int handle_map(const std::vector<std::string>& args) {
         seed_store = std::move(index_result.seed_store);
         linearization_coords = std::move(index_result.linearization_coords);
         fuzzy_quantizer_name = index_result.fuzzy_quantizer;
+
+        // Preserve fuzzy fine params for query-side processing
+        fuzzy_fine_min = index_config.fuzzy_fine_min;
+        fuzzy_fine_max = index_config.fuzzy_fine_max;
+        fuzzy_fine_range = index_config.fuzzy_fine_range;
 
         LOG_INFO("in-memory indexing complete");
     }
@@ -357,7 +381,13 @@ int handle_map(const std::vector<std::string>& args) {
     if (!fuzzy_quantizer_name.empty()) {
         map_config.fuzzy_config.backend = fuzzy_quantizer_name;
     }
-    LOG_INFO("Using fuzzy quantizer: " + map_config.fuzzy_config.backend);
+    map_config.fuzzy_config.fine_min = fuzzy_fine_min;
+    map_config.fuzzy_config.fine_max = fuzzy_fine_max;
+    map_config.fuzzy_config.fine_range = fuzzy_fine_range;
+    LOG_INFO("Using fuzzy quantizer: " + map_config.fuzzy_config.backend +
+             " (fine_min=" + std::to_string(fuzzy_fine_min) +
+             ", fine_max=" + std::to_string(fuzzy_fine_max) +
+             ", fine_range=" + std::to_string(fuzzy_fine_range) + ")");
 
     // Configure seed extractor from seed store parameters
     const auto* hash_seed_store = dynamic_cast<piru::index::HashSeedStore*>(seed_store.get());
