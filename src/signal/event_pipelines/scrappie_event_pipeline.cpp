@@ -119,7 +119,7 @@ void compute_sum_sumsq(const std::vector<float>& signal, std::vector<double>& su
 std::vector<float> compute_tstat(const std::vector<double>& sum, const std::vector<double>& sumsq,
                                  int length, int wlen) {
   std::vector<float> tstat(length, 0.0f);
-  const float eps = std::numeric_limits<float>::epsilon();
+  const float eps = std::numeric_limits<float>::min();  // Match Scrappie's FLT_MIN
 
   if (length < 2 * wlen || wlen < 2) return tstat;
 
