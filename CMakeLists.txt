@@ -79,13 +79,10 @@ add_executable(piru
     src/io/models/builtin_models.cpp
     src/io/index/serialization.cpp
     src/cli/parse.cpp
-    src/signal/event_detectors/event_detector_factory.cpp
-    src/signal/event_detectors/passthrough_event_detector.cpp
-    src/signal/event_detectors/scrappie_event_detector.cpp
-    src/signal/normalizers/normalizer_factory.cpp
-    src/signal/normalizers/identity_normalizer.cpp
-    src/signal/normalizers/zscore_normalizer.cpp
-    src/signal/normalizers/median_mad_normalizer.cpp
+    src/signal/event_pipeline_factory.cpp
+    src/signal/event_pipelines/scrappie_event_pipeline.cpp
+    src/signal/event_pipelines/rawhash_event_pipeline.cpp
+    src/signal/event_pipelines/passthrough_event_pipeline.cpp
     src/signal/fuzzy_quantizers/fuzzy_quantizer_factory.cpp
     src/signal/fuzzy_quantizers/passthrough_fuzzy_quantizer.cpp
     src/signal/fuzzy_quantizers/rh2_fuzzy_quantizer.cpp

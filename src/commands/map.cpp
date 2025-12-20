@@ -79,6 +79,7 @@ int handle_map(const std::vector<std::string>& args) {
         {'\0', "align", false, "Enable signal-level alignment for chain evaluation"},
         {'\0', "align-backend", true, "Alignment backend: path-guided (default), radius, auto"},
         {'\0', "", false, "\nSignal Processing Options (only with --graph):"},
+        {'\0', "event-pipeline", true, "Event pipeline backend: scrappie (default), rawhash, passthrough"},
         {'\0', "fuzzy-backend", true, "Fuzzy quantizer backend (default: rh2)"},
         {'\0', "fuzzy-fine-min", true, "Fuzzy quantizer fine region min (default: -2.0)"},
         {'\0', "fuzzy-fine-max", true, "Fuzzy quantizer fine region max (default: 2.0)"},
@@ -188,6 +189,7 @@ int handle_map(const std::vector<std::string>& args) {
     std::unique_ptr<piru::index::SeedStore> seed_store;
     std::vector<std::vector<piru::index::LinearCoordinate>> linearization_coords;
     std::string fuzzy_quantizer_name;
+    std::string pore_model_name;  // Track pore model for event pipeline parameter selection
     float fuzzy_fine_min{-2.0f};
     float fuzzy_fine_max{2.0f};
     float fuzzy_fine_range{0.4f};
@@ -218,6 +220,7 @@ int handle_map(const std::vector<std::string>& args) {
         signal_store = std::move(loaded_index.signals);
         seed_store = std::move(loaded_index.seeds);
         fuzzy_quantizer_name = loaded_index.metadata.fuzzy_quantizer;
+        pore_model_name = loaded_index.metadata.model_name;
 
         // Note: Linearization coords not serialized yet (Phase 7 TODO)
         // Superbubble uses graph.node.chain_id/linear_position instead
@@ -327,6 +330,7 @@ int handle_map(const std::vector<std::string>& args) {
         seed_store = std::move(index_result.seed_store);
         linearization_coords = std::move(index_result.linearization_coords);
         fuzzy_quantizer_name = index_result.fuzzy_quantizer;
+        pore_model_name = model_arg;
 
         // Preserve fuzzy fine params for query-side processing
         fuzzy_fine_min = index_config.fuzzy_fine_min;
@@ -418,6 +422,13 @@ int handle_map(const std::vector<std::string>& args) {
                                    ? parsed.values.at("clusterer")
                                    : "fse";
     map_config.clusterer_config.backend = clusterer;
+
+    // Configure event pipeline (unified event detection + normalization)
+    map_config.event_pipeline_config.pore_model = pore_model_name;
+    if (parsed.values.count("event-pipeline")) {
+        map_config.event_pipeline_config.backend = parsed.values.at("event-pipeline");
+    }
+    // Default backend is "scrappie" (set in EventPipelineConfig)
 
     // Override seed frequency threshold if specified
     if (parsed.values.count("max-seed-freq")) {

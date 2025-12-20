@@ -10,9 +10,8 @@
 #include "concurrency/executor.hpp"
 #include "io/reads/read_provider.hpp"
 #include "signal/alignment_quantizers/alignment_quantizer_factory.hpp"
-#include "signal/event_detectors/event_detector_factory.hpp"
+#include "signal/event_pipelines/event_pipeline_factory.hpp"
 #include "signal/fuzzy_quantizers/fuzzy_quantizer_factory.hpp"
-#include "signal/normalizers/normalizer_factory.hpp"
 #include "signal/seed_extractors/seed_extractor_factory.hpp"
 #include "signal/signal_types.hpp"
 #include "index/seed_store.hpp"
@@ -48,8 +47,7 @@ struct BatchMapperConfig {
     std::size_t batch_capacity_bytes{512 * 1024 * 1024};  // Reserved for future use.
     int num_threads{-1};  // -1 = automatic.
 
-    signal::EventDetectorConfig event_config{};
-    signal::SignalNormalizerConfig normalizer_config{};
+    signal::EventPipelineConfig event_pipeline_config{};  // Unified event detection + normalization
     signal::FuzzyQuantizerConfig fuzzy_config{};
     signal::AlignmentQuantizerConfig alignment_config{};
     signal::SeedExtractorConfig seed_config{};
@@ -86,7 +84,6 @@ struct BatchMapperStats {
 
 struct BatchBuffer {
     std::vector<io::RawRead> raw_reads;
-    std::vector<signal::EventSeries> events;
     std::vector<signal::NormalizedSignal> normalized;
     std::vector<signal::FuzzyQuantizedSignal> fuzzy_quantized;
     std::vector<signal::AlignmentQuantizedSignal> alignment_quantized;
@@ -101,8 +98,7 @@ struct BatchBuffer {
 };
 
 struct PipelineComponents {
-    signal::EventDetectorPtr event_detector;
-    signal::SignalNormalizerPtr normalizer;
+    signal::EventPipelinePtr event_pipeline;
     signal::FuzzyQuantizerPtr fuzzy_quantizer;
     signal::AlignmentQuantizerPtr alignment_quantizer;
     signal::SeedExtractorPtr seed_extractor;

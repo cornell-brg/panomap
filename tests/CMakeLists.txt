@@ -45,9 +45,6 @@ if(DOCTEST_AVAILABLE)
         test_path_guided_transform.cpp
         test_results.cpp
         test_reads.cpp
-        test_signal_mocks.cpp
-        test_signal_events.cpp
-        test_signal_normalizers.cpp
         test_signal_fuzzy_quantize.cpp
         test_signal_alignment_quantize.cpp
         test_signal_seed_extractors.cpp
@@ -87,13 +84,10 @@ if(DOCTEST_AVAILABLE)
         ${CMAKE_SOURCE_DIR}/src/io/results/result_writer_factory.cpp
         ${CMAKE_SOURCE_DIR}/src/io/models/builtin_models.cpp
         ${CMAKE_SOURCE_DIR}/src/io/index/serialization.cpp
-        ${CMAKE_SOURCE_DIR}/src/signal/event_detectors/event_detector_factory.cpp
-        ${CMAKE_SOURCE_DIR}/src/signal/event_detectors/passthrough_event_detector.cpp
-        ${CMAKE_SOURCE_DIR}/src/signal/event_detectors/scrappie_event_detector.cpp
-        ${CMAKE_SOURCE_DIR}/src/signal/normalizers/identity_normalizer.cpp
-        ${CMAKE_SOURCE_DIR}/src/signal/normalizers/normalizer_factory.cpp
-        ${CMAKE_SOURCE_DIR}/src/signal/normalizers/zscore_normalizer.cpp
-        ${CMAKE_SOURCE_DIR}/src/signal/normalizers/median_mad_normalizer.cpp
+        ${CMAKE_SOURCE_DIR}/src/signal/event_pipeline_factory.cpp
+        ${CMAKE_SOURCE_DIR}/src/signal/event_pipelines/scrappie_event_pipeline.cpp
+        ${CMAKE_SOURCE_DIR}/src/signal/event_pipelines/rawhash_event_pipeline.cpp
+        ${CMAKE_SOURCE_DIR}/src/signal/event_pipelines/passthrough_event_pipeline.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/fuzzy_quantizers/fuzzy_quantizer_factory.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/fuzzy_quantizers/passthrough_fuzzy_quantizer.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/fuzzy_quantizers/rh2_fuzzy_quantizer.cpp

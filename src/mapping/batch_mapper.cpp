@@ -192,7 +192,6 @@ void SeedLookup::lookup(const signal::SeedBuffer& seeds, std::vector<SeedHitReco
 
 void BatchBuffer::resize(std::size_t capacity) {
     raw_reads.resize(capacity);
-    events.resize(capacity);
     normalized.resize(capacity);
     fuzzy_quantized.resize(capacity);
     alignment_quantized.resize(capacity);
@@ -206,7 +205,6 @@ void BatchBuffer::resize(std::size_t capacity) {
 void BatchBuffer::clear() {
     for (std::size_t i = 0; i < num_reads; ++i) {
         raw_reads[i] = io::RawRead{};
-        events[i].events.clear();
         normalized[i] = signal::NormalizedSignal{};
         fuzzy_quantized[i].tokens.clear();
         alignment_quantized[i] = signal::AlignmentQuantizedSignal{};
@@ -227,8 +225,10 @@ BatchMapper::BatchMapper(io::ReadProvider& provider, BatchMapperConfig config, s
 
 PipelineComponents BatchMapper::create_components() const {
     PipelineComponents comps;
-    comps.event_detector = signal::make_event_detector(config_.event_config);
-    comps.normalizer = signal::make_signal_normalizer(config_.normalizer_config);
+
+    // Create unified event pipeline (event detection + normalization)
+    comps.event_pipeline = signal::make_event_pipeline(config_.event_pipeline_config);
+
     comps.fuzzy_quantizer = signal::make_fuzzy_quantizer(config_.fuzzy_config);
     comps.alignment_quantizer = signal::make_alignment_quantizer(config_.alignment_config);
     comps.seed_extractor = signal::make_seed_extractor(config_.seed_config);
@@ -386,8 +386,8 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
     }
 #endif
 
-    batch.events[index] = components_.event_detector->detect(batch.raw_reads[index]);
-    batch.normalized[index] = components_.normalizer->normalize(batch.events[index]);
+    // Signal processing: event detection + normalization
+    batch.normalized[index] = components_.event_pipeline->process(batch.raw_reads[index]);
     batch.fuzzy_quantized[index] = components_.fuzzy_quantizer->quantize(batch.normalized[index]);
     batch.alignment_quantized[index] = components_.alignment_quantizer->quantize(batch.normalized[index]);
     batch.seeds[index] = components_.seed_extractor->extract(batch.fuzzy_quantized[index]);
@@ -398,7 +398,6 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
         signal_file << read.read_id << "\n";
 
         // Line 2: Raw signal (ADC values converted to picoamps)
-        // Convert ADC to picoamps the same way event detector does
         const auto& raw = read.raw_signal;
         const float digitisation = read.digitisation;
         const float offset = read.offset;
@@ -411,15 +410,7 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
         }
         signal_file << "\n";
 
-        // Line 3: Event signal (event means in picoamps)
-        const auto& events = batch.events[index].events;
-        for (std::size_t i = 0; i < events.size(); ++i) {
-            if (i > 0) signal_file << ",";
-            signal_file << events[i].mean;
-        }
-        signal_file << "\n";
-
-        // Line 4: Normalized signal
+        // Line 3: Normalized signal (output of event pipeline)
         const auto& normalized = batch.normalized[index].samples;
         for (std::size_t i = 0; i < normalized.size(); ++i) {
             if (i > 0) signal_file << ",";
@@ -427,7 +418,7 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
         }
         signal_file << "\n";
 
-        // Line 5: Fuzzy quantized tokens
+        // Line 4: Fuzzy quantized tokens
         const auto& fuzzy = batch.fuzzy_quantized[index].tokens;
         for (std::size_t i = 0; i < fuzzy.size(); ++i) {
             if (i > 0) signal_file << ",";
