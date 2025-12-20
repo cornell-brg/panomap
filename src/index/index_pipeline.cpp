@@ -15,6 +15,7 @@
 #include "signal/alignment_quantizers/alignment_quantizer_factory.hpp"
 #include "signal/fuzzy_quantizers/fuzzy_quantizer_factory.hpp"
 #include "signal/seed_extractors/seed_extractor_factory.hpp"
+#include "alignment/signal_utils.hpp"
 #include "util/logging.hpp"
 
 #ifdef PIRU_DUMP_GRAPHS
@@ -78,36 +79,10 @@ IndexPipelineResult run_index_pipeline(
              " bidirected nodes)");
 
     // -------------------------------------------------------------------------
-    // Stage 2: Linearization
+    // Stage 2: Squigglization + Quantization
     // -------------------------------------------------------------------------
-
-    auto linearizer = make_linearizer(config.linearizer);
-    if (!linearizer) {
-        throw std::runtime_error("Failed to create linearizer: " + config.linearizer);
-    }
-
-    result.linearization_coords = linearizer->linearize(aln_graph);
-
-    LOG_INFO("[2/4] linearized with " + linearizer->name() + " backend");
-
-    // For superbubble backend, also store in graph nodes for serialization compatibility
-    if (config.linearizer == "superbubble") {
-        // Extract chain_id and linear_position from linearization coords
-        for (std::size_t i = 0; i < aln_graph.nodeCount(); ++i) {
-            if (!result.linearization_coords[i].empty()) {
-                const auto& coord = result.linearization_coords[i][0];
-                aln_graph.mutableNode(i).chain_id = static_cast<std::int64_t>(coord.path_id);
-                aln_graph.mutableNode(i).linear_position = coord.ref_coord;
-            } else {
-                aln_graph.mutableNode(i).chain_id = -1;
-                aln_graph.mutableNode(i).linear_position = -1;
-            }
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    // Stage 3: Squigglization + Quantization
-    // -------------------------------------------------------------------------
+    // Note: Squigglization happens before linearization so we can use
+    // actual signal sizes for linear coordinate computation.
 
     signal::FuzzyQuantizerConfig fuzzy_cfg;
     fuzzy_cfg.backend = config.fuzzy_quantizer;
@@ -151,8 +126,43 @@ IndexPipelineResult run_index_pipeline(
         }
     }
 
-    LOG_INFO("[3/4] squigglized: " + std::to_string(total_samples) + " signal samples, " +
+    LOG_INFO("[2/4] squigglized: " + std::to_string(total_samples) + " signal samples, " +
              std::to_string(unique_tokens.size()) + " unique fuzzy tokens");
+
+    // Extract signal sizes for linearization.
+    std::vector<std::size_t> signal_sizes;
+    signal_sizes.reserve(aln_graph.nodeCount());
+    for (const auto& sig : squiggle_result.alignment_signals) {
+        signal_sizes.push_back(alignment::signalLength(sig));
+    }
+
+    // -------------------------------------------------------------------------
+    // Stage 3: Linearization
+    // -------------------------------------------------------------------------
+
+    auto linearizer = make_linearizer(config.linearizer);
+    if (!linearizer) {
+        throw std::runtime_error("Failed to create linearizer: " + config.linearizer);
+    }
+
+    result.linearization_coords = linearizer->linearize(aln_graph, signal_sizes);
+
+    LOG_INFO("[3/4] linearized with " + linearizer->name() + " backend");
+
+    // For superbubble backend, also store in graph nodes for serialization compatibility
+    if (config.linearizer == "superbubble") {
+        // Extract chain_id and linear_position from linearization coords
+        for (std::size_t i = 0; i < aln_graph.nodeCount(); ++i) {
+            if (!result.linearization_coords[i].empty()) {
+                const auto& coord = result.linearization_coords[i][0];
+                aln_graph.mutableNode(i).chain_id = static_cast<std::int64_t>(coord.path_id);
+                aln_graph.mutableNode(i).linear_position = coord.ref_coord;
+            } else {
+                aln_graph.mutableNode(i).chain_id = -1;
+                aln_graph.mutableNode(i).linear_position = -1;
+            }
+        }
+    }
 
     // -------------------------------------------------------------------------
     // Stage 4: Seed Extraction & Indexing

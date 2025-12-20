@@ -31,12 +31,14 @@ class Linearizer {
 public:
   virtual ~Linearizer() = default;
 
-  // Assign linear coordinates to all nodes in the graph.
+  // Assign linear coordinates to all nodes in the graph using signal sizes.
+  // signal_sizes[node_id] = number of signal samples for that node.
   // Returns a vector of coordinates per node (indexed by node ID).
   // Nodes may have zero coordinates (not on any path/chain),
   // one coordinate (on single path/chain), or multiple coordinates
   // (on multiple paths or multiple occurrences on same path).
-  virtual std::vector<std::vector<LinearCoordinate>> linearize(const AlnGraph& graph) const = 0;
+  virtual std::vector<std::vector<LinearCoordinate>> linearize(
+      const AlnGraph& graph, const std::vector<std::size_t>& signal_sizes) const = 0;
 
   // Backend name for logging and debugging.
   virtual std::string name() const = 0;

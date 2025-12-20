@@ -16,7 +16,8 @@ class PathWalkLinearizer : public Linearizer {
 public:
   PathWalkLinearizer() = default;
 
-  std::vector<std::vector<LinearCoordinate>> linearize(const AlnGraph& graph) const override;
+  std::vector<std::vector<LinearCoordinate>> linearize(
+      const AlnGraph& graph, const std::vector<std::size_t>& signal_sizes) const override;
 
   std::string name() const override { return "path-walk"; }
 };

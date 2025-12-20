@@ -9,7 +9,7 @@
 namespace piru::index {
 
 std::vector<std::vector<LinearCoordinate>> PathWalkLinearizer::linearize(
-    const AlnGraph& graph) const {
+    const AlnGraph& graph, const std::vector<std::size_t>& signal_sizes) const {
   const std::size_t n = graph.nodeCount();
   const auto& paths = graph.paths();
 
@@ -18,6 +18,11 @@ std::vector<std::vector<LinearCoordinate>> PathWalkLinearizer::linearize(
     throw std::runtime_error(
         "PathWalkLinearizer: graph has no reference paths. "
         "Use SuperbubbleLinearizer or provide a graph with paths.");
+  }
+
+  // Validate signal_sizes.
+  if (signal_sizes.size() != n) {
+    throw std::runtime_error("PathWalkLinearizer: signal_sizes.size() != nodeCount()");
   }
 
   // Build label → node index mapping.
@@ -44,23 +49,14 @@ std::vector<std::vector<LinearCoordinate>> PathWalkLinearizer::linearize(
                                  step.node_id);
       }
       const std::size_t node_idx = it->second;
-      const auto& node = graph.node(node_idx);
 
       // Record coordinate for this node occurrence.
       // Note: This is the start position of the node on this path.
       // When expanding seeds, we'll add the offset within the node.
       result[node_idx].emplace_back(path_id, cumulative_pos);
 
-      // Advance cumulative position by node length minus overlap to next node.
-      const std::size_t node_len = node.sequence.size();
-      std::size_t overlap = 0;
-
-      // Get overlap to next step if available.
-      if (step_idx < path.steps.size() - 1 && step_idx < path.overlaps.size()) {
-        overlap = path.overlaps[step_idx];
-      }
-
-      cumulative_pos += static_cast<std::int64_t>(node_len) - static_cast<std::int64_t>(overlap);
+      // Advance cumulative position by signal size (no overlap math needed).
+      cumulative_pos += static_cast<std::int64_t>(signal_sizes[node_idx]);
     }
   }
 

@@ -12,6 +12,8 @@
 #include <unordered_map>
 #include <utility>
 
+#include "alignment/signal_utils.hpp"
+#include "index/signal_store.hpp"
 #include "mapping/anchor_expander.hpp"
 #include "mapping/anchor_merger.hpp"
 #include "util/logging.hpp"
@@ -20,8 +22,10 @@ namespace piru::mapping {
 
 namespace {
 
-// Compute path length by walking path steps and summing (node_length - overlap).
-std::int64_t computePathLength(const index::AlnGraph& graph, const index::AlnPath& path) {
+// Compute path length by summing signal sizes for each node on the path.
+std::int64_t computePathLength(const index::AlnGraph& graph,
+                               const index::AlnPath& path,
+                               const index::SignalStore* signal_store) {
     // Build label → node index mapping
     std::unordered_map<std::string, std::size_t> label_to_idx;
     for (std::size_t i = 0; i < graph.nodeCount(); ++i) {
@@ -29,20 +33,19 @@ std::int64_t computePathLength(const index::AlnGraph& graph, const index::AlnPat
     }
 
     std::int64_t cumulative = 0;
-    for (std::size_t step_idx = 0; step_idx < path.steps.size(); ++step_idx) {
-        const auto& step = path.steps[step_idx];
+    for (const auto& step : path.steps) {
         auto it = label_to_idx.find(step.node_id);
         if (it == label_to_idx.end()) continue;
 
-        const auto& node = graph.node(it->second);
-        const std::size_t node_len = node.sequence.size();
-        std::size_t overlap = 0;
+        const std::size_t node_idx = it->second;
 
-        if (step_idx < path.steps.size() - 1 && step_idx < path.overlaps.size()) {
-            overlap = path.overlaps[step_idx];
+        // Use signal size directly (no overlap math needed)
+        if (signal_store) {
+            const auto* sig = signal_store->get(node_idx);
+            if (sig) {
+                cumulative += static_cast<std::int64_t>(alignment::signalLength(*sig));
+            }
         }
-
-        cumulative += static_cast<std::int64_t>(node_len) - static_cast<std::int64_t>(overlap);
     }
     return cumulative;
 }
@@ -51,7 +54,8 @@ std::int64_t computePathLength(const index::AlnGraph& graph, const index::AlnPat
 void dumpAnchorsToFile(const char* filename,
                        const std::vector<Anchor>& anchors,
                        const std::string& read_id,
-                       const index::GraphStore* graph_store) {
+                       const index::GraphStore* graph_store,
+                       const index::SignalStore* signal_store) {
     std::ofstream out(filename);
     if (!out.is_open()) {
         LOG_WARN("Failed to open anchor dump file: " + std::string(filename));
@@ -71,7 +75,7 @@ void dumpAnchorsToFile(const char* filename,
     // Write path metadata header
     for (std::size_t path_id = 0; path_id < paths.size(); ++path_id) {
         const auto& path = paths[path_id];
-        std::int64_t length = computePathLength(graph, path);
+        std::int64_t length = computePathLength(graph, path, signal_store);
         out << "#PATH\t" << path_id << "\t" << path.name << "\t" << length << "\n";
     }
 
@@ -104,7 +108,8 @@ void dumpAnchorsToFile(const char* filename,
 void dumpChainToFile(const char* filename,
                      const ReadMapResult& result,
                      const std::string& read_id,
-                     const index::GraphStore* graph_store) {
+                     const index::GraphStore* graph_store,
+                     const index::SignalStore* signal_store) {
     if (result.mappings.empty()) {
         LOG_WARN("Cannot dump chain: no mappings for read " + read_id);
         return;
@@ -136,7 +141,7 @@ void dumpChainToFile(const char* filename,
     // Write path metadata header
     for (std::size_t path_id = 0; path_id < paths.size(); ++path_id) {
         const auto& path = paths[path_id];
-        std::int64_t length = computePathLength(graph, path);
+        std::int64_t length = computePathLength(graph, path, signal_store);
         out << "#PATH\t" << path_id << "\t" << path.name << "\t" << length << "\n";
     }
 
@@ -444,7 +449,7 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
     if (!config_.dump_anchors_dir.empty()) {
         std::size_t dump_num = anchor_dump_counter.fetch_add(1);
         std::string anchor_file = config_.dump_anchors_dir + "/read_" + std::to_string(dump_num) + "_anchors.tsv";
-        dumpAnchorsToFile(anchor_file.c_str(), anchors, read.read_id, config_.graph_store);
+        dumpAnchorsToFile(anchor_file.c_str(), anchors, read.read_id, config_.graph_store, config_.signal_store);
     }
 
     // Cluster anchors
@@ -498,7 +503,7 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
     if (!config_.dump_chains_dir.empty()) {
         std::size_t dump_num = chain_dump_counter.fetch_add(1);
         std::string chain_file = config_.dump_chains_dir + "/read_" + std::to_string(dump_num) + "_chain.tsv";
-        dumpChainToFile(chain_file.c_str(), result, read.read_id, config_.graph_store);
+        dumpChainToFile(chain_file.c_str(), result, read.read_id, config_.graph_store, config_.signal_store);
     }
 }
 

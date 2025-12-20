@@ -8,7 +8,7 @@
 namespace piru::index {
 
 std::vector<std::vector<LinearCoordinate>> SuperbubbleLinearizer::linearize(
-    const AlnGraph& graph) const {
+    const AlnGraph& graph, const std::vector<std::size_t>& /*signal_sizes*/) const {
   const std::size_t n = graph.nodeCount();
 
   // Run existing pseudo-linearization pipeline.
