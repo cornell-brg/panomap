@@ -120,6 +120,12 @@ std::unordered_map<std::string, std::size_t> PathGuidedTransform::walkPathsAndAd
       aln_step.node_id = graph.node(node_with_context_id).label;
       aln_step.is_reverse = is_reverse;
       aln_path.steps.push_back(aln_step);
+
+      // Add overlap to previous step (k-1 bases of context overlap)
+      // overlaps[i] is the overlap between steps[i] and steps[i+1]
+      if (i > 0) {
+        aln_path.overlaps.push_back(k_minus_1);
+      }
     }
 
     // Add reconstructed path to graph
@@ -203,6 +209,12 @@ std::unordered_map<std::string, std::size_t> PathGuidedTransform::walkPathsAndAd
       aln_step.node_id = graph.node(node_with_context_id).label;
       aln_step.is_reverse = is_reverse;
       reverse_aln_path.steps.push_back(aln_step);
+
+      // Add overlap to previous step (k-1 bases of context overlap)
+      // Not on first step of reverse walk (i == path.steps.size() - 1)
+      if (i < path.steps.size() - 1) {
+        reverse_aln_path.overlaps.push_back(k_minus_1);
+      }
     }
 
     // Add reverse path to graph
