@@ -219,7 +219,7 @@ TEST_CASE("ResultFormatter formats single mapping") {
     CHECK(results[0].target_start == 2);
     CHECK(results[0].target_end == 14);  // 10 + 4 = 14
     CHECK(results[0].strand == '+');
-    CHECK(results[0].mapq == 60);  // No secondary, so high MAPQ
+    CHECK(results[0].mapq == 100);  // MAPQ equals raw chain score
 }
 
 TEST_CASE("ResultFormatter builds GAF path string") {
@@ -278,9 +278,9 @@ TEST_CASE("ResultFormatter handles primary and secondary mappings") {
     primary.anchors.push_back(a0);
     map_result.mappings.push_back(primary);
 
-    // Secondary mapping (lower score)
+    // Secondary mapping (score >= 70% of primary to pass filter)
     piru::mapping::Mapping secondary;
-    secondary.chain_score = 50.0;
+    secondary.chain_score = 80.0;  // 80% of primary, passes 70% filter
     piru::mapping::SeedAnchor a1;
     a1.target = {1, 0, 4};
     a1.read_pos = 0;
@@ -293,10 +293,9 @@ TEST_CASE("ResultFormatter handles primary and secondary mappings") {
 
     REQUIRE(results.size() == 2);
 
-    // Primary should have higher MAPQ
-    CHECK(results[0].mapq > 0);
-    // Secondary should have MAPQ = 0
-    CHECK(results[1].mapq == 0);
+    // MAPQ equals raw chain score
+    CHECK(results[0].mapq == 100);
+    CHECK(results[1].mapq == 80);
 
     // Check tp:A:P and tp:A:S tags
     bool primary_has_tag = false;
@@ -356,4 +355,53 @@ TEST_CASE("ResultFormatter handles empty mappings") {
     auto results = formatter.format(map_result, "read1", 50);
 
     CHECK(results.empty());
+}
+
+TEST_CASE("ResultFormatter filters low-scoring secondaries") {
+    auto graph = makeTestGraph();
+    piru::mapping::ResultFormatterConfig config;
+    config.min_secondary_ratio = 0.7;  // Filter secondaries below 70% of primary
+    piru::mapping::ResultFormatter formatter(graph, config);
+
+    piru::mapping::ReadMapResult map_result;
+
+    // Primary mapping
+    piru::mapping::Mapping primary;
+    primary.chain_score = 100.0;
+    piru::mapping::SeedAnchor a0;
+    a0.target = {0, 0, 4};
+    a0.read_pos = 0;
+    a0.path_id = 0;
+    a0.ref_coord = 0;
+    primary.anchors.push_back(a0);
+    map_result.mappings.push_back(primary);
+
+    // Secondary that passes filter (70% of primary = 70)
+    piru::mapping::Mapping secondary_good;
+    secondary_good.chain_score = 75.0;  // Above threshold
+    piru::mapping::SeedAnchor a1;
+    a1.target = {1, 0, 4};
+    a1.read_pos = 0;
+    a1.path_id = 0;
+    a1.ref_coord = 4;
+    secondary_good.anchors.push_back(a1);
+    map_result.mappings.push_back(secondary_good);
+
+    // Secondary that fails filter
+    piru::mapping::Mapping secondary_bad;
+    secondary_bad.chain_score = 50.0;  // Below threshold
+    piru::mapping::SeedAnchor a2;
+    a2.target = {2, 0, 4};
+    a2.read_pos = 0;
+    a2.path_id = 0;
+    a2.ref_coord = 8;
+    secondary_bad.anchors.push_back(a2);
+    map_result.mappings.push_back(secondary_bad);
+
+    auto results = formatter.format(map_result, "read1", 50);
+
+    // Should only get primary + good secondary (bad secondary filtered)
+    CHECK(results.size() == 2);
+    CHECK(results[0].mapq == 100);  // Primary chain score
+    CHECK(results[1].mapq == 75);   // Good secondary chain score
 }

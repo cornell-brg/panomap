@@ -1,11 +1,23 @@
 #include <doctest/doctest.h>
 
+#include <stdexcept>
+
 #include "index/linearizer_factory.hpp"
 #include "index/path_walk_linearizer.hpp"
 #include "index/pseudo_linearize.hpp"
 #include "index/superbubble_linearizer.hpp"
 
 using namespace piru::index;
+
+// Helper to create mock signal sizes from a graph (use sequence length as signal size for testing).
+std::vector<std::size_t> createMockSignalSizes(const AlnGraph& graph) {
+  std::vector<std::size_t> sizes;
+  sizes.reserve(graph.nodeCount());
+  for (std::size_t i = 0; i < graph.nodeCount(); ++i) {
+    sizes.push_back(graph.node(i).sequence.size());
+  }
+  return sizes;
+}
 
 // Helper to create a simple linear graph: A -> B -> C
 AlnGraph createLinearGraph() {
@@ -85,8 +97,9 @@ TEST_CASE("SuperbubbleLinearizer on linear graph") {
   path.steps.push_back({"C", false});
   graph.addPath(path);
 
+  auto signal_sizes = createMockSignalSizes(graph);
   SuperbubbleLinearizer linearizer;
-  auto coords = linearizer.linearize(graph);
+  auto coords = linearizer.linearize(graph, signal_sizes);
 
   REQUIRE(coords.size() == 3);
 
@@ -113,8 +126,9 @@ TEST_CASE("PathWalkLinearizer on linear graph with single path") {
   path.overlaps.push_back(0);  // B-C overlap
   graph.addPath(path);
 
+  auto signal_sizes = createMockSignalSizes(graph);
   PathWalkLinearizer linearizer;
-  auto coords = linearizer.linearize(graph);
+  auto coords = linearizer.linearize(graph, signal_sizes);
 
   REQUIRE(coords.size() == 3);
 
@@ -129,7 +143,7 @@ TEST_CASE("PathWalkLinearizer on linear graph with single path") {
   CHECK(coords[2][0].path_id == 0);
 
   // Coordinates should be monotonically increasing
-  // A at position 0, B at position 4 (A.length=4), C at position 8 (A+B=8)
+  // A at position 0, B at position 4 (signal_size=4), C at position 8 (A+B=8)
   CHECK(coords[0][0].ref_coord == 0);
   CHECK(coords[1][0].ref_coord == 4);
   CHECK(coords[2][0].ref_coord == 8);
@@ -159,8 +173,9 @@ TEST_CASE("PathWalkLinearizer on bubble graph with two paths") {
   path2.overlaps = {0, 0};
   graph.addPath(path2);
 
+  auto signal_sizes = createMockSignalSizes(graph);
   PathWalkLinearizer linearizer;
-  auto coords = linearizer.linearize(graph);
+  auto coords = linearizer.linearize(graph, signal_sizes);
 
   REQUIRE(coords.size() == 4);
 
@@ -222,8 +237,9 @@ TEST_CASE("PathWalkLinearizer on graph with cycle") {
   path.overlaps = {0, 0, 0};
   graph.addPath(path);
 
+  auto signal_sizes = createMockSignalSizes(graph);
   PathWalkLinearizer linearizer;
-  auto coords = linearizer.linearize(graph);
+  auto coords = linearizer.linearize(graph, signal_sizes);
 
   REQUIRE(coords.size() == 3);
 
@@ -247,36 +263,39 @@ TEST_CASE("PathWalkLinearizer error on graph without paths") {
   AlnGraph graph = createLinearGraph();
   // No paths added
 
+  auto signal_sizes = createMockSignalSizes(graph);
   PathWalkLinearizer linearizer;
 
-  CHECK_THROWS_AS(linearizer.linearize(graph), std::runtime_error);
+  CHECK_THROWS_AS(linearizer.linearize(graph, signal_sizes), std::runtime_error);
 }
 
-TEST_CASE("PathWalkLinearizer with overlaps") {
+TEST_CASE("PathWalkLinearizer with varying signal sizes") {
   AlnGraph graph = createLinearGraph();
 
-  // Add path with overlaps: A -[overlap 1]-> B -[overlap 2]-> C
+  // Add path: A -> B -> C
   AlnPath path;
-  path.name = "path_with_overlaps";
+  path.name = "path_with_sizes";
   path.steps.push_back({"A", false});
   path.steps.push_back({"B", false});
   path.steps.push_back({"C", false});
-  path.overlaps.push_back(1);  // A-B overlap of 1
-  path.overlaps.push_back(2);  // B-C overlap of 2
   graph.addPath(path);
 
+  // Use varying signal sizes (simulating what squigglization would produce
+  // with different node lengths and k-1 overlaps)
+  std::vector<std::size_t> signal_sizes = {3, 2, 5};  // A=3, B=2, C=5
+
   PathWalkLinearizer linearizer;
-  auto coords = linearizer.linearize(graph);
+  auto coords = linearizer.linearize(graph, signal_sizes);
 
   REQUIRE(coords.size() == 3);
   REQUIRE(coords[0].size() == 1);
   REQUIRE(coords[1].size() == 1);
   REQUIRE(coords[2].size() == 1);
 
-  // A at 0, B at 4-1=3, C at 3+4-2=5
+  // Coordinates are cumulative signal sizes: A at 0, B at 3, C at 5
   CHECK(coords[0][0].ref_coord == 0);
-  CHECK(coords[1][0].ref_coord == 3);   // 0 + 4 - 1
-  CHECK(coords[2][0].ref_coord == 5);   // 3 + 4 - 2
+  CHECK(coords[1][0].ref_coord == 3);   // 0 + 3
+  CHECK(coords[2][0].ref_coord == 5);   // 3 + 2
 }
 
 TEST_CASE("Linearizer factory creates correct backends") {

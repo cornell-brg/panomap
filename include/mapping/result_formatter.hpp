@@ -15,8 +15,9 @@ namespace piru::mapping {
 
 /// Configuration for result formatting.
 struct ResultFormatterConfig {
-  bool primary_only{false};      // Only output primary (best) mapping
-  std::size_t max_secondary{9};  // Max secondary mappings (default: 9, so up to 10 total)
+  bool primary_only{false};           // Only output primary (best) mapping
+  std::size_t max_secondary{9};       // Max secondary mappings (default: 9, so up to 10 total)
+  double min_secondary_ratio{0.7};    // Min chain score ratio vs primary (default: 0.7 = 70%)
 };
 
 /// Formats ReadMapResult to AlignmentResult for PAF/GAF output.

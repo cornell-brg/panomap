@@ -283,8 +283,10 @@ PipelineComponents BatchMapper::create_components() const {
     // Create result formatter if we have a graph store (needed for result output)
     const auto* adj_store = dynamic_cast<const index::AdjListGraphStore*>(config_.graph_store);
     if (adj_store && config_.result_writer) {
-        comps.result_formatter = std::make_unique<ResultFormatter>(adj_store->graph());
-        LOG_INFO("Result formatter enabled for output");
+        comps.result_formatter = std::make_unique<ResultFormatter>(
+            adj_store->graph(), config_.formatter_config);
+        LOG_INFO("Result formatter enabled for output (min_secondary_ratio=" +
+                 std::to_string(config_.formatter_config.min_secondary_ratio) + ")");
     }
 
     // Create chain aligner if alignment is enabled

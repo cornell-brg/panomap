@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <string_view>
 #include <unordered_map>
 
 namespace piru::mapping {
@@ -25,35 +26,33 @@ std::vector<io::AlignmentResult> ResultFormatter::format(
   }
 
   // Determine how many mappings to output
-  std::size_t num_mappings = map_result.mappings.size();
+  std::size_t max_mappings = map_result.mappings.size();
   if (config_.primary_only) {
-    num_mappings = 1;
+    max_mappings = 1;
   } else {
-    num_mappings = std::min(num_mappings, config_.max_secondary + 1);
+    max_mappings = std::min(max_mappings, config_.max_secondary + 1);
   }
 
-  results.reserve(num_mappings);
+  // Primary chain score for filtering secondaries
+  const double primary_score = map_result.mappings[0].chain_score;
+  const double min_score = primary_score * config_.min_secondary_ratio;
 
-  // Get primary and secondary scores for MAPQ calculation
-  double primary_score = map_result.mappings[0].chain_score;
-  double secondary_score = (map_result.mappings.size() > 1)
-                               ? map_result.mappings[1].chain_score
-                               : 0.0;
+  results.reserve(max_mappings);
 
-  for (std::size_t i = 0; i < num_mappings; ++i) {
-    bool is_primary = (i == 0);
+  for (std::size_t i = 0; i < max_mappings; ++i) {
     const auto& mapping = map_result.mappings[i];
+    bool is_primary = (i == 0);
+
+    // Skip secondaries below the score threshold
+    if (!is_primary && mapping.chain_score < min_score) {
+      continue;
+    }
 
     // Format mapping to result
     results.push_back(formatMapping(mapping, read_id, read_length, is_primary));
 
-    // Set MAPQ based on primary vs secondary score gap
-    if (is_primary) {
-      results.back().mapq = estimateMapQ(primary_score, secondary_score);
-    } else {
-      // Secondary alignments get lower MAPQ
-      results.back().mapq = 0;
-    }
+    // Set MAPQ based on chain score
+    results.back().mapq = estimateMapQ(mapping.chain_score, 0);
 
     // Add tp:A:P (primary) or tp:A:S (secondary) tag
     results.back().optional_fields.push_back(
@@ -118,16 +117,31 @@ io::AlignmentResult ResultFormatter::formatMapping(
     min_ref = std::min(min_ref, anchor.ref_coord);
     max_ref = std::max(max_ref, anchor.ref_coord + static_cast<std::int64_t>(anchor.target.length));
   }
+
+  // Strand and coordinate handling
+  // Path names ending with "_reverse" indicate reverse complement orientation.
+  // For reverse paths: strip suffix and flip coordinates to original path space.
+  result.strand = '+';
+  constexpr std::string_view kReverseSuffix = "_reverse";
+  if (result.target_path.size() > kReverseSuffix.size() &&
+      result.target_path.substr(result.target_path.size() - kReverseSuffix.size()) == kReverseSuffix) {
+    result.strand = '-';
+
+    // Strip "_reverse" suffix to get original path name
+    result.target_path = result.target_path.substr(0, result.target_path.size() - kReverseSuffix.size());
+
+    // Flip coordinates: convert from reverse path space to original path space
+    // new_start = path_len - old_end
+    // new_end = path_len - old_start
+    std::int64_t path_len = static_cast<std::int64_t>(result.target_length);
+    std::int64_t flipped_start = path_len - max_ref;
+    std::int64_t flipped_end = path_len - min_ref;
+    min_ref = flipped_start;
+    max_ref = flipped_end;
+  }
+
   result.target_start = static_cast<std::uint64_t>(min_ref);
   result.target_end = static_cast<std::uint64_t>(max_ref);
-
-  // Strand - determine from path direction
-  // For now, assume forward (+). Path names ending with "_reverse" indicate reverse.
-  result.strand = '+';
-  if (result.target_path.size() > 8 &&
-      result.target_path.substr(result.target_path.size() - 8) == "_reverse") {
-    result.strand = '-';
-  }
 
   // Approximate matches and block length from anchor coverage
   // matches = sum of anchor lengths (approximate)
@@ -252,24 +266,10 @@ std::size_t ResultFormatter::computePathLength(std::size_t path_id) const {
   return path_lengths_[path_id];
 }
 
-int ResultFormatter::estimateMapQ(double primary_score, double secondary_score) const {
-  // Simple MAPQ estimation based on score gap
-  // Similar to minimap2's approach: mapq = 40 * (1 - secondary/primary)
-  // Clamped to [0, 60]
-
-  if (primary_score <= 0) {
-    return 0;
-  }
-
-  if (secondary_score <= 0) {
-    // No secondary alignment - high confidence
-    return 60;
-  }
-
-  double ratio = secondary_score / primary_score;
-  int mapq = static_cast<int>(40.0 * (1.0 - ratio));
-
-  return std::clamp(mapq, 0, 60);
+int ResultFormatter::estimateMapQ(double primary_score, double /*secondary_score*/) const {
+  // Use raw chain score as MAPQ.
+  // TODO: Refine MAPQ calculation when alignment scoring is added.
+  return std::max(0, static_cast<int>(primary_score));
 }
 
 }  // namespace piru::mapping

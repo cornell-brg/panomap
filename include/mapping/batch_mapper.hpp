@@ -70,6 +70,9 @@ struct BatchMapperConfig {
     // Debug dump directories (empty = disabled)
     std::string dump_anchors_dir{};  // Dump anchors per read
     std::string dump_chains_dir{};   // Dump chains per read
+
+    // Result formatting configuration
+    ResultFormatterConfig formatter_config{};
 };
 
 struct BatchMapperStats {

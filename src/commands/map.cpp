@@ -92,6 +92,7 @@ int handle_map(const std::vector<std::string>& args) {
         {'\0', "", false, "\nOutput Options:"},
         {'o', "output", true, "Output file path (format auto-detected from extension: .paf, .gaf, .gam, .json)"},
         {'\0', "output-format", true, "Override output format (paf, gaf, gam, json)"},
+        {'\0', "min-secondary-ratio", true, "Min chain score ratio vs primary for secondaries (default: 0.7)"},
     };
     config.on_error = [](const std::string&) { std::cerr << "map: invalid option\n"; };
 
@@ -474,6 +475,12 @@ int handle_map(const std::vector<std::string>& args) {
         map_config.dump_chains_dir = parsed.values.at("dump-chains");
         std::filesystem::create_directories(map_config.dump_chains_dir);
         LOG_INFO("Dumping chains to: " + map_config.dump_chains_dir);
+    }
+
+    // Configure result formatter
+    if (parsed.values.count("min-secondary-ratio")) {
+        map_config.formatter_config.min_secondary_ratio =
+            std::stod(parsed.values.at("min-secondary-ratio"));
     }
 
     // =========================================================================
