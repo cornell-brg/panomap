@@ -148,16 +148,12 @@ GraphStore SignalStore SeedStore
       │            │  Loader      │
       ▼            │ (GraphStore, │
  ┌──────────────┐  │  SeedStore,  │
- │Event Detect  │  │  SignalStore,│
- └──────────────┘  │  LinearCoords│
-      │            └──────────────┘
-      ▼                 │
- ┌──────────────┐       │
- │ Normalize    │       │
- └──────────────┘       │
+ │Event Pipeline│  │  SignalStore,│
+ │(detect+norm) │  │  LinearCoords│
+ └──────────────┘  └──────────────┘
       │                 │
       ▼                 │
- Cleaned Signal         │
+ Normalized Signal      │
       │                 │
       ├────────────────┐│
       │                ││
@@ -198,35 +194,50 @@ GraphStore SignalStore SeedStore
       ▼
 Selected Anchors/Chains
       │
-      └─── future: align → score → results ───┘
+      ▼
+ ┌──────────────┐
+ │   Result     │
+ │  Conversion  │
+ └──────────────┘
+      │
+      ▼
+ ┌──────────────┐
+ │ ResultWriter │
+ │ (PAF/GAF)    │
+ └──────────────┘
+      │
+      ▼
+   Output File
 ```
 
-**Current status (DEV012 - 2025-12-15):** Uniform 4-stage mapping pipeline implemented. Seed lookup, anchor expansion, and clustering/chaining are complete. Alignment scoring and result writing remain for future work.
+**Current status (DEV015 - 2025-12):** Full mapping pipeline implemented through result output. Chain-based result generation produces PAF/GAF output. Multi-chain extraction supported. Alignment scoring (DEV016) remains for future work.
 
 **Component status:**
 - [x] Read parse (ReadProvider)
-- [x] Event detection
-- [x] Signal normalization
+- [x] Event pipeline (unified event detection + normalization)
 - [x] Fuzzy quantization (seeding)
 - [x] Alignment quantization (scoring)
 - [x] Seed extraction
 - [x] Index Loader
 - [x] SeedStore lookup
 - [x] Anchor expansion (SuperbubbleExpander, PathWalkExpander)
-- [x] Clustering/chaining (FSE, Probe, DPChain)
-- [ ] Alignment scoring (future)
-- [ ] ResultWriter integration in map path (future)
+- [x] Anchor merging (consolidate adjacent/overlapping anchors)
+- [x] Clustering/chaining (FSE, Probe, DPChain with multi-chain extraction)
+- [x] Chain-to-result conversion (ChainResultConverter)
+- [x] ResultWriter integration (PAF, GAF, GAM, JSON)
+- [ ] Alignment scoring (DEV016 - future)
 
-**Mapping algorithm (implemented DEV012):**
+**Mapping algorithm (implemented DEV012-DEV015):**
 
 **Stage 1: Linearization** (done during indexing)
    - Superbubble: Assign chain IDs and local linear positions to nodes
    - Path-walk: Assign global positions along reference paths
 
 **Stage 2: Signal preprocessing**
-   - **Event detection**: Segment raw signal into events or use raw samples directly
-   - **Normalize**: Scale/shift signal to standard range
-   - **Parallel quantization**: Cleaned signal branches into two paths:
+   - **Event pipeline**: Unified event detection + normalization with swappable backends:
+     - **Scrappie** (default): Detect events on raw pA signal → normalize event means
+     - **RawHash**: Normalize raw signal first → detect events on normalized signal (uses IQR-filtered means, R9/R10 auto-params)
+   - **Parallel quantization**: Normalized signal branches into two paths:
      - **Fuzzy quantization** (for seeding): Apply fuzzy binning to encourage seed collision
      - **Alignment quantization** (for scoring): Convert to SignalStore format
 
@@ -239,14 +250,25 @@ Selected Anchors/Chains
    - **PathWalkExpander**: 1:N mapping via path occurrence coordinates
    - Result: Anchors in linear space (path_id, ref_coord)
 
-**Stage 5: Clustering/Chaining** (select optimal anchor subset)
+**Stage 5: Anchor merging** (consolidate overlapping anchors)
+   - Group anchors by path_id, sort by (ref_coord, query_pos)
+   - Merge adjacent/overlapping anchors on same path
+   - Result: Reduced anchor count with accurate coverage lengths
+
+**Stage 6: Clustering/Chaining** (select optimal anchor subset)
    - **FSE/Probe clusterers**: Group by path_id, cluster by diagonal (superbubble pipeline)
    - **DPChain clusterer**: Colinear chaining via dynamic programming (path-walk pipeline)
-   - Result: Selected anchors/chains for alignment extension
+   - **Multi-chain extraction**: Extract up to N best chains with non-redundant endpoints
+   - Result: Selected chains for result output
 
-**Stage 6: Alignment scoring** (future work)
+**Stage 7: Result conversion & output**
+   - **ChainResultConverter**: Convert chains to AlignmentResult (query/ref coords, MAPQ, path)
+   - **GAF path construction**: Walk chain anchors, translate node IDs to original GFA space
+   - **ResultWriter**: Output PAF or GAF format with optional tags (chain score, anchor count)
+
+**Stage 8: Alignment scoring** (DEV016 - future work)
    - Compare alignment quantized query signal against SignalStore reference signals
-   - Produces final alignment coordinates, scores, and statistics
+   - Produces CIGAR, edit distance, identity metrics
 
 **Note on quantization:**
 - **Fuzzy quantization** (Stage 2): Intentional binning to make similar signals collide for seed discovery. Lossy by design.
@@ -351,15 +373,17 @@ Selected Anchors/Chains
 - **Loading**: Index loader reads all three files and instantiates appropriate backend classes via factories.
 
 ### Result I/O
-- Data: `AlignmentResult` (`include/io/results/result.hpp`) with query/target spans, mappings/edits, and tags.
+- Data: `AlignmentResult` (`include/io/results/result.hpp`) with query/target spans, graph_path, mappings/edits, and tags.
 - Interface: `ResultWriter` (`include/io/results/result_writer.hpp`).
 - Factory: `make_result_writer` (`include/io/results/result_writer_factory.hpp`) chooses by extension.
 - Backends:
-  - GAF (pure TSV, no libvgio).
+  - PAF (`PafWriter`) - linear coordinate output, 12 mandatory columns + optional tags.
+  - GAF (`GafWriter`) - graph path output with `>node1>node2` format, pure TSV.
   - GAM (libvgio VGAlignmentEmitter).
   - JSON (libvgio VGAlignmentEmitter JSON).
-- Conversion: `to_vg_alignment` (`include/io/results/alignment_conversion.hpp`) builds vg::Alignment for GAM/JSON.
-- Note: GAF/GAM/JSON formats will capture alignment statistics, quality metrics, and mapping metadata. Unaligned reads and detailed diagnostics may be added as separate outputs in the future.
+- Chain conversion: `ChainResultConverter` (`include/mapping/chain_result_converter.hpp`) converts DP chains to `AlignmentResult` with MAPQ estimation.
+- VG conversion: `to_vg_alignment` (`include/io/results/alignment_conversion.hpp`) builds vg::Alignment for GAM/JSON.
+- CLI: `-o/--output <file>` and `--output-format {paf|gaf|gam|json}` flags.
 
 ### Concurrency & Utilities
 - Concurrency: `concurrency/executor` with TBB (optional) or serial fallback.
@@ -377,13 +401,11 @@ Selected Anchors/Chains
   - Implement CSR backend for GraphStore.
   - Implement advanced storage backends for SignalStore (custom fixed-point, adaptive) beyond the current vector store.
   - Implement minimizer-based seeding strategy for SeedStore and corresponding storage tweaks.
-- **Map**:
-  - Implement alignment core (AlignSingle):
-    - Seed lookup via SeedStore
-    - Seed clustering by chain ID
-    - Colinear chaining within chains using linear coordinates
-    - Alignment scoring against SignalStore
-  - Integrate ResultWriter
+- **Map** (DEV016):
+  - Alignment scoring against SignalStore (signal-level DTW or banded DP)
+  - CIGAR generation from signal alignment
+  - Edit distance and identity metrics
+  - `--align` flag to enable alignment mode (default: chain-only)
 - **Graph I/O**: GBZ loader; richer GFA support; alignment graph definition and export for debugging.
 - **Reads**: Investigate POD5 backend.
-- **Results**: Richer tags; SAM output support.
+- **Results**: SAM/BAM output support; streaming output for adaptive sampling.
