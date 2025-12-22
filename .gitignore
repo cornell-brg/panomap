@@ -15,3 +15,6 @@
 /Testing/
 /CTestTestfile.cmake
 /compile_commands.json
+
+# Generated evaluation reads (recreate with scripts/generate_eval_reads.sh)
+/tests/data/HLA/eval_reads/
