@@ -21,7 +21,8 @@ TEST_CASE("built-in r10.4 model loads and exposes entries") {
 
     double mean = 0.0;
     REQUIRE(model->lookup("AAAAAAAAA", mean));
-    CHECK(mean == doctest::Approx(-1.8424464464));
+    // Value from squigulator R10 model (raw pA)
+    CHECK(mean == doctest::Approx(54.31598354));
 }
 
 TEST_CASE("load model from legacy r9-format file") {

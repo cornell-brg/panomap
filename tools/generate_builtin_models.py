@@ -39,10 +39,17 @@ def parse_r10(path: Path, default_stdv: float) -> List[Entry]:
     for line in path.read_text().splitlines():
         if not line.strip():
             continue
+        # Skip comment lines (e.g., #ont_model_name, #kit, etc.)
+        if line.startswith("#"):
+            continue
         parts = line.split()
         if len(parts) < 2:
             continue
-        kmer, mean = parts[0], float(parts[1])
+        kmer = parts[0]
+        # Skip header line (kmer column contains "kmer" not ACGT sequence)
+        if not all(c in "ACGT" for c in kmer):
+            continue
+        mean = float(parts[1])
         entries.append((kmer, mean))
     return entries
 
