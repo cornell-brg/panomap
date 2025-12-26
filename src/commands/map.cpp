@@ -70,12 +70,20 @@ int handle_map(const std::vector<std::string>& args) {
         {'t', "threads", true, "Worker threads (-1 = auto)"},
         {'p', "profile", false, "Emit timing profile (tree)"},
         {'\0', "", false, "\nIn-Memory Indexing Options (with --graph):"},
-        {'\0', "linearizer", true, "Linearizer backend: superbubble (default) or path-walk"},
-        {'\0', "graph-type", true, "Graph type: dbg (default) or vg"},
+        {'\0', "linearizer", true, "Linearizer backend: path-walk (default) or superbubble"},
+        {'\0', "graph-type", true, "Graph type: vg (default) or dbg"},
         {'\0', "graph-k", true, "DBG k-mer size (default: auto-detect from overlap)"},
         {'\0', "", false, "\nMapping Options:"},
         {'\0', "max-seed-freq", true, "Maximum seed frequency for lookup (default: use index threshold)"},
-        {'\0', "clusterer", true, "Clusterer backend: fse (default), probe, dp-chain"},
+        {'\0', "clusterer", true, "Clusterer backend: dp-chain (default), fse, probe"},
+        {'\0', "chain-max-dist", true, "DP chain: max query/ref distance between anchors (default: 5000)"},
+        {'\0', "chain-max-diag-dev", true, "DP chain: max diagonal deviation (default: 500)"},
+        {'\0', "chain-gap-penalty", true, "DP chain: gap penalty factor (default: 0.02)"},
+        {'\0', "chain-diag-penalty", true, "DP chain: diagonal penalty factor (default: 0.05)"},
+        {'\0', "chain-overlap-penalty", true, "DP chain: overlap penalty factor (default: 0.90)"},
+        {'\0', "chain-anchor-weight", true, "DP chain: anchor weight (default: 1.0)"},
+        {'\0', "chain-min-score", true, "DP chain: minimum chain score (default: 0)"},
+        {'\0', "chain-max-chains", true, "DP chain: max chains to extract (default: 10)"},
         {'\0', "align", false, "Enable signal-level alignment for chain evaluation"},
         {'\0', "align-backend", true, "Alignment backend: path-guided (default), radius, auto"},
         {'\0', "", false, "\nSignal Processing Options (only with --graph):"},
@@ -85,11 +93,11 @@ int handle_map(const std::vector<std::string>& args) {
         {'\0', "event-t1", true, "Event detection threshold1 (default: backend-specific)"},
         {'\0', "event-t2", true, "Event detection threshold2 (default: backend-specific)"},
         {'\0', "event-peak", true, "Event detection peak height (default: backend-specific)"},
-        {'\0', "fuzzy-backend", true, "Fuzzy quantizer backend: rh2, piru (default: rh2)"},
+        {'\0', "fuzzy-backend", true, "Fuzzy quantizer backend: piru (default), rh2"},
         {'\0', "fuzzy-fine-min", true, "Fuzzy quantizer fine region min (default: -2.0)"},
         {'\0', "fuzzy-fine-max", true, "Fuzzy quantizer fine region max (default: 2.0)"},
-        {'\0', "fuzzy-fine-range", true, "Fuzzy quantizer fine bin width (default: 0.4)"},
-        {'\0', "fuzzy-bins", true, "Fuzzy quantizer bin count (default: 16, i.e., 2^4)"},
+        {'\0', "fuzzy-fine-range", true, "Fuzzy quantizer fine range (default: 0.9 R9, 0.8 R10)"},
+        {'\0', "fuzzy-bins", true, "Fuzzy quantizer bin count (default: 10)"},
         {'\0', "seed-k", true, "Seed extractor k-mer size (default: 6)"},
         {'\0', "seed-stride", true, "Seed extractor stride (default: 1)"},
         {'\0', "", false, "\nDebug Options:"},
@@ -248,10 +256,10 @@ int handle_map(const std::vector<std::string>& args) {
         const std::string model_arg = parsed.values.at("model");
         const std::string linearizer = parsed.values.count("linearizer")
                                            ? parsed.values.at("linearizer")
-                                           : "superbubble";
+                                           : "path-walk";
         const std::string graph_type = parsed.values.count("graph-type")
                                            ? parsed.values.at("graph-type")
-                                           : "dbg";
+                                           : "vg";
 
         LOG_INFO("running in-memory indexing: graph=" + graph_path +
                  ", linearizer=" + linearizer);
@@ -433,11 +441,37 @@ int handle_map(const std::vector<std::string>& args) {
     LOG_INFO("Using clustering config from index: max_hash_frequency=" +
              std::to_string(map_config.clusterer_config.max_hash_frequency));
 
-    // Configure clusterer backend (default: fse for backward compatibility)
+    // Configure clusterer backend (default: dp-chain for path-walk pipeline)
     const std::string clusterer = parsed.values.count("clusterer")
                                    ? parsed.values.at("clusterer")
-                                   : "fse";
+                                   : "dp-chain";
     map_config.clusterer_config.backend = clusterer;
+
+    // DP chain parameter overrides (only relevant when clusterer=dp-chain)
+    if (parsed.values.count("chain-max-dist")) {
+        map_config.clusterer_config.dp_max_dist = std::stoull(parsed.values.at("chain-max-dist"));
+    }
+    if (parsed.values.count("chain-max-diag-dev")) {
+        map_config.clusterer_config.dp_max_diag_dev = std::stoull(parsed.values.at("chain-max-diag-dev"));
+    }
+    if (parsed.values.count("chain-gap-penalty")) {
+        map_config.clusterer_config.dp_gap_penalty = std::stod(parsed.values.at("chain-gap-penalty"));
+    }
+    if (parsed.values.count("chain-diag-penalty")) {
+        map_config.clusterer_config.dp_diag_penalty = std::stod(parsed.values.at("chain-diag-penalty"));
+    }
+    if (parsed.values.count("chain-overlap-penalty")) {
+        map_config.clusterer_config.dp_overlap_penalty = std::stod(parsed.values.at("chain-overlap-penalty"));
+    }
+    if (parsed.values.count("chain-anchor-weight")) {
+        map_config.clusterer_config.dp_anchor_weight = std::stod(parsed.values.at("chain-anchor-weight"));
+    }
+    if (parsed.values.count("chain-min-score")) {
+        map_config.clusterer_config.dp_min_chain_score = std::stoull(parsed.values.at("chain-min-score"));
+    }
+    if (parsed.values.count("chain-max-chains")) {
+        map_config.clusterer_config.dp_max_chains = std::stoull(parsed.values.at("chain-max-chains"));
+    }
 
     // Configure event pipeline (unified event detection + normalization)
     map_config.event_pipeline_config.pore_model = pore_model_name;

@@ -405,9 +405,24 @@ AnchorClustererPtr make_anchor_clusterer(
         return std::make_unique<ProbeClusterer>(config);
     }
     if (config.backend == "dp-chain") {
-        // Use default DPChainClustererConfig for MVP (parameters can be exposed via CLI later)
+        // Build DPChainClustererConfig from SeedClustererConfig dp_* fields
         DPChainClustererConfig dp_config;
-        dp_config.min_chain_score = 0;  // MVP: accept any chain for testing
+        dp_config.max_dist = config.dp_max_dist;
+        dp_config.max_diag_dev = config.dp_max_diag_dev;
+        dp_config.gap_penalty_factor = config.dp_gap_penalty;
+        dp_config.diag_penalty_factor = config.dp_diag_penalty;
+        dp_config.overlap_penalty_factor = config.dp_overlap_penalty;
+        dp_config.anchor_weight = config.dp_anchor_weight;
+        dp_config.min_chain_score = config.dp_min_chain_score;
+        dp_config.max_chains = config.dp_max_chains;
+        LOG_INFO("DP chain config: max_dist=" + std::to_string(dp_config.max_dist) +
+                 ", max_diag_dev=" + std::to_string(dp_config.max_diag_dev) +
+                 ", gap_penalty=" + std::to_string(dp_config.gap_penalty_factor) +
+                 ", diag_penalty=" + std::to_string(dp_config.diag_penalty_factor) +
+                 ", overlap_penalty=" + std::to_string(dp_config.overlap_penalty_factor) +
+                 ", anchor_weight=" + std::to_string(dp_config.anchor_weight) +
+                 ", min_score=" + std::to_string(dp_config.min_chain_score) +
+                 ", max_chains=" + std::to_string(dp_config.max_chains));
         return std::make_unique<DPChainClusterer>(dp_config);
     }
     if (config.backend == "chaining" || config.backend == "noop") {

@@ -58,7 +58,7 @@ struct ClusterSummary {
 };
 
 struct SeedClustererConfig {
-    std::string backend{"fse"};  // "fse", "probe", "chaining" (future)
+    std::string backend{"fse"};  // "fse", "probe", "dp-chain"
     std::size_t max_hash_frequency{0};  // from SeedStore metadata
 
     // Clustering parameters (FSE/legacy)
@@ -69,6 +69,17 @@ struct SeedClustererConfig {
     // Probe parameters (legacy)
     std::size_t max_probes_per_cluster{10};  // Max probe seeds per cluster
     std::size_t probe_stride{0};             // Override stride (0 = auto-compute from query length)
+
+    // DP chain parameters (used when backend="dp-chain")
+    // Tuned for noisy signals (DEV027), original defaults in comments
+    std::size_t dp_max_dist{5000};              // Max query/ref distance for chaining
+    std::size_t dp_max_diag_dev{500};           // Max diagonal deviation |Δr - Δq|
+    double dp_gap_penalty{0.02};                // Penalty per unit gap distance (was: 0.1)
+    double dp_diag_penalty{0.05};               // Penalty per unit diagonal deviation (was: 0.5)
+    double dp_overlap_penalty{0.90};            // Penalty per unit overlap (was: 2.0)
+    double dp_anchor_weight{1.0};               // Weight per anchor length
+    std::size_t dp_min_chain_score{0};          // Min score to report a chain (0 = accept any)
+    std::size_t dp_max_chains{10};              // Max number of chains to extract
 };
 
 // Abstract interface for anchor clustering/chaining.
