@@ -84,6 +84,7 @@ int handle_map(const std::vector<std::string>& args) {
         {'\0', "chain-anchor-weight", true, "DP chain: anchor weight (default: 1.0)"},
         {'\0', "chain-min-score", true, "DP chain: minimum chain score (default: 0)"},
         {'\0', "chain-max-chains", true, "DP chain: max chains to extract (default: 10)"},
+        {'\0', "chain-merge", true, "DP chain: merge overlapping chains (default: true)"},
         {'\0', "align", false, "Enable signal-level alignment for chain evaluation"},
         {'\0', "align-backend", true, "Alignment backend: path-guided (default), radius, auto"},
         {'\0', "", false, "\nSignal Processing Options (only with --graph):"},
@@ -471,6 +472,10 @@ int handle_map(const std::vector<std::string>& args) {
     }
     if (parsed.values.count("chain-max-chains")) {
         map_config.clusterer_config.dp_max_chains = std::stoull(parsed.values.at("chain-max-chains"));
+    }
+    if (parsed.values.count("chain-merge")) {
+        const std::string val = parsed.values.at("chain-merge");
+        map_config.clusterer_config.dp_merge_chains = (val == "true" || val == "1" || val == "yes");
     }
 
     // Configure event pipeline (unified event detection + normalization)

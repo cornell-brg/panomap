@@ -14,6 +14,111 @@ namespace piru::mapping {
 
 namespace {
 
+// Merge overlapping chains on the same path.
+// If c1 and c2 overlap (c2 at higher positions), merge them:
+// - Combined anchors = union of anchors from both chains
+// - Overlap segment score = sum of anchor scores in overlap region
+// - Merged score = c1.score + c2.score - overlap_segment_score
+void merge_overlapping_chains(std::vector<ClusterGroup>& chains, double anchor_weight) {
+    if (chains.size() < 2) {
+        return;
+    }
+
+    bool merged = true;
+    while (merged) {
+        merged = false;
+
+        // Sort chains by (path_id, ref_start)
+        std::sort(chains.begin(), chains.end(),
+                  [](const ClusterGroup& a, const ClusterGroup& b) {
+                      if (a.anchors.empty() || b.anchors.empty()) {
+                          return a.anchors.size() > b.anchors.size();
+                      }
+                      if (a.anchors.front().path_id != b.anchors.front().path_id) {
+                          return a.anchors.front().path_id < b.anchors.front().path_id;
+                      }
+                      return a.anchors.front().ref_coord < b.anchors.front().ref_coord;
+                  });
+
+        // Try to merge adjacent chains on same path
+        for (std::size_t i = 0; i + 1 < chains.size(); ++i) {
+            auto& c1 = chains[i];
+            auto& c2 = chains[i + 1];
+
+            if (c1.anchors.empty() || c2.anchors.empty()) {
+                continue;
+            }
+
+            // Check same path
+            if (c1.anchors.front().path_id != c2.anchors.front().path_id) {
+                continue;
+            }
+
+            // Get ref intervals
+            std::int64_t c1_end = c1.anchors.back().ref_coord +
+                                  static_cast<std::int64_t>(c1.anchors.back().target.length);
+            std::int64_t c2_start = c2.anchors.front().ref_coord;
+
+            // Check overlap: c2 starts before c1 ends
+            if (c2_start < c1_end) {
+                // Calculate overlap segment score (anchors from c2 that fall within c1's range)
+                double overlap_score = 0.0;
+                for (const auto& anchor : c2.anchors) {
+                    if (anchor.ref_coord < c1_end) {
+                        overlap_score += anchor.target.length * anchor_weight;
+                    }
+                }
+
+                // Merge: combine anchors, adjust score
+                double merged_score = c1.cluster_score + c2.cluster_score - overlap_score;
+
+                // Combine and sort anchors
+                std::vector<SeedAnchor> merged_anchors;
+                merged_anchors.reserve(c1.anchors.size() + c2.anchors.size());
+                merged_anchors.insert(merged_anchors.end(), c1.anchors.begin(), c1.anchors.end());
+                merged_anchors.insert(merged_anchors.end(), c2.anchors.begin(), c2.anchors.end());
+
+                // Sort by ref_coord
+                std::sort(merged_anchors.begin(), merged_anchors.end(),
+                          [](const SeedAnchor& a, const SeedAnchor& b) {
+                              return a.ref_coord < b.ref_coord;
+                          });
+
+                // Remove duplicates (same ref_coord and read_pos)
+                auto last = std::unique(merged_anchors.begin(), merged_anchors.end(),
+                                        [](const SeedAnchor& a, const SeedAnchor& b) {
+                                            return a.ref_coord == b.ref_coord &&
+                                                   a.read_pos == b.read_pos;
+                                        });
+                merged_anchors.erase(last, merged_anchors.end());
+
+                // Update c1 with merged result
+                c1.anchors = std::move(merged_anchors);
+                c1.cluster_score = merged_score;
+
+                // Remove c2
+                chains.erase(chains.begin() + static_cast<std::ptrdiff_t>(i) + 1);
+
+                merged = true;
+                break;  // Restart loop
+            }
+        }
+    }
+
+    // Sort by score descending (highest score = rank 0)
+    std::sort(chains.begin(), chains.end(),
+              [](const ClusterGroup& a, const ClusterGroup& b) {
+                  return a.cluster_score > b.cluster_score;
+              });
+
+    // Reassign cluster IDs after merging (now reflects rank)
+    for (std::size_t i = 0; i < chains.size(); ++i) {
+        for (auto& anchor : chains[i].anchors) {
+            anchor.cluster_id = i;
+        }
+    }
+}
+
 // Check if a coordinate falls within any interval in the list.
 // Extends each interval by the specified margin on both ends to catch
 // endpoints that are just past the boundary (reducing redundant chains).
@@ -182,6 +287,11 @@ ClusterSummary DPChainClusterer::cluster(const std::vector<Anchor>& anchors) con
 
         summary.clusters.push_back(std::move(group));
         ++chain_id;
+    }
+
+    // Post-processing: merge overlapping chains on same path
+    if (config_.merge_chains && summary.clusters.size() > 1) {
+        merge_overlapping_chains(summary.clusters, config_.anchor_weight);
     }
 
     // Set summary score to best chain score (first chain)

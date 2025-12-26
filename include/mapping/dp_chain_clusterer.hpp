@@ -26,6 +26,9 @@ struct DPChainClustererConfig {
     double gap_penalty_factor{0.1};          // Penalty per unit gap distance
     double diag_penalty_factor{0.5};         // Penalty per unit diagonal deviation
     double overlap_penalty_factor{2.0};      // Penalty per unit overlap
+
+    // Post-processing
+    bool merge_chains{true};                 // Merge overlapping chains on same path
 };
 
 // DP-based colinear chaining clusterer.
