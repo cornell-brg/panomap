@@ -85,6 +85,7 @@ add_executable(piru
     src/signal/event_pipelines/passthrough_event_pipeline.cpp
     src/signal/fuzzy_quantizers/fuzzy_quantizer_factory.cpp
     src/signal/fuzzy_quantizers/passthrough_fuzzy_quantizer.cpp
+    src/signal/fuzzy_quantizers/piru_fuzzy_quantizer.cpp
     src/signal/fuzzy_quantizers/rh2_fuzzy_quantizer.cpp
     src/signal/alignment_quantizers/alignment_quantizer_factory.cpp
     src/signal/alignment_quantizers/passthrough_alignment_quantizer.cpp

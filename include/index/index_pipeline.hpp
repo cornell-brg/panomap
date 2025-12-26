@@ -57,6 +57,7 @@ struct IndexPipelineConfig {
     float fuzzy_fine_min{-2.0f};   // Minimum value for fine quantization region
     float fuzzy_fine_max{2.0f};    // Maximum value for fine quantization region
     float fuzzy_fine_range{0.4f};  // Range per fine quantization bin
+    std::uint32_t fuzzy_n_bins{0}; // Number of bins (0 = use 2^qbits = 16)
 
     // Alignment quantizer: "int16", "int8", or "passthrough"
     // - Converts normalized signal to integer format for alignment

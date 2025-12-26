@@ -49,21 +49,25 @@ EventPipelineConfig apply_rawhash_defaults(EventPipelineConfig config) {
                        config.pore_model.find("R10") != std::string::npos);
 
   if (is_r10) {
-    // R10 parameters (from RawHash main.cpp preset)
-    config.window_length1 = 3;
-    config.window_length2 = 6;
-    config.threshold1 = 6.5f;
-    config.threshold2 = 4.0f;
-    config.peak_height = 0.2f;
-    LOG_INFO("RawHash event pipeline: using R10 defaults (w1=3, w2=6, t1=6.5, t2=4.0, ph=0.2)");
-  } else {
-    // R9 parameters (RawHash defaults from roptions.c)
-    config.window_length1 = 3;
-    config.window_length2 = 9;
+    // R10 parameters (tuned for piru, see DEV025)
+    config.window_length1 = 4;
+    config.window_length2 = 10;
     config.threshold1 = 4.0f;
-    config.threshold2 = 3.5f;
+    config.threshold2 = 3.0f;
     config.peak_height = 0.4f;
-    LOG_INFO("RawHash event pipeline: using R9 defaults (w1=3, w2=9, t1=4.0, t2=3.5, ph=0.4)");
+    LOG_INFO("RawHash event pipeline: using R10 defaults (w1=4, w2=10, t1=4.0, t2=3.0, ph=0.4)");
+    // Original RawHash R10 defaults (from RawHash main.cpp preset):
+    // w1=3, w2=6, t1=6.5, t2=4.0, ph=0.2
+  } else {
+    // R9 parameters (tuned for piru, see DEV025)
+    config.window_length1 = 5;
+    config.window_length2 = 8;
+    config.threshold1 = 2.1f;
+    config.threshold2 = 1.2f;
+    config.peak_height = 0.4f;
+    LOG_INFO("RawHash event pipeline: using R9 defaults (w1=5, w2=8, t1=2.1, t2=1.2, ph=0.4)");
+    // Original RawHash R9 defaults (from RawHash roptions.c):
+    // w1=3, w2=9, t1=4.0, t2=3.5, ph=0.4
   }
 
   // Apply user overrides after backend defaults
@@ -82,24 +86,24 @@ EventPipelineConfig apply_scrappie_defaults(EventPipelineConfig config) {
 }  // namespace
 
 EventPipelinePtr make_event_pipeline(const EventPipelineConfig& config) {
-  if (config.backend == "scrappie" || config.backend.empty()) {
-    LOG_INFO("Event pipeline: scrappie (detect events on raw signal, then normalize)");
-    auto scrappie_config = apply_scrappie_defaults(config);
-    return std::make_unique<ScrappieEventPipeline>(scrappie_config);
-  }
-  if (config.backend == "rawhash") {
+  if (config.backend == "rawhash" || config.backend.empty()) {
     LOG_INFO("Event pipeline: rawhash (normalize raw signal, then detect events)");
     auto rawhash_config = apply_rawhash_defaults(config);
     return std::make_unique<RawHashEventPipeline>(rawhash_config);
+  }
+  if (config.backend == "scrappie") {
+    LOG_INFO("Event pipeline: scrappie (detect events on raw signal, then normalize)");
+    auto scrappie_config = apply_scrappie_defaults(config);
+    return std::make_unique<ScrappieEventPipeline>(scrappie_config);
   }
   if (config.backend == "passthrough") {
     LOG_INFO("Event pipeline: passthrough (normalize only, no event detection)");
     return std::make_unique<PassthroughEventPipeline>(config);
   }
 
-  LOG_WARN("Unknown event pipeline backend '" + config.backend + "', using scrappie");
-  auto scrappie_config = apply_scrappie_defaults(config);
-  return std::make_unique<ScrappieEventPipeline>(scrappie_config);
+  LOG_WARN("Unknown event pipeline backend '" + config.backend + "', using rawhash");
+  auto rawhash_config = apply_rawhash_defaults(config);
+  return std::make_unique<RawHashEventPipeline>(rawhash_config);
 }
 
 }  // namespace piru::signal

@@ -18,7 +18,7 @@
 namespace piru::signal {
 
 struct EventPipelineConfig {
-  std::string backend{"scrappie"};  // "scrappie" | "rawhash" | "passthrough"
+  std::string backend{"rawhash"};  // "rawhash" | "scrappie" | "passthrough"
   std::string pore_model;           // e.g., "r9.4", "r10.4" - used for backend-specific defaults
 
   // Event detection parameters (t-stat peak detection)
