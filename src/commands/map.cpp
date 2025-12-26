@@ -80,6 +80,11 @@ int handle_map(const std::vector<std::string>& args) {
         {'\0', "align-backend", true, "Alignment backend: path-guided (default), radius, auto"},
         {'\0', "", false, "\nSignal Processing Options (only with --graph):"},
         {'\0', "event-pipeline", true, "Event pipeline backend: scrappie (default), rawhash, passthrough"},
+        {'\0', "event-w1", true, "Event detection short window length (default: 3)"},
+        {'\0', "event-w2", true, "Event detection long window length (default: backend-specific)"},
+        {'\0', "event-t1", true, "Event detection threshold1 (default: backend-specific)"},
+        {'\0', "event-t2", true, "Event detection threshold2 (default: backend-specific)"},
+        {'\0', "event-peak", true, "Event detection peak height (default: backend-specific)"},
         {'\0', "fuzzy-backend", true, "Fuzzy quantizer backend (default: rh2)"},
         {'\0', "fuzzy-fine-min", true, "Fuzzy quantizer fine region min (default: -2.0)"},
         {'\0', "fuzzy-fine-max", true, "Fuzzy quantizer fine region max (default: 2.0)"},
@@ -429,7 +434,22 @@ int handle_map(const std::vector<std::string>& args) {
     if (parsed.values.count("event-pipeline")) {
         map_config.event_pipeline_config.backend = parsed.values.at("event-pipeline");
     }
-    // Default backend is "scrappie" (set in EventPipelineConfig)
+    // Event detection parameter overrides (take precedence over backend defaults)
+    if (parsed.values.count("event-w1")) {
+        map_config.event_pipeline_config.override_window_length1 = std::stoi(parsed.values.at("event-w1"));
+    }
+    if (parsed.values.count("event-w2")) {
+        map_config.event_pipeline_config.override_window_length2 = std::stoi(parsed.values.at("event-w2"));
+    }
+    if (parsed.values.count("event-t1")) {
+        map_config.event_pipeline_config.override_threshold1 = std::stof(parsed.values.at("event-t1"));
+    }
+    if (parsed.values.count("event-t2")) {
+        map_config.event_pipeline_config.override_threshold2 = std::stof(parsed.values.at("event-t2"));
+    }
+    if (parsed.values.count("event-peak")) {
+        map_config.event_pipeline_config.override_peak_height = std::stof(parsed.values.at("event-peak"));
+    }
 
     // Override seed frequency threshold if specified
     if (parsed.values.count("max-seed-freq")) {

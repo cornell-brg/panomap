@@ -9,6 +9,7 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "io/reads/read_provider.hpp"
@@ -27,6 +28,13 @@ struct EventPipelineConfig {
   float threshold1{1.4f};
   float threshold2{9.0f};
   float peak_height{0.2f};
+
+  // User overrides (if set, take precedence over backend defaults)
+  std::optional<int> override_window_length1;
+  std::optional<int> override_window_length2;
+  std::optional<float> override_threshold1;
+  std::optional<float> override_threshold2;
+  std::optional<float> override_peak_height;
 
   // Signal trimming parameters
   int trim_start{200};

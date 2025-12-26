@@ -395,6 +395,16 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
 
     // Signal processing: event detection + normalization
     batch.normalized[index] = components_.event_pipeline->process(batch.raw_reads[index]);
+
+    // Debug: log raw signal size vs event count for each read
+    // Expected: events ≈ basepairs (each event ~1bp), raw_signal ≈ events * samples_per_base (~9)
+    LOG_INFO("read=" + read.read_id +
+             " raw_samples=" + std::to_string(read.len_raw_signal) +
+             " events=" + std::to_string(batch.normalized[index].samples.size()) +
+             " ratio=" + std::to_string(
+                 batch.normalized[index].samples.empty() ? 0.0 :
+                 static_cast<double>(read.len_raw_signal) / batch.normalized[index].samples.size()));
+
     batch.fuzzy_quantized[index] = components_.fuzzy_quantizer->quantize(batch.normalized[index]);
     batch.alignment_quantized[index] = components_.alignment_quantizer->quantize(batch.normalized[index]);
     batch.seeds[index] = components_.seed_extractor->extract(batch.fuzzy_quantized[index]);

@@ -548,17 +548,21 @@ def plot_anchor_heatmap_grouped(anchors: List[Anchor], paths: List[Path], output
                     color=line_color, linewidth=line_width, zorder=10,
                     path_effects=line_halo)
 
-            # Add label inside the chain interval, centered with rounded box
+            # Add label inside the chain interval, centered with white halo
             label_x = (display_start + display_end) / 2
             if mapping.chain_score is not None:
                 label_text = f"C{idx} {mapping.chain_score}"
             else:
                 label_text = f"C{idx}"
+            # White halo layer
             ax.text(label_x, interval_y, label_text,
                     ha='center', va='center', fontsize=7, fontweight='medium',
-                    color='#92400e', zorder=12,
-                    bbox=dict(boxstyle='round,pad=0.2,rounding_size=0.3',
-                              facecolor='white', edgecolor='none'))
+                    color='white', zorder=11,
+                    path_effects=[pe.withStroke(linewidth=5, foreground='white')])
+            # Solid text on top
+            ax.text(label_x, interval_y, label_text,
+                    ha='center', va='center', fontsize=7, fontweight='medium',
+                    color='#92400e', zorder=12)
 
     # Add colorbar (only in standalone mode or if explicitly requested)
     if show_colorbar and standalone_mode:

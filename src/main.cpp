@@ -48,7 +48,7 @@ int main(int argc, char** argv) {
     const std::vector<Command> commands = {
         {"index", "Build index (dbg default, --graph=vg for vg).", handle_index},
         {"map", "Map reads against an index (stub).", handle_map},
-        {"eval", "Evaluate theoretical enrichment/depletion (stub).", handle_eval},
+        {"eval", "Evaluate mapping accuracy against ground truth.", handle_eval},
         {"mt-test", "Spawn parallel sleep tasks to test concurrency.", handle_mt_test},
     };
 

@@ -3,8 +3,9 @@
 # Generate evaluation read sets for piru testing.
 # Requires: module load squigulator
 #
-# Usage: ./scripts/generate_eval_reads.sh [tier]
-#   tier: 1-5 or "all" (default: all)
+# Usage: ./scripts/generate_eval_reads.sh [core|all]
+#   core (default): 4 read sets (R9/R10 x ideal/real, 2k length)
+#   all: All tiers (27 read sets)
 #
 set -euo pipefail
 
@@ -46,18 +47,18 @@ generate() {
         2>&1 | grep -E "^\[INFO\]|^\[main\]" || true
 }
 
-# Tier 1: Core Validation
-generate_tier1() {
-    echo "Tier 1: Core Validation"
+# Core: R9/R10 x ideal/real, 2k length (4 read sets)
+generate_core() {
+    echo "Core: R9/R10 x ideal/real, 2k length"
     generate "r9m_2k_ideal_dnorm"  "dna-r9-min"  2000 "--ideal" "" 100
     generate "r10m_2k_ideal_dnorm" "dna-r10-min" 2000 "--ideal" "" 101
     generate "r9m_2k_real_dnorm"   "dna-r9-min"  2000 ""        "" 102
     generate "r10m_2k_real_dnorm"  "dna-r10-min" 2000 ""        "" 103
 }
 
-# Tier 2: Read Length Sensitivity
-generate_tier2() {
-    echo "Tier 2: Read Length Sensitivity"
+# Extended tiers (only run with "all")
+generate_extended() {
+    echo "Extended: Read Length Sensitivity"
     generate "r9m_500_ideal_dnorm"  "dna-r9-min"  500   "--ideal" "" 110
     generate "r9m_1k_ideal_dnorm"   "dna-r9-min"  1000  "--ideal" "" 111
     generate "r9m_4k_ideal_dnorm"   "dna-r9-min"  4000  "--ideal" "" 112
@@ -68,30 +69,21 @@ generate_tier2() {
     generate "r10m_4k_ideal_dnorm"  "dna-r10-min" 4000  "--ideal" "" 117
     generate "r10m_1k_real_dnorm"   "dna-r10-min" 1000  ""        "" 118
     generate "r10m_4k_real_dnorm"   "dna-r10-min" 4000  ""        "" 119
-}
 
-# Tier 3: Noise Sensitivity
-generate_tier3() {
-    echo "Tier 3: Noise Sensitivity"
+    echo "Extended: Noise Sensitivity"
     generate "r9m_2k_amplo_dnorm"  "dna-r9-min"  2000 "--amp-noise 0.5" "" 120
     generate "r9m_2k_amphi_dnorm"  "dna-r9-min"  2000 "--amp-noise 2.0" "" 121
     generate "r10m_2k_amplo_dnorm" "dna-r10-min" 2000 "--amp-noise 0.5" "" 122
     generate "r10m_2k_amphi_dnorm" "dna-r10-min" 2000 "--amp-noise 2.0" "" 123
-}
 
-# Tier 4: Dwell/Timing Sensitivity
-generate_tier4() {
-    echo "Tier 4: Dwell/Timing Sensitivity"
+    echo "Extended: Dwell/Timing Sensitivity"
     generate "r9m_2k_ideal_dfast" "dna-r9-min" 2000 "--ideal" "--dwell-mean 6.0"  130
     generate "r9m_2k_ideal_dslow" "dna-r9-min" 2000 "--ideal" "--dwell-mean 12.0" 131
     generate "r9m_2k_ideal_dvar"  "dna-r9-min" 2000 "--ideal" "--dwell-std 8.0"   132
     generate "r9m_2k_real_dfast"  "dna-r9-min" 2000 ""        "--dwell-mean 6.0"  133
     generate "r9m_2k_real_dvar"   "dna-r9-min" 2000 ""        "--dwell-std 8.0"   134
-}
 
-# Tier 5: Prom vs Min Chemistry
-generate_tier5() {
-    echo "Tier 5: Prom vs Min Chemistry"
+    echo "Extended: Prom vs Min Chemistry"
     generate "r9p_2k_ideal_dnorm"  "dna-r9-prom"  2000 "--ideal" "" 140
     generate "r9p_2k_real_dnorm"   "dna-r9-prom"  2000 ""        "" 141
     generate "r10p_2k_ideal_dnorm" "dna-r10-prom" 2000 "--ideal" "" 142
@@ -99,26 +91,24 @@ generate_tier5() {
 }
 
 # Main
-TIER="${1:-all}"
+MODE="${1:-core}"
 
-case "$TIER" in
-    1) generate_tier1 ;;
-    2) generate_tier2 ;;
-    3) generate_tier3 ;;
-    4) generate_tier4 ;;
-    5) generate_tier5 ;;
+case "$MODE" in
+    core)
+        generate_core
+        ;;
     all)
-        generate_tier1
-        generate_tier2
-        generate_tier3
-        generate_tier4
-        generate_tier5
+        generate_core
+        generate_extended
         ;;
     *)
-        echo "Usage: $0 [1|2|3|4|5|all]" >&2
+        echo "Usage: $0 [core|all]" >&2
+        echo "  core (default): 4 read sets (R9/R10 x ideal/real)" >&2
+        echo "  all: All tiers (27 read sets)" >&2
         exit 1
         ;;
 esac
 
+echo ""
 echo "Done. Generated reads in: $OUTDIR"
 echo "Total files: $(ls -1 "$OUTDIR"/*.blow5 2>/dev/null | wc -l) read sets"
