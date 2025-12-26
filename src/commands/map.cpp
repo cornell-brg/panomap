@@ -88,7 +88,7 @@ int handle_map(const std::vector<std::string>& args) {
         {'\0', "align", false, "Enable signal-level alignment for chain evaluation"},
         {'\0', "align-backend", true, "Alignment backend: path-guided (default), radius, auto"},
         {'\0', "", false, "\nSignal Processing Options (only with --graph):"},
-        {'\0', "event-pipeline", true, "Event pipeline backend: scrappie (default), rawhash, passthrough"},
+        {'\0', "event-pipeline", true, "Event pipeline backend: rawhash (default), scrappie, passthrough"},
         {'\0', "event-w1", true, "Event detection short window length (default: 3)"},
         {'\0', "event-w2", true, "Event detection long window length (default: backend-specific)"},
         {'\0', "event-t1", true, "Event detection threshold1 (default: backend-specific)"},
@@ -107,7 +107,7 @@ int handle_map(const std::vector<std::string>& args) {
         {'\0', "", false, "\nOutput Options:"},
         {'o', "output", true, "Output file path (format auto-detected from extension: .paf, .gaf, .gam, .json)"},
         {'\0', "output-format", true, "Override output format (paf, gaf, gam, json)"},
-        {'\0', "min-secondary-ratio", true, "Min chain score ratio vs primary for secondaries (default: 0.7)"},
+        {'\0', "min-secondary-ratio", true, "Min chain score ratio vs primary for secondaries (default: 0.4)"},
     };
     config.on_error = [](const std::string&) { std::cerr << "map: invalid option\n"; };
 

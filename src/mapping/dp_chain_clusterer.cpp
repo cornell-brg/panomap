@@ -17,9 +17,11 @@ namespace {
 // Merge overlapping chains on the same path.
 // If c1 and c2 overlap (c2 at higher positions), merge them:
 // - Combined anchors = union of anchors from both chains
-// - Overlap segment score = sum of anchor scores in overlap region
-// - Merged score = c1.score + c2.score - overlap_segment_score
-void merge_overlapping_chains(std::vector<ClusterGroup>& chains, double anchor_weight) {
+// - Score uses density-based calculation:
+//   - c1_only region: c1's score/bp
+//   - overlap region: max(c1's score/bp, c2's score/bp)
+//   - c2_only region: c2's score/bp
+void merge_overlapping_chains(std::vector<ClusterGroup>& chains, double /*anchor_weight*/) {
     if (chains.size() < 2) {
         return;
     }
@@ -54,23 +56,40 @@ void merge_overlapping_chains(std::vector<ClusterGroup>& chains, double anchor_w
                 continue;
             }
 
-            // Get ref intervals
+            // Get ref intervals for both chains
+            std::int64_t c1_start = c1.anchors.front().ref_coord;
             std::int64_t c1_end = c1.anchors.back().ref_coord +
                                   static_cast<std::int64_t>(c1.anchors.back().target.length);
             std::int64_t c2_start = c2.anchors.front().ref_coord;
+            std::int64_t c2_end = c2.anchors.back().ref_coord +
+                                  static_cast<std::int64_t>(c2.anchors.back().target.length);
 
             // Check overlap: c2 starts before c1 ends
             if (c2_start < c1_end) {
-                // Calculate overlap segment score (anchors from c2 that fall within c1's range)
-                double overlap_score = 0.0;
-                for (const auto& anchor : c2.anchors) {
-                    if (anchor.ref_coord < c1_end) {
-                        overlap_score += anchor.target.length * anchor_weight;
-                    }
-                }
+                // Calculate chain lengths and score densities
+                double c1_length = static_cast<double>(c1_end - c1_start);
+                double c2_length = static_cast<double>(c2_end - c2_start);
+                double c1_density = (c1_length > 0) ? c1.cluster_score / c1_length : 0.0;
+                double c2_density = (c2_length > 0) ? c2.cluster_score / c2_length : 0.0;
 
-                // Merge: combine anchors, adjust score
-                double merged_score = c1.cluster_score + c2.cluster_score - overlap_score;
+                // Calculate region lengths
+                // c1_only: from c1_start to c2_start (before overlap)
+                // overlap: from c2_start to c1_end
+                // c2_only: from c1_end to c2_end (after overlap)
+                double c1_only_length = static_cast<double>(c2_start - c1_start);
+                double overlap_length = static_cast<double>(c1_end - c2_start);
+                double c2_only_length = static_cast<double>(c2_end - c1_end);
+
+                // Clamp negative lengths to 0 (edge cases)
+                c1_only_length = std::max(0.0, c1_only_length);
+                overlap_length = std::max(0.0, overlap_length);
+                c2_only_length = std::max(0.0, c2_only_length);
+
+                // Merged score: use each region's appropriate density
+                // Overlap uses the higher density (better chain's score/bp)
+                double merged_score = c1_only_length * c1_density +
+                                      overlap_length * std::max(c1_density, c2_density) +
+                                      c2_only_length * c2_density;
 
                 // Combine and sort anchors
                 std::vector<SeedAnchor> merged_anchors;

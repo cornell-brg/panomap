@@ -16,5 +16,11 @@
 /CTestTestfile.cmake
 /compile_commands.json
 
-# Generated evaluation reads (recreate with scripts/generate_eval_reads.sh)
+# Generated evaluation data (recreate with scripts/)
 /tests/data/HLA/eval_reads/
+/tests/data/HLA/eval_results/
+/tests/data/HLA/eval_index/
+
+
+# Python cache
+__pycache__/
