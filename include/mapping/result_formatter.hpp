@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "index/aln_graph.hpp"
+#include "index/signal_store.hpp"
 #include "io/results/result.hpp"
 #include "mapping/map_result.hpp"
 
@@ -27,6 +28,7 @@ struct ResultFormatterConfig {
 class ResultFormatter {
  public:
   explicit ResultFormatter(const index::AlnGraph& graph,
+                           const index::SignalStore* signal_store = nullptr,
                            ResultFormatterConfig config = {});
 
   /// Format mappings to AlignmentResult vector.
@@ -57,6 +59,7 @@ class ResultFormatter {
   int estimateMapQ(double primary_score, double secondary_score) const;
 
   const index::AlnGraph& graph_;
+  const index::SignalStore* signal_store_;
   ResultFormatterConfig config_;
 
   // Cached path lengths (computed on first access).
