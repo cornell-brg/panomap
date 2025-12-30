@@ -62,24 +62,32 @@ std::unordered_map<std::string, std::size_t> PathGuidedTransform::walkPathsAndAd
       }
       const io::ImportedGraphNode& imported_node = *imported_it->second;
 
-      // Determine successor context
+      // Determine successor context by walking multiple nodes if needed
       std::string context;
 
-      if (i + 1 < path.steps.size()) {
-        // Get successor from next step
-        const auto& succ_step = path.steps[i + 1];
+      // Gather k-1 context by walking subsequent nodes until we have enough
+      std::size_t j = i + 1;
+      while (context.size() < k_minus_1 && j < path.steps.size()) {
+        const auto& succ_step = path.steps[j];
         const auto succ_imported_it = imported_node_map.find(succ_step.segment_id);
 
-        if (succ_imported_it != imported_node_map.end()) {
-          const io::ImportedGraphNode& succ_imported = *succ_imported_it->second;
-          // Context comes from the beginning of successor sequence
-          // Handle orientation: if successor is reverse, take context from its revcomp
-          std::string succ_seq = succ_step.is_reverse ? revcomp(succ_imported.sequence)
-                                                       : succ_imported.sequence;
-          context = getKMinus1Context(succ_seq, k_minus_1);
+        if (succ_imported_it == imported_node_map.end()) {
+          break;  // Can't find node, stop gathering
         }
+
+        const io::ImportedGraphNode& succ_imported = *succ_imported_it->second;
+        // Handle orientation: if successor is reverse, take context from its revcomp
+        std::string succ_seq = succ_step.is_reverse ? revcomp(succ_imported.sequence)
+                                                     : succ_imported.sequence;
+
+        // How many more bases do we need?
+        std::size_t need = k_minus_1 - context.size();
+        // Take up to 'need' bases from this node
+        context += succ_seq.substr(0, std::min(need, succ_seq.size()));
+
+        ++j;  // Move to next node in path
       }
-      // If no successor (path end), context remains empty
+      // context now has up to k-1 bases (or less if path ended early)
 
       // Create variant key: (original_id, is_reverse, context)
       std::string variant_key = node_id + "|" +
@@ -153,23 +161,36 @@ std::unordered_map<std::string, std::size_t> PathGuidedTransform::walkPathsAndAd
       }
       const io::ImportedGraphNode& imported_node = *imported_it->second;
 
-      // Determine successor context (from next step in reverse walk)
+      // Determine successor context by walking multiple nodes if needed (reverse direction)
       std::string context;
 
+      // Gather k-1 context by walking predecessor nodes (successors in reverse path)
       if (i > 0) {
-        // Get predecessor in original path (successor in reverse path)
-        const auto& succ_step = path.steps[i - 1];
-        const auto succ_imported_it = imported_node_map.find(succ_step.segment_id);
+        std::size_t j = i - 1;
+        while (context.size() < k_minus_1) {
+          const auto& succ_step = path.steps[j];
+          const auto succ_imported_it = imported_node_map.find(succ_step.segment_id);
 
-        if (succ_imported_it != imported_node_map.end()) {
+          if (succ_imported_it == imported_node_map.end()) {
+            break;  // Can't find node, stop gathering
+          }
+
           const io::ImportedGraphNode& succ_imported = *succ_imported_it->second;
           // Flip orientation for successor as well
           bool succ_is_reverse = !succ_step.is_reverse;
           std::string succ_seq = succ_is_reverse ? revcomp(succ_imported.sequence)
                                                    : succ_imported.sequence;
-          context = getKMinus1Context(succ_seq, k_minus_1);
+
+          // How many more bases do we need?
+          std::size_t need = k_minus_1 - context.size();
+          // Take up to 'need' bases from this node
+          context += succ_seq.substr(0, std::min(need, succ_seq.size()));
+
+          if (j == 0) break;  // Reached beginning of path
+          --j;  // Move to previous node in original path (next in reverse)
         }
       }
+      // context now has up to k-1 bases (or less if path ended early)
 
       // Create variant key
       std::string variant_key = node_id + "|" +
