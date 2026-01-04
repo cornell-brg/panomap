@@ -22,10 +22,10 @@ struct DPChainClustererConfig {
     std::size_t max_chains{10};              // Max number of chains to extract (multi-mapping)
 
     // Scoring parameters
-    double anchor_weight{1.0};               // Weight per anchor length
+    double anchor_weight{1.5};               // Weight per anchor length
     double gap_penalty_factor{0.1};          // Penalty per unit gap distance
     double diag_penalty_factor{0.5};         // Penalty per unit diagonal deviation
-    double overlap_penalty_factor{2.0};      // Penalty per unit overlap
+    double overlap_penalty_factor{0.4};      // Penalty per unit overlap
 
     // Post-processing
     bool merge_chains{true};                 // Merge overlapping chains on same path
