@@ -12,17 +12,17 @@ namespace piru::mapping {
 
 // Configuration for anchor merging.
 struct AnchorMergerConfig {
-    // Maximum gap (in samples/bases) to allow merging (default: 0 for exact adjacency).
-    std::size_t merge_tolerance{0};
+    // Currently no parameters needed - merge if overlap, don't merge if gap.
 };
 
-// Merge adjacent/overlapping anchors on the same path.
+// Merge overlapping anchors on the same path.
 //
 // Algorithm:
 // 1. Group anchors by path_id
 // 2. Within each path, sort by (ref_coord, query_pos)
-// 3. Merge consecutive anchors if query gap ≤ tolerance AND ref gap ≤ tolerance
-// 4. Update length to cover merged span
+// 3. Merge consecutive anchors if they overlap (B starts before A ends)
+// 4. Don't merge if there's a gap (B starts after A ends)
+// 5. Update length to cover merged span
 //
 // Benefits:
 // - Reduces anchor count for DP chaining

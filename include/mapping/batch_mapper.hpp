@@ -71,6 +71,9 @@ struct BatchMapperConfig {
     std::string dump_anchors_dir{};  // Dump anchors per read
     std::string dump_chains_dir{};   // Dump chains per read
 
+    // Anchor merging (disable for debugging/heatmap comparison)
+    bool enable_anchor_merge{true};
+
     // Result formatting configuration
     ResultFormatterConfig formatter_config{};
 };

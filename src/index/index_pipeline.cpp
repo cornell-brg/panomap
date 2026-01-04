@@ -189,7 +189,9 @@ IndexPipelineResult run_index_pipeline(
     SeedBuildConfig seed_cfg;
     seed_cfg.keep_least_frequent_fraction = config.seed_filter;
 
-    auto seed_store = buildSeedStore(squiggle_result.fuzzy_signals, *extractor, seed_cfg);
+    // Pass nullptr for node-based seeding, or &aln_graph for path-guided seeding
+    const AlnGraph* graph_for_seeding = (config.seed_mode == "path") ? &aln_graph : nullptr;
+    auto seed_store = buildSeedStore(graph_for_seeding, squiggle_result.fuzzy_signals, *extractor, seed_cfg);
 
     LOG_INFO("[4/4] indexed: " + std::to_string(seed_store.size()) +
              " unique seeds (max_freq=" + std::to_string(seed_store.max_hash_frequency()) + ")");

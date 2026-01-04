@@ -52,6 +52,7 @@ int handle_index(const std::vector<std::string>& args) {
         {'\0', "seed-k", true, "Seed k-mer size (default: 6)"},
         {'\0', "seed-stride", true, "Seed stride (default: 1)"},
         {'\0', "seed-filter", true, "Keep least frequent seed fraction (default: 0.9)"},
+        {'\0', "seed-mode", true, "Seeding mode: node (default), path"},
         {'\0', "", false, "\nAlignment Quantization Options:"},
         {'\0', "aq-backend", true, "Backend: int16 (default), int8, passthrough"},
         {'\0', "aq-scale", true, "Manual scale override (expert)"},
@@ -156,6 +157,9 @@ int handle_index(const std::vector<std::string>& args) {
     const double seed_filter = parsed.values.count("seed-filter")
                                    ? std::stod(parsed.values.at("seed-filter"))
                                    : defaults.seed_filter;
+    const std::string seed_mode = parsed.values.count("seed-mode")
+                                      ? parsed.values.at("seed-mode")
+                                      : defaults.seed_mode;
 
     std::string output_dir = graph_path + ".piru";
     if (parsed.values.count("output")) {
@@ -166,7 +170,7 @@ int handle_index(const std::vector<std::string>& args) {
              std::to_string(graph_k) + ")");
     LOG_INFO("model: " + model->name() + " (k=" + std::to_string(pore_k) + ")");
     LOG_INFO("seeds: k=" + std::to_string(seed_k) + ", stride=" + std::to_string(seed_stride) +
-             ", filter=" + std::to_string(seed_filter));
+             ", filter=" + std::to_string(seed_filter) + ", mode=" + seed_mode);
     LOG_INFO("output: " + output_dir);
 
     // -------------------------------------------------------------------------
@@ -180,6 +184,7 @@ int handle_index(const std::vector<std::string>& args) {
     index_config.seed_k = seed_k;
     index_config.seed_stride = seed_stride;
     index_config.seed_filter = seed_filter;
+    index_config.seed_mode = seed_mode;
     index_config.fuzzy_quantizer = "rh2";
     index_config.alignment_quantizer =
         parsed.values.count("aq-backend") ? parsed.values.at("aq-backend") : "int16";

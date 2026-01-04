@@ -101,9 +101,11 @@ int handle_map(const std::vector<std::string>& args) {
         {'\0', "fuzzy-bins", true, "Fuzzy quantizer bin count (default: 10)"},
         {'\0', "seed-k", true, "Seed extractor k-mer size (default: 6)"},
         {'\0', "seed-stride", true, "Seed extractor stride (default: 1)"},
+        {'\0', "seed-mode", true, "Seeding mode: node (default), path"},
         {'\0', "", false, "\nDebug Options:"},
         {'\0', "dump-anchors", true, "Dump anchors to directory (one file per read)"},
         {'\0', "dump-chains", true, "Dump chains to directory (one file per read)"},
+        {'\0', "no-anchor-merge", false, "Disable anchor merging (for heatmap debugging)"},
         {'\0', "", false, "\nOutput Options:"},
         {'o', "output", true, "Output file path (format auto-detected from extension: .paf, .gaf, .gam, .json)"},
         {'\0', "output-format", true, "Override output format (paf, gaf, gam, json)"},
@@ -244,6 +246,7 @@ int handle_map(const std::vector<std::string>& args) {
 
         // Warn if user tries to override seed/fuzzy params with pre-built index
         if (parsed.values.count("seed-k") || parsed.values.count("seed-stride") ||
+            parsed.values.count("seed-mode") ||
             parsed.values.count("fuzzy-backend") || parsed.values.count("fuzzy-fine-min") ||
             parsed.values.count("fuzzy-fine-max") || parsed.values.count("fuzzy-fine-range")) {
             LOG_WARN("--seed-* and --fuzzy-* flags are ignored with --index (use --graph for experimentation)");
@@ -320,6 +323,10 @@ int handle_map(const std::vector<std::string>& args) {
         if (parsed.values.count("seed-stride")) {
             index_config.seed_stride = std::stoull(parsed.values.at("seed-stride"));
             LOG_INFO("Using seed stride=" + std::to_string(index_config.seed_stride) + " for indexing");
+        }
+        if (parsed.values.count("seed-mode")) {
+            index_config.seed_mode = parsed.values.at("seed-mode");
+            LOG_INFO("Using seed mode=" + index_config.seed_mode + " for indexing");
         }
         if (parsed.values.count("fuzzy-backend")) {
             index_config.fuzzy_quantizer = parsed.values.at("fuzzy-backend");
@@ -544,6 +551,10 @@ int handle_map(const std::vector<std::string>& args) {
         map_config.dump_chains_dir = parsed.values.at("dump-chains");
         std::filesystem::create_directories(map_config.dump_chains_dir);
         LOG_INFO("Dumping chains to: " + map_config.dump_chains_dir);
+    }
+    if (parsed.values.count("no-anchor-merge")) {
+        map_config.enable_anchor_merge = false;
+        LOG_INFO("Anchor merging disabled");
     }
 
     // Configure result formatter

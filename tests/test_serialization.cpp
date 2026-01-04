@@ -267,7 +267,7 @@ TEST_CASE("buildSeedStore records extractor metadata") {
     piru::index::SeedBuildConfig build_cfg;
     build_cfg.keep_least_frequent_fraction = 0.5;
 
-    auto store = piru::index::buildSeedStore(signals, *extractor, build_cfg);
+    auto store = piru::index::buildSeedStore(nullptr, signals, *extractor, build_cfg);
 
     CHECK(store.extractor_name() == "kmer");
     const auto& params = store.params();

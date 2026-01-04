@@ -71,6 +71,14 @@ struct IndexPipelineConfig {
     // Seed Extraction Parameters
     // -------------------------------------------------------------------------
 
+    // Seed extraction mode: "node" or "path"
+    // - node: Extract seeds from each node independently (current behavior)
+    //         Seeds cannot cross node boundaries
+    // - path: Walk paths and extract seeds that can cross node boundaries
+    //         Better coverage for graphs with short nodes (e.g., VG-built)
+    //         Deduplicates seeds from shared regions across paths
+    std::string seed_mode{"node"};
+
     // Seed k-mer size (number of fuzzy tokens hashed together)
     // - Larger k = more specific seeds, fewer false matches
     // - Smaller k = more sensitive but noisier matches

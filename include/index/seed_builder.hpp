@@ -16,6 +16,7 @@
 
 #include <vector>
 
+#include "index/aln_graph.hpp"
 #include "index/seed_store.hpp"
 #include "signal/seed_extractors/seed_extractor.hpp"
 #include "signal/signal_types.hpp"
@@ -31,7 +32,11 @@ struct SeedBuildConfig {
 
 // Extract seeds from fuzzy-quantized signals and populate a SeedStore.
 // Computes frequency statistics and optionally filters repetitive seeds.
-HashSeedStore buildSeedStore(const std::vector<piru::signal::FuzzyQuantizedSignal>& signals,
+//
+// If graph is nullptr: node-based seeding (current behavior, seeds per node).
+// If graph is non-null: path-guided seeding (walks paths, seeds can cross node boundaries).
+HashSeedStore buildSeedStore(const AlnGraph* graph,
+                             const std::vector<piru::signal::FuzzyQuantizedSignal>& signals,
                              const piru::signal::SeedExtractor& extractor,
                              const SeedBuildConfig& config = SeedBuildConfig{});
 

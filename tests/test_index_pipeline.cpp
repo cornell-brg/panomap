@@ -212,7 +212,7 @@ TEST_CASE("seed builder computes frequencies and threshold") {
     index::SeedBuildConfig build_cfg;
     build_cfg.keep_least_frequent_fraction = 0.5;  // keep up to 50th percentile
 
-    const auto store = index::buildSeedStore(signals, *extractor, build_cfg);
+    const auto store = index::buildSeedStore(nullptr, signals, *extractor, build_cfg);
 
     CHECK(store.size() == 3);                // hashes for 1, 2, 3
     CHECK(store.max_hash_frequency() == 4);  // hash(1) seen 4 times
@@ -346,7 +346,7 @@ TEST_CASE("End-to-end DBG indexing pipeline") {
     seed_cfg.keep_least_frequent_fraction = 1.0;  // Keep all seeds for testing
 
     const auto seed_store =
-        index::buildSeedStore(squiggle_result.fuzzy_signals, *extractor, seed_cfg);
+        index::buildSeedStore(nullptr, squiggle_result.fuzzy_signals, *extractor, seed_cfg);
 
     // Verify seeds were extracted
     // Nodes are ~52bp, after trimming (graph_k - pore_k) = 6bp: 52 - 6 = 46bp

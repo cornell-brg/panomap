@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -17,6 +18,15 @@ struct SeedHit {
     std::size_t node_id{0};
     std::size_t offset{0};
     std::size_t length{0};     // Seed coverage length (from Seed.length)
+
+    // For sorting and deduplication (ignore length for uniqueness)
+    bool operator<(const SeedHit& other) const {
+        if (node_id != other.node_id) return node_id < other.node_id;
+        return offset < other.offset;
+    }
+    bool operator==(const SeedHit& other) const {
+        return node_id == other.node_id && offset == other.offset;
+    }
 };
 
 class SeedStore {
@@ -63,6 +73,16 @@ public:
 
     const std::unordered_map<std::uint64_t, std::vector<SeedHit>>& data() const { return store_; }
     std::unordered_map<std::uint64_t, std::vector<SeedHit>>& mutableData() { return store_; }
+
+    // Remove duplicate (node_id, offset) entries from each hit vector.
+    // Used after path-guided seeding where shared regions produce duplicates.
+    void deduplicate() {
+        for (auto& [hash, hits] : store_) {
+            if (hits.size() <= 1) continue;
+            std::sort(hits.begin(), hits.end());
+            hits.erase(std::unique(hits.begin(), hits.end()), hits.end());
+        }
+    }
 
 private:
     std::unordered_map<std::uint64_t, std::vector<SeedHit>> store_;

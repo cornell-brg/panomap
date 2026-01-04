@@ -454,7 +454,16 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
     auto anchors = components_.expander->expand(batch.seed_hits[index]);
 
     // Merge adjacent/overlapping anchors on same path (optional optimization)
-    anchors = AnchorMerger::merge(anchors, AnchorMergerConfig{});
+    if (config_.enable_anchor_merge) {
+        const auto pre_merge_count = anchors.size();
+        anchors = AnchorMerger::merge(anchors, AnchorMergerConfig{});
+        LOG_INFO("Anchor merge: " + std::to_string(pre_merge_count) + " -> " +
+                  std::to_string(anchors.size()) + " (" +
+                  std::to_string(pre_merge_count > 0
+                                     ? 100 * (pre_merge_count - anchors.size()) / pre_merge_count
+                                     : 0) +
+                  "% reduction)");
+    }
 
     // Dump anchors if --dump-anchors is set
     static std::atomic<std::size_t> anchor_dump_counter{0};

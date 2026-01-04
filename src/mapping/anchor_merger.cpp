@@ -20,63 +20,43 @@ struct AnchorComparator {
     }
 };
 
-// Check if two anchors can be merged based on tolerance.
-bool can_merge(const Anchor& a, const Anchor& b, std::size_t tolerance) {
-    // Compute gap between END of a and START of b
-    const std::int64_t a_query_end = static_cast<std::int64_t>(a.query_pos + a.length);
-    const std::int64_t a_ref_end = a.ref_coord + static_cast<std::int64_t>(a.length);
-
-    const std::int64_t query_gap_signed = static_cast<std::int64_t>(b.query_pos) - a_query_end;
-    const std::int64_t ref_gap_signed = b.ref_coord - a_ref_end;
-
-    // Reject merging if query position goes backwards (large negative gap)
-    // Allow small overlaps (within tolerance) but not large backward jumps
-    if (query_gap_signed < -static_cast<std::int64_t>(tolerance)) {
-        return false;
-    }
-    if (ref_gap_signed < -static_cast<std::int64_t>(tolerance)) {
-        return false;
+// Check if two anchors can be merged.
+// Rules:
+// 1. Must be on same diagonal (exact matches have equal query/ref spans)
+// 2. Must overlap (no gap between them)
+bool can_merge(const Anchor& a, const Anchor& b) {
+    // Must be on same diagonal (diagonal = ref_coord - query_pos)
+    const std::int64_t a_diag = a.ref_coord - static_cast<std::int64_t>(a.query_pos);
+    const std::int64_t b_diag = b.ref_coord - static_cast<std::int64_t>(b.query_pos);
+    if (a_diag != b_diag) {
+        return false;  // Different diagonals = different alignments, don't merge
     }
 
-    // Compute absolute gap (0 for overlaps within tolerance)
-    const std::size_t query_gap = (query_gap_signed > 0) ?
-                                  static_cast<std::size_t>(query_gap_signed) : 0;
-    const std::size_t ref_gap = (ref_gap_signed > 0) ?
-                                static_cast<std::size_t>(ref_gap_signed) : 0;
-
-    // Allow merging if forward gaps are within tolerance
-    return query_gap <= tolerance && ref_gap <= tolerance;
+    // On same diagonal, just check if they overlap in query (ref will match)
+    const std::size_t a_query_end = a.query_pos + a.length;
+    return b.query_pos <= a_query_end;
 }
 
 // Merge anchor b into anchor a (updates a's length to cover both).
+// Precondition: a and b are on the same diagonal, so query_span == ref_span.
 void merge_into(Anchor& a, const Anchor& b) {
-    // Calculate the end positions
+    // Since they're on the same diagonal, we only need to track query positions
+    // (ref positions will be consistent due to same diagonal)
     const std::size_t a_query_end = a.query_pos + a.length;
     const std::size_t b_query_end = b.query_pos + b.length;
-    const std::int64_t a_ref_end = a.ref_coord + static_cast<std::int64_t>(a.length);
-    const std::int64_t b_ref_end = b.ref_coord + static_cast<std::int64_t>(b.length);
 
-    // Extend span to cover both anchors
-    const std::size_t merged_query_start = std::min(a.query_pos, b.query_pos);
+    // Extend to cover both (a starts first since sorted by ref_coord)
     const std::size_t merged_query_end = std::max(a_query_end, b_query_end);
-    const std::int64_t merged_ref_start = std::min(a.ref_coord, b.ref_coord);
-    const std::int64_t merged_ref_end = std::max(a_ref_end, b_ref_end);
+    a.length = merged_query_end - a.query_pos;
 
-    // Update anchor to represent merged span
-    // Use the maximum span needed on either query or reference dimension
-    a.query_pos = merged_query_start;
-    a.ref_coord = merged_ref_start;
-    a.length = std::max(merged_query_end - merged_query_start,
-                        static_cast<std::size_t>(merged_ref_end - merged_ref_start));
-
-    // Keep other fields from a (path_id, node_id, node_offset from first anchor)
+    // Keep a's query_pos, ref_coord, path_id, node_id, node_offset (first anchor)
 }
 
 }  // namespace
 
 std::vector<Anchor> AnchorMerger::merge(
     const std::vector<Anchor>& anchors,
-    const AnchorMergerConfig& config) {
+    const AnchorMergerConfig& /*config*/) {
 
     if (anchors.empty()) {
         return {};
@@ -102,7 +82,7 @@ std::vector<Anchor> AnchorMerger::merge(
         for (std::size_t i = 1; i < path_anchors.size(); ++i) {
             const auto& next = path_anchors[i];
 
-            if (can_merge(current, next, config.merge_tolerance)) {
+            if (can_merge(current, next)) {
                 // Merge next into current
                 merge_into(current, next);
             } else {
