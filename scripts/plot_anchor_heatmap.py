@@ -657,9 +657,156 @@ def print_summary_statistics(anchors: List[Anchor], paths: List[Path]):
     print()
 
 
+def plot_anchor_lines_grouped(anchors: List[Anchor], paths: List[Path], output_file: str,
+                               label: str = "", ax: Optional[plt.Axes] = None,
+                               fig: Optional[plt.Figure] = None, title_prefix: str = "",
+                               paf_mappings: Optional[List[PafMapping]] = None,
+                               min_opacity: float = 0.3, max_opacity: float = 0.95):
+    """Plot anchor coverage as horizontal lines on path bars.
+
+    Same layout as heatmap (Y=paths, X=ref coord) but draws green horizontal lines
+    for each anchor's coverage, with opacity based on anchor length.
+    """
+    import matplotlib.patheffects as pe
+
+    groups = group_paths_by_haplotype(paths)
+    if not groups:
+        print("No paths to plot")
+        return
+
+    path_by_name = {p.name: p for p in paths}
+    max_length = max(g.length for g in groups)
+    standalone_mode = (ax is None)
+
+    if standalone_mode:
+        fig_height = max(6, len(groups) * 0.8 + 2)
+        fig, ax = plt.subplots(figsize=(16, fig_height))
+
+    lengths = [a.length for a in anchors]
+    min_len = min(lengths) if lengths else 1
+    max_len = max(lengths) if lengths else 1
+    len_range = max_len - min_len if max_len > min_len else 1
+
+    row_info = []
+    for group in groups:
+        row_info.append((group, "+"))
+        row_info.append((group, "-"))
+
+    bar_height = 0.35
+    group_spacing = 0.3
+    line_color = (0.2, 0.7, 0.3)  # Green
+
+    y_positions = []
+    y_pos = 0
+
+    for group_idx, group in enumerate(groups):
+        y_forward = y_pos
+        y_positions.append((y_forward, group, "+"))
+        ax.add_patch(plt.Rectangle((0, y_forward), group.length, bar_height,
+                                    facecolor='white', edgecolor='gray', linewidth=0.5))
+        ax.plot([group.length, group.length], [y_forward, y_forward + bar_height],
+                color='dimgray', linewidth=1, linestyle='-', zorder=2)
+
+        y_reverse = y_forward + bar_height
+        y_positions.append((y_reverse, group, "-"))
+        ax.add_patch(plt.Rectangle((0, y_reverse), group.length, bar_height,
+                                    facecolor='white', edgecolor='gray', linewidth=0.5))
+        ax.plot([group.length, group.length], [y_reverse, y_reverse + bar_height],
+                color='dimgray', linewidth=1, linestyle='-', zorder=2)
+
+        label_y = y_forward + bar_height
+        if ':' in group.base_name:
+            parts = group.base_name.split(':', 1)
+            label_text = f"{parts[0]}\n{parts[1]}"
+        else:
+            label_text = group.base_name
+        ax.text(-max_length * 0.01, label_y, label_text,
+                va='center', ha='right', fontsize=9, fontweight='normal', linespacing=0.9)
+        ax.text(-max_length * 0.005, y_forward + bar_height / 2,
+                '+', va='center', ha='right', fontsize=8, color='green')
+        ax.text(-max_length * 0.005, y_reverse + bar_height / 2,
+                '-', va='center', ha='right', fontsize=8, color='red')
+        ax.text(group.length + max_length * 0.01, label_y,
+                f'{group.length:,} bp', va='center', ha='left', fontsize=9,
+                color='dimgray', fontstyle='italic')
+
+        y_pos = y_reverse + bar_height + group_spacing
+
+    # Draw anchor rectangles (full bar height)
+    for anchor in anchors:
+        path = path_by_name.get(anchor.path_name)
+        if not path:
+            continue
+        for row_idx, (group, strand) in enumerate(row_info):
+            if path.strand == strand and path.base_name == group.base_name:
+                y_base = y_positions[row_idx][0]
+                if strand == "-":
+                    path_length = group.length
+                    anchor_start = path_length - (anchor.ref_coord + anchor.length)
+                    anchor_end = path_length - anchor.ref_coord
+                else:
+                    anchor_start = anchor.ref_coord
+                    anchor_end = anchor.ref_coord + anchor.length
+                alpha = min_opacity + (anchor.length - min_len) / len_range * (max_opacity - min_opacity)
+                anchor_width = anchor_end - anchor_start
+                ax.add_patch(plt.Rectangle((anchor_start, y_base), anchor_width, bar_height,
+                                           facecolor=(*line_color, alpha), edgecolor='none', zorder=3))
+                break
+
+    # Draw PAF mapping intervals if provided
+    if paf_mappings:
+        path_to_y: Dict[Tuple[str, str], float] = {}
+        for y, group, strand in y_positions:
+            path_to_y[(group.base_name, strand)] = y
+        for idx, mapping in enumerate(paf_mappings, start=1):
+            y = path_to_y.get((mapping.target_name, mapping.strand))
+            if y is None:
+                continue
+            interval_y = y + bar_height / 2
+            line_halo = [pe.withStroke(linewidth=3.5, foreground='white', alpha=0.85)]
+            ax.plot([mapping.target_start, mapping.target_end], [interval_y, interval_y],
+                    color='#d97706', linewidth=1.5, solid_capstyle='butt', zorder=10, path_effects=line_halo)
+            ax.plot([mapping.target_start, mapping.target_start], [interval_y - 0.03, interval_y + 0.03],
+                    color='#d97706', linewidth=1.5, zorder=10, path_effects=line_halo)
+            ax.plot([mapping.target_end, mapping.target_end], [interval_y - 0.03, interval_y + 0.03],
+                    color='#d97706', linewidth=1.5, zorder=10, path_effects=line_halo)
+            label_x = (mapping.target_start + mapping.target_end) / 2
+            label_text = f"C{idx}" + (f" {mapping.chain_score}" if mapping.chain_score else "")
+            ax.text(label_x, interval_y, label_text, ha='center', va='center', fontsize=7,
+                    fontweight='medium', color='#92400e', zorder=12,
+                    path_effects=[pe.withStroke(linewidth=4, foreground='white')])
+
+    ax.set_xlabel("Reference Coordinate (bp)", fontsize=11 if standalone_mode else 9)
+    ax.set_ylabel("Haplotype Path", fontsize=11 if standalone_mode else 9)
+    read_id = anchors[0].read_id if anchors else "No anchors"
+    if standalone_mode:
+        ax.set_title(f"Anchor Coverage: {read_id}\n(Line opacity ∝ length: {min_len}-{max_len})",
+                     fontsize=12, pad=15)
+    else:
+        ax.set_title(f"{title_prefix}{read_id}", fontsize=10, pad=8)
+
+    ax.set_xlim(-max_length * 0.15, max_length * 1.12)
+    ax.set_ylim(y_pos - group_spacing + 0.5, -0.6)
+    ax.set_yticks([])
+    ax.set_facecolor('white')
+    if fig is not None:
+        fig.patch.set_facecolor('white')
+
+    if label and standalone_mode and fig is not None:
+        fig.text(0.01, 0.99, label, fontsize=11, fontstyle='italic',
+                 color='goldenrod', va='top', ha='left')
+
+    if standalone_mode:
+        plt.tight_layout()
+        plt.savefig(output_file, dpi=150, bbox_inches='tight')
+        plt.close(fig)
+        print(f"Saved anchor lines plot to {output_file}")
+
+
 def plot_combined_heatmaps(anchor_files: List[Tuple[str, str]], output_file: str,
                            window_size: int, stride: int, label: str = "",
-                           paf_mappings_by_read: Optional[Dict[str, List[PafMapping]]] = None):
+                           paf_mappings_by_read: Optional[Dict[str, List[PafMapping]]] = None,
+                           mode: str = "density"):
     """Plot all reads as subplots in a single figure, sorted by read name.
 
     Args:
@@ -669,6 +816,7 @@ def plot_combined_heatmaps(anchor_files: List[Tuple[str, str]], output_file: str
         stride: Sliding window stride in bp
         label: Custom label text to display
         paf_mappings_by_read: Optional dict mapping read_id to list of PAF mappings
+        mode: Visualization mode ('density' or 'lines')
     """
     # First pass: parse all files to get read_id for sorting
     read_data = []  # List of (read_id, paths, anchors, filepath)
@@ -724,21 +872,32 @@ def plot_combined_heatmaps(anchor_files: List[Tuple[str, str]], output_file: str
             read_paf_mappings = paf_mappings_by_read.get(read_id)
         print(f"  Plotting [{idx+1}/{n_reads}] {read_id}..." +
               (f" ({len(read_paf_mappings)} PAF mappings)" if read_paf_mappings else ""))
-        plot_anchor_heatmap_grouped(
-            anchors, paths, output_file,
-            window_size=window_size, stride=stride,
-            ax=ax, fig=fig, show_colorbar=False,
-            title_prefix="",
-            paf_mappings=read_paf_mappings
-        )
+        if mode == "lines":
+            plot_anchor_lines_grouped(
+                anchors, paths, output_file,
+                ax=ax, fig=fig, title_prefix="",
+                paf_mappings=read_paf_mappings
+            )
+        else:
+            plot_anchor_heatmap_grouped(
+                anchors, paths, output_file,
+                window_size=window_size, stride=stride,
+                ax=ax, fig=fig, show_colorbar=False,
+                title_prefix="",
+                paf_mappings=read_paf_mappings
+            )
 
     # Hide empty subplots
     for idx in range(n_reads, len(axes)):
         axes[idx].set_visible(False)
 
     # Add overall title
-    fig.suptitle(f"Anchor Density Heatmaps (Window: {window_size} bp, Stride: {stride} bp)",
-                 fontsize=14, fontweight='bold', y=0.99)
+    if mode == "lines":
+        fig.suptitle("Anchor Coverage (line opacity ∝ length)",
+                     fontsize=14, fontweight='bold', y=0.99)
+    else:
+        fig.suptitle(f"Anchor Density Heatmaps (Window: {window_size} bp, Stride: {stride} bp)",
+                     fontsize=14, fontweight='bold', y=0.99)
 
     # Add custom label if provided
     if label:
@@ -759,7 +918,8 @@ def plot_combined_heatmaps(anchor_files: List[Tuple[str, str]], output_file: str
 
 def process_single_file(filepath: str, output_file: str, window_size: int, stride: int,
                          label: str = "",
-                         paf_mappings_by_read: Optional[Dict[str, List[PafMapping]]] = None):
+                         paf_mappings_by_read: Optional[Dict[str, List[PafMapping]]] = None,
+                         mode: str = "density"):
     """Process a single anchor dump file and generate heatmap."""
     print(f"Loading anchor dump from {filepath}...")
     paths, anchors = parse_anchor_dump(filepath)
@@ -784,11 +944,16 @@ def process_single_file(filepath: str, output_file: str, window_size: int, strid
     groups = group_paths_by_haplotype(paths)
     print(f"  Haplotypes: {len(groups)}")
 
-    # Plot heatmap
-    print(f"  Generating heatmap (window: {window_size} bp, stride: {stride} bp)...")
-    plot_anchor_heatmap_grouped(anchors, paths, output_file,
-                                 window_size=window_size, stride=stride, label=label,
-                                 paf_mappings=paf_mappings)
+    # Plot based on mode
+    if mode == "lines":
+        print(f"  Generating anchor lines plot...")
+        plot_anchor_lines_grouped(anchors, paths, output_file, label=label,
+                                   paf_mappings=paf_mappings)
+    else:
+        print(f"  Generating heatmap (window: {window_size} bp, stride: {stride} bp)...")
+        plot_anchor_heatmap_grouped(anchors, paths, output_file,
+                                     window_size=window_size, stride=stride, label=label,
+                                     paf_mappings=paf_mappings)
 
     # Print summary statistics
     print_summary_statistics(anchors, paths)
@@ -870,6 +1035,14 @@ Examples:
              "on the heatmap showing mapping locations. Multiple mappings are numbered (1, 2, 3...)."
     )
 
+    parser.add_argument(
+        "--mode", "-m",
+        choices=["density", "lines"],
+        default="density",
+        help="Visualization mode: 'density' (default) shows binned heatmap, "
+             "'lines' draws green horizontal lines for each anchor's coverage with opacity based on length"
+    )
+
     args = parser.parse_args()
 
     # Parse PAF file if provided
@@ -905,7 +1078,8 @@ Examples:
                 success = plot_combined_heatmaps(
                     anchor_files, output_file,
                     args.window_size, args.stride, args.label,
-                    paf_mappings_by_read=paf_mappings_by_read if paf_mappings_by_read else None
+                    paf_mappings_by_read=paf_mappings_by_read if paf_mappings_by_read else None,
+                    mode=args.mode
                 )
                 return 0 if success else 1
             else:
@@ -915,7 +1089,8 @@ Examples:
                     output_file = os.path.join(args.input, f"read_{read_num}_heatmap.png")
                     print(f"\n[{int(read_num)+1}/{len(anchor_files)}] Processing read_{read_num}...")
                     if process_single_file(filepath, output_file, args.window_size, args.stride, args.label,
-                                           paf_mappings_by_read=paf_mappings_by_read if paf_mappings_by_read else None):
+                                           paf_mappings_by_read=paf_mappings_by_read if paf_mappings_by_read else None,
+                                           mode=args.mode):
                         success_count += 1
 
                 print("\n" + "=" * 60)
@@ -929,7 +1104,8 @@ Examples:
             else:
                 output_file = f"{args.input}.png"
             return 0 if process_single_file(args.input, output_file, args.window_size, args.stride, args.label,
-                                            paf_mappings_by_read=paf_mappings_by_read if paf_mappings_by_read else None) else 1
+                                            paf_mappings_by_read=paf_mappings_by_read if paf_mappings_by_read else None,
+                                            mode=args.mode) else 1
 
     else:
         # Test data mode
