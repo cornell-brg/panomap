@@ -176,7 +176,7 @@ IndexPipelineResult run_index_pipeline(
     extractor_cfg.stride = config.seed_stride;
     extractor_cfg.qbits = 4;
 
-    LOG_INFO("Seed extraction config: k=" + std::to_string(config.seed_k) +
+    LOG_DEBUG("Seed extraction config: k=" + std::to_string(config.seed_k) +
              ", stride=" + std::to_string(config.seed_stride) +
              ", qbits=" + std::to_string(extractor_cfg.qbits) +
              ", backend=" + extractor_cfg.backend);

@@ -17,7 +17,7 @@ namespace piru::mapping {
 struct DPChainClustererConfig {
     std::size_t max_dist{500};               // Max query/ref distance for chaining (also used for banding)
     std::size_t max_diag_dev{500};           // Max diagonal deviation |Δr - Δq|
-    std::size_t min_chain_score{100};        // Min score to report a chain
+    std::size_t min_chain_score{12};         // Min score to report a chain
     std::size_t max_chains{10};              // Max number of chains to extract (multi-mapping)
     std::size_t max_skip{25};                // Stop after this many consecutive failed chain attempts
 

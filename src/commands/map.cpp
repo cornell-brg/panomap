@@ -69,6 +69,7 @@ int handle_map(const std::vector<std::string>& args) {
         {'m', "model", true, "Pore model (required with --graph; r9.4/r10.4 or file path)"},
         {'t', "threads", true, "Worker threads (-1 = auto)"},
         {'p', "profile", false, "Emit timing profile (tree)"},
+        {'v', "verbose", false, "Enable verbose logging (DEBUG level)"},
         {'\0', "", false, "\nIn-Memory Indexing Options (with --graph):"},
         {'\0', "linearizer", true, "Linearizer backend: path-walk (default) or superbubble"},
         {'\0', "graph-type", true, "Graph type: vg (default) or dbg"},
@@ -82,7 +83,7 @@ int handle_map(const std::vector<std::string>& args) {
         {'\0', "chain-diag-penalty", true, "DP chain: diagonal penalty factor (default: 0.05)"},
         {'\0', "chain-overlap-penalty", true, "DP chain: overlap penalty factor (default: 0.4)"},
         {'\0', "chain-anchor-weight", true, "DP chain: anchor weight (default: 1.5)"},
-        {'\0', "chain-min-score", true, "DP chain: minimum chain score (default: 0)"},
+        {'\0', "chain-min-score", true, "DP chain: minimum chain score (default: 12)"},
         {'\0', "chain-max-chains", true, "DP chain: max chains to extract (default: 10)"},
         {'\0', "chain-max-skip", true, "DP chain: stop after N consecutive failed attempts (default: 25)"},
         {'\0', "chain-merge", true, "DP chain: merge overlapping chains (default: true)"},
@@ -154,6 +155,10 @@ int handle_map(const std::vector<std::string>& args) {
 
     // Extract common options
     const bool profile = parsed.values.count("profile") > 0;
+    const bool verbose = parsed.values.count("verbose") > 0;
+    if (verbose) {
+        piru::logger.set_level(piru::LogLevel::DEBUG);
+    }
     const int num_threads = [&]() {
         auto it = parsed.values.find("threads");
         if (it == parsed.values.end()) return -1;
@@ -268,7 +273,7 @@ int handle_map(const std::vector<std::string>& args) {
                                            ? parsed.values.at("graph-type")
                                            : "vg";
 
-        LOG_INFO("running in-memory indexing: graph=" + graph_path +
+        LOG_INFO("Running in-memory indexing: graph=" + graph_path +
                  ", linearizer=" + linearizer);
 
         // Step 1: Load pore model (built-in or file)
@@ -321,35 +326,35 @@ int handle_map(const std::vector<std::string>& args) {
         // Apply CLI overrides for seed extraction (affects in-memory indexing)
         if (parsed.values.count("seed-k")) {
             index_config.seed_k = std::stoull(parsed.values.at("seed-k"));
-            LOG_INFO("Using seed k=" + std::to_string(index_config.seed_k) + " for indexing");
+            LOG_DEBUG("Using seed k=" + std::to_string(index_config.seed_k) + " for indexing");
         }
         if (parsed.values.count("seed-stride")) {
             index_config.seed_stride = std::stoull(parsed.values.at("seed-stride"));
-            LOG_INFO("Using seed stride=" + std::to_string(index_config.seed_stride) + " for indexing");
+            LOG_DEBUG("Using seed stride=" + std::to_string(index_config.seed_stride) + " for indexing");
         }
         if (parsed.values.count("seed-mode")) {
             index_config.seed_mode = parsed.values.at("seed-mode");
-            LOG_INFO("Using seed mode=" + index_config.seed_mode + " for indexing");
+            LOG_DEBUG("Using seed mode=" + index_config.seed_mode + " for indexing");
         }
         if (parsed.values.count("fuzzy-backend")) {
             index_config.fuzzy_quantizer = parsed.values.at("fuzzy-backend");
-            LOG_INFO("Using fuzzy quantizer=" + index_config.fuzzy_quantizer + " for indexing");
+            LOG_DEBUG("Using fuzzy quantizer=" + index_config.fuzzy_quantizer + " for indexing");
         }
         if (parsed.values.count("fuzzy-fine-min")) {
             index_config.fuzzy_fine_min = std::stof(parsed.values.at("fuzzy-fine-min"));
-            LOG_INFO("Using fuzzy fine_min=" + std::to_string(index_config.fuzzy_fine_min));
+            LOG_DEBUG("Using fuzzy fine_min=" + std::to_string(index_config.fuzzy_fine_min));
         }
         if (parsed.values.count("fuzzy-fine-max")) {
             index_config.fuzzy_fine_max = std::stof(parsed.values.at("fuzzy-fine-max"));
-            LOG_INFO("Using fuzzy fine_max=" + std::to_string(index_config.fuzzy_fine_max));
+            LOG_DEBUG("Using fuzzy fine_max=" + std::to_string(index_config.fuzzy_fine_max));
         }
         if (parsed.values.count("fuzzy-fine-range")) {
             index_config.fuzzy_fine_range = std::stof(parsed.values.at("fuzzy-fine-range"));
-            LOG_INFO("Using fuzzy fine_range=" + std::to_string(index_config.fuzzy_fine_range));
+            LOG_DEBUG("Using fuzzy fine_range=" + std::to_string(index_config.fuzzy_fine_range));
         }
         if (parsed.values.count("fuzzy-bins")) {
             index_config.fuzzy_n_bins = static_cast<std::uint32_t>(std::stoul(parsed.values.at("fuzzy-bins")));
-            LOG_INFO("Using fuzzy n_bins=" + std::to_string(index_config.fuzzy_n_bins));
+            LOG_DEBUG("Using fuzzy n_bins=" + std::to_string(index_config.fuzzy_n_bins));
         }
 
         // Step 4: Run full indexing pipeline
@@ -369,7 +374,7 @@ int handle_map(const std::vector<std::string>& args) {
         fuzzy_fine_range = index_config.fuzzy_fine_range;
         fuzzy_n_bins = index_config.fuzzy_n_bins;
 
-        LOG_INFO("in-memory indexing complete");
+        LOG_INFO("In-memory indexing complete");
     }
 
     PIRU_PROFILE_STOP(profile, "index");
@@ -424,11 +429,11 @@ int handle_map(const std::vector<std::string>& args) {
     map_config.fuzzy_config.fine_max = fuzzy_fine_max;
     map_config.fuzzy_config.fine_range = fuzzy_fine_range;
     map_config.fuzzy_config.n_bins = fuzzy_n_bins;
-    LOG_INFO("Using fuzzy quantizer: " + map_config.fuzzy_config.backend +
-             " (fine_min=" + std::to_string(fuzzy_fine_min) +
-             ", fine_max=" + std::to_string(fuzzy_fine_max) +
-             ", fine_range=" + std::to_string(fuzzy_fine_range) +
-             ", n_bins=" + std::to_string(fuzzy_n_bins) + ")");
+    LOG_DEBUG("Using fuzzy quantizer: " + map_config.fuzzy_config.backend +
+              " (fine_min=" + std::to_string(fuzzy_fine_min) +
+              ", fine_max=" + std::to_string(fuzzy_fine_max) +
+              ", fine_range=" + std::to_string(fuzzy_fine_range) +
+              ", n_bins=" + std::to_string(fuzzy_n_bins) + ")");
 
     // Configure seed extractor from seed store parameters
     const auto* hash_seed_store = dynamic_cast<piru::index::HashSeedStore*>(seed_store.get());
@@ -443,16 +448,16 @@ int handle_map(const std::vector<std::string>& args) {
         return 1;
     }
 
-    LOG_INFO("Using seed extractor settings: backend=" + index_seed_cfg.backend +
-             ", k=" + std::to_string(index_seed_cfg.k) +
-             ", stride=" + std::to_string(index_seed_cfg.stride) +
-             ", qbits=" + std::to_string(index_seed_cfg.qbits));
+    LOG_DEBUG("Using seed extractor settings: backend=" + index_seed_cfg.backend +
+              ", k=" + std::to_string(index_seed_cfg.k) +
+              ", stride=" + std::to_string(index_seed_cfg.stride) +
+              ", qbits=" + std::to_string(index_seed_cfg.qbits));
     map_config.seed_config = index_seed_cfg;
 
     // Configure clusterer from seed store statistics
     map_config.clusterer_config.max_hash_frequency = hash_seed_store->max_hash_frequency();
-    LOG_INFO("Using clustering config from index: max_hash_frequency=" +
-             std::to_string(map_config.clusterer_config.max_hash_frequency));
+    LOG_DEBUG("Using clustering config from index: max_hash_frequency=" +
+              std::to_string(map_config.clusterer_config.max_hash_frequency));
 
     // Configure clusterer backend (default: dp-chain for path-walk pipeline)
     const std::string clusterer = parsed.values.count("clusterer")
@@ -588,9 +593,6 @@ int handle_map(const std::vector<std::string>& args) {
             continue;
         }
         ++files_processed;
-        LOG_INFO("map: processing '" + f.string() + "' (format=" + provider->get_format_name() +
-                 ").");
-
         piru::mapping::BatchMapper mapper(*provider, map_config, std::cout);
         const auto stats = mapper.process_all();
         total_reads += stats.reads_processed;

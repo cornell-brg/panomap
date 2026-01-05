@@ -78,7 +78,7 @@ struct SeedClustererConfig {
     double dp_diag_penalty{0.05};               // Penalty per unit diagonal deviation (was: 0.5)
     double dp_overlap_penalty{0.90};            // Penalty per unit overlap (was: 2.0)
     double dp_anchor_weight{1.0};               // Weight per anchor length
-    std::size_t dp_min_chain_score{0};          // Min score to report a chain (0 = accept any)
+    std::size_t dp_min_chain_score{12};         // Min score to report a chain
     std::size_t dp_max_chains{10};              // Max number of chains to extract
     std::size_t dp_max_skip{25};                // Stop after N consecutive failed chain attempts
     bool dp_merge_chains{true};                 // Merge overlapping chains on same path

@@ -136,7 +136,7 @@ HashSeedStore buildSeedStore(const AlnGraph* graph,
         // Deduplicate seeds from shared regions across paths
         store.deduplicate();
 
-        LOG_INFO("Seed extraction (path-guided): extracted=" +
+        LOG_DEBUG("Seed extraction (path-guided): extracted=" +
                  std::to_string(total_seeds_extracted) + " seeds from " +
                  std::to_string(graph->pathCount()) + " paths, unique=" +
                  std::to_string(store.size()) + " (after dedup)");

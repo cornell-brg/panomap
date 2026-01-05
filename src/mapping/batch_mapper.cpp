@@ -277,7 +277,7 @@ PipelineComponents BatchMapper::create_components() const {
     }
 
     // Log pipeline configuration
-    LOG_INFO("Pipeline: " + comps.expander->name() + " expansion + " +
+    LOG_DEBUG("Pipeline: " + comps.expander->name() + " expansion + " +
              clusterer_name + " clustering");
 
     // Create result formatter if we have a graph store (needed for result output)
@@ -307,7 +307,7 @@ BatchMapperStats BatchMapper::process_all() {
     BatchBuffer batch;
     batch.resize(config_.batch_capacity_reads);
 
-    LOG_INFO("BatchMapper starting: batch_capacity_reads=" +
+    LOG_DEBUG("BatchMapper starting: batch_capacity_reads=" +
              std::to_string(config_.batch_capacity_reads) +
              ", threads=" + std::to_string(executor_->max_concurrency()) +
              ", fuzzy=" + components_.fuzzy_quantizer->name() +
@@ -398,12 +398,12 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
 
     // Debug: log raw signal size vs event count for each read
     // Expected: events ≈ basepairs (each event ~1bp), raw_signal ≈ events * samples_per_base (~9)
-    LOG_INFO("read=" + read.read_id +
-             " raw_samples=" + std::to_string(read.len_raw_signal) +
-             " events=" + std::to_string(batch.normalized[index].samples.size()) +
-             " ratio=" + std::to_string(
-                 batch.normalized[index].samples.empty() ? 0.0 :
-                 static_cast<double>(read.len_raw_signal) / batch.normalized[index].samples.size()));
+    LOG_DEBUG("read=" + read.read_id +
+              " raw_samples=" + std::to_string(read.len_raw_signal) +
+              " events=" + std::to_string(batch.normalized[index].samples.size()) +
+              " ratio=" + std::to_string(
+                  batch.normalized[index].samples.empty() ? 0.0 :
+                  static_cast<double>(read.len_raw_signal) / batch.normalized[index].samples.size()));
 
     batch.fuzzy_quantized[index] = components_.fuzzy_quantizer->quantize(batch.normalized[index]);
     batch.alignment_quantized[index] = components_.alignment_quantizer->quantize(batch.normalized[index]);
@@ -457,7 +457,7 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
     if (config_.enable_anchor_merge) {
         const auto pre_merge_count = anchors.size();
         anchors = AnchorMerger::merge(anchors, AnchorMergerConfig{});
-        LOG_INFO("Anchor merge: " + std::to_string(pre_merge_count) + " -> " +
+        LOG_DEBUG("Anchor merge: " + std::to_string(pre_merge_count) + " -> " +
                   std::to_string(anchors.size()) + " (" +
                   std::to_string(pre_merge_count > 0
                                      ? 100 * (pre_merge_count - anchors.size()) / pre_merge_count
