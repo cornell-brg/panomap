@@ -77,7 +77,7 @@ struct IndexPipelineConfig {
     // - path: Walk paths and extract seeds that can cross node boundaries
     //         Better coverage for graphs with short nodes (e.g., VG-built)
     //         Deduplicates seeds from shared regions across paths
-    std::string seed_mode{"node"};
+    std::string seed_mode{"path"};
 
     // Seed k-mer size (number of fuzzy tokens hashed together)
     // - Larger k = more specific seeds, fewer false matches

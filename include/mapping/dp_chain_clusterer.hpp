@@ -13,13 +13,13 @@
 namespace piru::mapping {
 
 // Configuration for DP-based chaining algorithm.
+// Note: Cross-path chaining is not supported. See DEV033 for planned alias-based approach.
 struct DPChainClustererConfig {
-    std::size_t max_dist{5000};              // Max query/ref distance for chaining
+    std::size_t max_dist{500};               // Max query/ref distance for chaining (also used for banding)
     std::size_t max_diag_dev{500};           // Max diagonal deviation |Δr - Δq|
-    bool allow_cross_haplotypes{false};      // Allow chaining across different paths
-    double path_switch_cost{50.0};           // Penalty for switching between paths
     std::size_t min_chain_score{100};        // Min score to report a chain
     std::size_t max_chains{10};              // Max number of chains to extract (multi-mapping)
+    std::size_t max_skip{25};                // Stop after this many consecutive failed chain attempts
 
     // Scoring parameters
     double anchor_weight{1.5};               // Weight per anchor length
@@ -36,7 +36,7 @@ struct DPChainClustererConfig {
 // Algorithm:
 // 1. Sort anchors by (path_id, ref_coord, query_pos)
 // 2. DP: dp[i] = max_j(dp[j] + score(i) - gap_cost(j, i))
-//    where j is a valid predecessor (same/allowed path, within distance, diagonal constraints)
+//    where j is a valid predecessor (same path, within distance, diagonal constraints)
 // 3. Backtrack from best scoring anchor to extract chain
 // 4. Optionally extract multiple chains for multi-mapping
 //

@@ -76,7 +76,7 @@ int handle_map(const std::vector<std::string>& args) {
         {'\0', "", false, "\nMapping Options:"},
         {'\0', "max-seed-freq", true, "Maximum seed frequency for lookup (default: use index threshold)"},
         {'\0', "clusterer", true, "Clusterer backend: dp-chain (default), fse, probe"},
-        {'\0', "chain-max-dist", true, "DP chain: max query/ref distance between anchors (default: 5000)"},
+        {'\0', "chain-max-dist", true, "DP chain: max query/ref distance between anchors (default: 500)"},
         {'\0', "chain-max-diag-dev", true, "DP chain: max diagonal deviation (default: 500)"},
         {'\0', "chain-gap-penalty", true, "DP chain: gap penalty factor (default: 0.02)"},
         {'\0', "chain-diag-penalty", true, "DP chain: diagonal penalty factor (default: 0.05)"},
@@ -84,6 +84,7 @@ int handle_map(const std::vector<std::string>& args) {
         {'\0', "chain-anchor-weight", true, "DP chain: anchor weight (default: 1.5)"},
         {'\0', "chain-min-score", true, "DP chain: minimum chain score (default: 0)"},
         {'\0', "chain-max-chains", true, "DP chain: max chains to extract (default: 10)"},
+        {'\0', "chain-max-skip", true, "DP chain: stop after N consecutive failed attempts (default: 25)"},
         {'\0', "chain-merge", true, "DP chain: merge overlapping chains (default: true)"},
         {'\0', "align", false, "Enable signal-level alignment for chain evaluation"},
         {'\0', "align-backend", true, "Alignment backend: path-guided (default), radius, auto"},
@@ -101,7 +102,7 @@ int handle_map(const std::vector<std::string>& args) {
         {'\0', "fuzzy-bins", true, "Fuzzy quantizer bin count (default: 10)"},
         {'\0', "seed-k", true, "Seed extractor k-mer size (default: 6)"},
         {'\0', "seed-stride", true, "Seed extractor stride (default: 1)"},
-        {'\0', "seed-mode", true, "Seeding mode: node (default), path"},
+        {'\0', "seed-mode", true, "Seeding mode: node, path (default)"},
         {'\0', "", false, "\nDebug Options:"},
         {'\0', "dump-anchors", true, "Dump anchors to directory (one file per read)"},
         {'\0', "dump-chains", true, "Dump chains to directory (one file per read)"},
@@ -479,6 +480,9 @@ int handle_map(const std::vector<std::string>& args) {
     }
     if (parsed.values.count("chain-max-chains")) {
         map_config.clusterer_config.dp_max_chains = std::stoull(parsed.values.at("chain-max-chains"));
+    }
+    if (parsed.values.count("chain-max-skip")) {
+        map_config.clusterer_config.dp_max_skip = std::stoull(parsed.values.at("chain-max-skip"));
     }
     if (parsed.values.count("chain-merge")) {
         const std::string val = parsed.values.at("chain-merge");

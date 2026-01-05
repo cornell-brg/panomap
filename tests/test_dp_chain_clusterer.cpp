@@ -152,15 +152,15 @@ TEST_CASE("DPChainClusterer: Distance filter prevents chaining far-apart anchors
     CHECK(summary.anchors.size() == 1);
 }
 
-TEST_CASE("DPChainClusterer: Single-path mode rejects cross-path chains") {
+TEST_CASE("DPChainClusterer: Rejects cross-path chains") {
     // Node 0 on path 0, Node 1 on path 1
+    // Cross-path chaining not supported (see DEV033 for planned alias-based approach)
     std::vector<std::vector<LinearCoordinate>> coords(2);
     coords[0] = {{0, 100}};
     coords[1] = {{1, 200}};  // Different path
 
     PathWalkExpander expander(coords);
     DPChainClustererConfig config;
-    config.allow_cross_haplotypes = false;  // Single-path mode
     config.max_dist = 5000;
     config.max_diag_dev = 500;
     config.min_chain_score = 10;
@@ -178,37 +178,6 @@ TEST_CASE("DPChainClusterer: Single-path mode rejects cross-path chains") {
 
     // Should only select one anchor (cannot cross paths)
     CHECK(summary.anchors.size() == 1);
-}
-
-TEST_CASE("DPChainClusterer: Cross-path mode allows path switching with penalty") {
-    // Node 0 on path 0, Node 1 on path 1
-    std::vector<std::vector<LinearCoordinate>> coords(2);
-    coords[0] = {{0, 100}};
-    coords[1] = {{1, 200}};
-
-    PathWalkExpander expander(coords);
-    DPChainClustererConfig config;
-    config.allow_cross_haplotypes = true;  // Cross-path mode
-    config.path_switch_cost = 10.0;  // Lower cost to make chaining favorable
-    config.gap_penalty_factor = 0.05;  // Lower gap penalty
-    config.max_dist = 5000;
-    config.max_diag_dev = 500;
-    config.min_chain_score = 10;
-    config.anchor_weight = 1.0;
-
-    DPChainClusterer clusterer(config);
-
-    // Two seeds on different paths with longer spans to increase score
-    std::vector<SeedHitRecord> hits = {
-        make_hit(0, 0, 50, 30),   // Higher score
-        make_hit(1, 0, 150, 30)   // Higher score
-    };
-    auto anchors = expander.expand(hits);
-
-    auto summary = clusterer.cluster(anchors);
-
-    // Should chain both (cross-path allowed and beneficial)
-    CHECK(summary.anchors.size() == 2);
 }
 
 TEST_CASE("DPChainClusterer: Prefers higher-scoring chain") {
@@ -323,12 +292,12 @@ TEST_CASE("DPChainClusterer: Backward query positions are rejected") {
 
 TEST_CASE("DPChainClusterer: Node appearing on multiple paths expands correctly") {
     // Node 0 appears on two paths
+    // Cross-path chaining not supported, so only one path's anchor is selected
     std::vector<std::vector<LinearCoordinate>> coords(1);
     coords[0] = {{0, 100}, {1, 500}};  // Same node on path 0 and path 1
 
     PathWalkExpander expander(coords);
     DPChainClustererConfig config;
-    config.allow_cross_haplotypes = false;  // Single-path mode
     config.max_dist = 5000;
     config.max_diag_dev = 500;
     config.min_chain_score = 10;

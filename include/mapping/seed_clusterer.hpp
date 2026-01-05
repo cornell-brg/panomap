@@ -72,7 +72,7 @@ struct SeedClustererConfig {
 
     // DP chain parameters (used when backend="dp-chain")
     // Tuned for noisy signals (DEV027), original defaults in comments
-    std::size_t dp_max_dist{5000};              // Max query/ref distance for chaining
+    std::size_t dp_max_dist{500};               // Max query/ref distance for chaining (banding)
     std::size_t dp_max_diag_dev{500};           // Max diagonal deviation |Δr - Δq|
     double dp_gap_penalty{0.02};                // Penalty per unit gap distance (was: 0.1)
     double dp_diag_penalty{0.05};               // Penalty per unit diagonal deviation (was: 0.5)
@@ -80,6 +80,7 @@ struct SeedClustererConfig {
     double dp_anchor_weight{1.0};               // Weight per anchor length
     std::size_t dp_min_chain_score{0};          // Min score to report a chain (0 = accept any)
     std::size_t dp_max_chains{10};              // Max number of chains to extract
+    std::size_t dp_max_skip{25};                // Stop after N consecutive failed chain attempts
     bool dp_merge_chains{true};                 // Merge overlapping chains on same path
 };
 

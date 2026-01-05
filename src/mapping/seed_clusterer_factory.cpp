@@ -415,6 +415,7 @@ AnchorClustererPtr make_anchor_clusterer(
         dp_config.anchor_weight = config.dp_anchor_weight;
         dp_config.min_chain_score = config.dp_min_chain_score;
         dp_config.max_chains = config.dp_max_chains;
+        dp_config.max_skip = config.dp_max_skip;
         dp_config.merge_chains = config.dp_merge_chains;
         LOG_INFO("DP chain config: max_dist=" + std::to_string(dp_config.max_dist) +
                  ", max_diag_dev=" + std::to_string(dp_config.max_diag_dev) +
@@ -424,6 +425,7 @@ AnchorClustererPtr make_anchor_clusterer(
                  ", anchor_weight=" + std::to_string(dp_config.anchor_weight) +
                  ", min_score=" + std::to_string(dp_config.min_chain_score) +
                  ", max_chains=" + std::to_string(dp_config.max_chains) +
+                 ", max_skip=" + std::to_string(dp_config.max_skip) +
                  ", merge_chains=" + (dp_config.merge_chains ? "true" : "false"));
         return std::make_unique<DPChainClusterer>(dp_config);
     }

@@ -198,14 +198,42 @@ ClusterSummary DPChainClusterer::cluster(const std::vector<Anchor>& anchors) con
         double best_score = anchor_score(anchor_i);  // Start new chain at i
         int best_pred = -1;
 
-        // Check all potential predecessors j < i
-        for (std::size_t j = 0; j < i; ++j) {
+        // Check potential predecessors j, starting from closest (i-1) going backwards.
+        // This enables early termination via banding: once ref distance exceeds max_dist,
+        // all earlier anchors on the same path are even further away.
+        //
+        // Anchors are sorted by (path_id, ref_coord), so:
+        // - Same path anchors are contiguous
+        // - When we hit a different path_id, all earlier anchors are also different path
+        //
+        // max_skip heuristic: stop after consecutive failed chain attempts (minimap2-style).
+        // If we've checked max_skip anchors and none can chain, further anchors are unlikely
+        // to be better predecessors.
+        std::size_t num_skipped = 0;
+        for (std::size_t j = i; j > 0 && num_skipped < config_.max_skip; ) {
+            --j;
             const auto& anchor_j = sorted_anchors[j];
 
-            // Check if j can chain to i
+            // Different path - all earlier anchors are also different path, break.
+            // (Cross-path chaining is handled separately in DEV033, currently disabled)
+            if (anchor_j.path_id != anchor_i.path_id) {
+                break;
+            }
+
+            // Band exceeded - earlier same-path anchors are even further, break.
+            if (anchor_i.ref_coord - anchor_j.ref_coord >
+                static_cast<std::int64_t>(config_.max_dist)) {
+                break;
+            }
+
+            // Check if j can chain to i (query order, diagonal constraints)
             if (!can_chain(anchor_j, anchor_i)) {
+                ++num_skipped;
                 continue;
             }
+
+            // Successful chain attempt - reset skip counter
+            num_skipped = 0;
 
             // Compute score if we extend chain ending at j with anchor i
             const double cost = gap_cost(anchor_j, anchor_i);
@@ -331,8 +359,8 @@ bool DPChainClusterer::can_chain(const Anchor& j, const Anchor& i) const {
         return false;
     }
 
-    // Check path constraint
-    if (!config_.allow_cross_haplotypes && i.path_id != j.path_id) {
+    // Must be same path (cross-path chaining not supported, see DEV033)
+    if (i.path_id != j.path_id) {
         return false;
     }
 
@@ -391,11 +419,6 @@ double DPChainClusterer::gap_cost(const Anchor& j, const Anchor& i) const {
         const double query_overlap = std::abs(std::min<std::int64_t>(0, query_gap));
         const double avg_overlap = (ref_overlap + query_overlap) / 2.0;
         cost += avg_overlap * config_.overlap_penalty_factor;
-    }
-
-    // Path switch penalty
-    if (config_.allow_cross_haplotypes && i.path_id != j.path_id) {
-        cost += config_.path_switch_cost;
     }
 
     return cost;

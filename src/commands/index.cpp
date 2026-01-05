@@ -52,7 +52,7 @@ int handle_index(const std::vector<std::string>& args) {
         {'\0', "seed-k", true, "Seed k-mer size (default: 6)"},
         {'\0', "seed-stride", true, "Seed stride (default: 1)"},
         {'\0', "seed-filter", true, "Keep least frequent seed fraction (default: 0.9)"},
-        {'\0', "seed-mode", true, "Seeding mode: node (default), path"},
+        {'\0', "seed-mode", true, "Seeding mode: node, path (default)"},
         {'\0', "", false, "\nAlignment Quantization Options:"},
         {'\0', "aq-backend", true, "Backend: int16 (default), int8, passthrough"},
         {'\0', "aq-scale", true, "Manual scale override (expert)"},
