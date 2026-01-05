@@ -214,6 +214,8 @@ int handle_map(const std::vector<std::string>& args) {
     float fuzzy_fine_range{0.4f};
     std::uint32_t fuzzy_n_bins{0};
 
+    PIRU_PROFILE_START(profile, "index");
+
     if (has_index) {
         // ---------------------------------------------------------------------
         // WORKFLOW 1: Load pre-built index from disk
@@ -369,6 +371,8 @@ int handle_map(const std::vector<std::string>& args) {
 
         LOG_INFO("in-memory indexing complete");
     }
+
+    PIRU_PROFILE_STOP(profile, "index");
 
     // =========================================================================
     // READ FILE DISCOVERY
@@ -571,6 +575,8 @@ int handle_map(const std::vector<std::string>& args) {
     // READ PROCESSING
     // =========================================================================
 
+    PIRU_PROFILE_START(profile, "mapping");
+
     std::size_t total_reads = 0;
     std::size_t total_batches = 0;
     std::size_t files_processed = 0;
@@ -590,6 +596,8 @@ int handle_map(const std::vector<std::string>& args) {
         total_reads += stats.reads_processed;
         total_batches += stats.batches;
     }
+
+    PIRU_PROFILE_STOP(profile, "mapping");
 
     if (files_processed == 0) {
         LOG_ERROR("map: no readable input files");
