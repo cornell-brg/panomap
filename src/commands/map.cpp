@@ -74,8 +74,6 @@ int handle_map(const std::vector<std::string>& args) {
         {'\0', "", false, "\nIn-Memory Indexing Options (with --graph):"},
         {'\0', "index-backend", true, "Index pipeline: classic (default) or simple"},
         {'\0', "linearizer", true, "Linearizer backend: path-walk (default) or superbubble"},
-        {'\0', "graph-type", true, "Graph type: vg (default) or dbg"},
-        {'\0', "graph-k", true, "DBG k-mer size (default: auto-detect from overlap)"},
         {'\0', "", false, "\nMapping Options:"},
         {'\0', "max-seed-freq", true, "Maximum seed frequency for lookup (default: use index threshold)"},
         {'\0', "clusterer", true, "Clusterer backend: dp-chain (default), fse, probe"},
@@ -287,9 +285,6 @@ int handle_map(const std::vector<std::string>& args) {
         const std::string linearizer = parsed.values.count("linearizer")
                                            ? parsed.values.at("linearizer")
                                            : "path-walk";
-        const std::string graph_type = parsed.values.count("graph-type")
-                                           ? parsed.values.at("graph-type")
-                                           : "vg";
 
         LOG_INFO("Running in-memory indexing: graph=" + graph_path +
                  ", linearizer=" + linearizer);
@@ -308,13 +303,7 @@ int handle_map(const std::vector<std::string>& args) {
         }
 
         piru::io::ImportedGraph imported;
-        if (graph_type == "vg") {
-            imported.flavor = piru::io::ImportedGraphFlavor::kVg;
-        } else if (graph_type == "dbg") {
-            imported.flavor = piru::io::ImportedGraphFlavor::kDbg;
-        } else {
-            imported.flavor = piru::io::ImportedGraphFlavor::kUnknown;
-        }
+        imported.flavor = piru::io::ImportedGraphFlavor::kVg;
 
         if (!loader->load(imported)) {
             LOG_ERROR("map: failed to read graph file '" + graph_path + "'");
@@ -328,23 +317,12 @@ int handle_map(const std::vector<std::string>& args) {
 
         // Step 3: Configure indexing pipeline
         piru::index::IndexPipelineConfig index_config;
-        index_config.graph_flavor = graph_type;
         index_config.linearizer = linearizer;
 
         // Pipeline mode: classic (default) or simple
         if (parsed.values.count("index-backend")) {
             index_config.pipeline_mode = parsed.values.at("index-backend");
             LOG_INFO("Using index backend: " + index_config.pipeline_mode);
-        }
-
-        // Auto-detect graph_k from edge overlap (DBG only)
-        if (!parsed.values.count("graph-k") && graph_type == "dbg") {
-            if (!imported.edges.empty() && imported.edges.front().overlap_bases.has_value()) {
-                const auto overlap = *imported.edges.front().overlap_bases;
-                index_config.graph_k = overlap + 1;
-            }
-        } else if (parsed.values.count("graph-k")) {
-            index_config.graph_k = std::stoul(parsed.values.at("graph-k"));
         }
 
         // Apply CLI overrides for seed extraction (affects in-memory indexing)

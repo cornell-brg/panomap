@@ -19,8 +19,8 @@ struct IndexMetadata {
     uint32_t piru_version_minor{0};
     uint32_t piru_version_patch{0};
     uint64_t build_timestamp{0};
-    uint32_t graph_flavor{0}; // 0=unknown, 1=dbg, 2=vg
-    uint32_t graph_k{0};
+    uint32_t graph_flavor{0}; // 0=unknown, 2=vg (1=dbg was removed)
+    uint32_t graph_k{0};      // Legacy field, always 0 for VG graphs
     uint32_t pore_k{0};
     std::string model_name;
     std::string fuzzy_quantizer;

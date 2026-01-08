@@ -34,15 +34,7 @@ struct IndexPipelineConfig {
     // -------------------------------------------------------------------------
     // Graph Parameters
     // -------------------------------------------------------------------------
-
-    // Graph type: "vg" (variation graph) or "dbg" (de Bruijn graph)
-    std::string graph_flavor{"vg"};
-
-    // DBG k-mer size (bases)
-    // - For DBG: node overlap length + 1
-    // - Set to 0 for auto-detection from edge overlaps
-    // - Unused for VG graphs
-    std::size_t graph_k{0};
+    // Note: Only VG graph format is supported. DBG support was removed.
 
     // -------------------------------------------------------------------------
     // Linearization Parameters
@@ -133,8 +125,6 @@ struct IndexPipelineResult {
     std::vector<std::vector<LinearCoordinate>> linearization_coords;
 
     // Metadata
-    io::ImportedGraphFlavor graph_flavor{io::ImportedGraphFlavor::kUnknown};
-    std::size_t graph_k{0};
     std::size_t pore_k{0};
     std::string model_name;
     std::string fuzzy_quantizer;
@@ -146,8 +136,8 @@ struct IndexPipelineResult {
 // Run the full indexing pipeline on an imported graph.
 //
 // Pipeline stages:
-// 1. Transform: ImportedGraph → AlnGraph (DBG or VG)
-// 2. Linearize: Assign coordinates to nodes (superbubble or path-walk)
+// 1. Transform: ImportedGraph → AlnGraph (VG path-guided)
+// 2. Linearize: Assign coordinates to nodes (path-walk)
 // 3. Squigglize: Generate reference signals for each node
 // 4. Quantize: Convert signals to fuzzy and alignment quantized forms
 // 5. Build seeds: Extract and index k-mer seeds from fuzzy signals

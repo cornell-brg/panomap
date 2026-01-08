@@ -12,7 +12,7 @@ namespace piru::io::index {
 
 namespace {
 
-constexpr char kMagic[4] = {'P', 'I', 'R', '2'};
+constexpr char kMagic[4] = {'P', 'I', 'R', 'X'};
 constexpr uint32_t kVersion = 1;
 
 // Flags (bit field)

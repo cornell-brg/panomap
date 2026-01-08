@@ -1,5 +1,4 @@
 *.gz
 reads/
-graphs/
 *.fai
 eval_reads/

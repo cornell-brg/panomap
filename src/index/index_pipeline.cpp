@@ -12,7 +12,6 @@
 #include "index/pseudo_linearize.hpp"
 #include "index/seed_builder.hpp"
 #include "index/squigglize.hpp"
-#include "index/transform_dbg.hpp"
 #include "index/simple_expand.hpp"
 #include "index/vg_transform_factory.hpp"
 #include "signal/alignment_quantizers/alignment_quantizer_factory.hpp"
@@ -33,11 +32,9 @@ IndexPipelineResult run_index_pipeline(
     const IndexPipelineConfig& config) {
 
     // -------------------------------------------------------------------------
-    // Simple Pipeline Mode (DEV039)
+    // Simple Pipeline Mode
     // -------------------------------------------------------------------------
     if (config.pipeline_mode == "simple") {
-        LOG_INFO("Using simple index pipeline");
-
         auto stage_start = std::chrono::high_resolution_clock::now();
 
         // Stage 1: Simple ±expand (2x nodes)
@@ -45,7 +42,7 @@ IndexPipelineResult run_index_pipeline(
 
         auto stage_elapsed = std::chrono::duration<double>(
             std::chrono::high_resolution_clock::now() - stage_start).count();
-        LOG_INFO("[1/?] simple expand: " + std::to_string(aln_graph.nodeCount()) +
+        LOG_INFO("[1/2] Transforming graph to directional graph: " + std::to_string(aln_graph.nodeCount()) +
                  " nodes, " + std::to_string(aln_graph.edgeCount()) + " edges, " +
                  std::to_string(aln_graph.pathCount()) + " paths [" +
                  std::to_string(stage_elapsed) + "s]");
@@ -105,7 +102,6 @@ IndexPipelineResult run_index_pipeline(
         result.graph_store = std::make_unique<AdjListGraphStore>(std::move(aln_graph));
         result.seed_store = std::move(pwi_result.seed_store);
         result.linearization_coords = std::move(pwi_result.linearization_coords);
-        result.graph_flavor = imported.flavor;
         result.pore_k = model.k();
         result.model_name = model.name();
         result.fuzzy_quantizer = fuzzy_cfg.backend;
@@ -128,33 +124,19 @@ IndexPipelineResult run_index_pipeline(
 
     auto stage_start = std::chrono::high_resolution_clock::now();
 
-    if (config.graph_flavor == "dbg") {
-        if (config.graph_k == 0) {
-            throw std::runtime_error("DBG graph requires graph_k to be set");
-        }
-        if (config.graph_k < pore_k) {
-            throw std::runtime_error("graph k=" + std::to_string(config.graph_k) +
-                                     " < pore k=" + std::to_string(pore_k) + " (invalid)");
-        }
+    // VG transformation using path-guided approach
+    TransformConfig transform_config;
+    transform_config.uncovered_strategy = "expand";
 
-        aln_graph = transformDbg(imported, config.graph_k, pore_k);
-    } else if (config.graph_flavor == "vg") {
-        // VG transformation using path-guided approach
-        TransformConfig transform_config;
-        transform_config.uncovered_strategy = "expand";
+    auto vg_transform = makeVGTransform("path_guided", transform_config);
+    aln_graph = vg_transform->apply(imported, 0, pore_k);
 
-        auto vg_transform = makeVGTransform("path_guided", transform_config);
-        aln_graph = vg_transform->apply(imported, 0, pore_k);
-
-        auto stats = vg_transform->getStats();
-        LOG_INFO("VG transform: " + std::to_string(stats.original_node_count) +
-                 " original nodes → " + std::to_string(stats.transformed_node_count) +
-                 " transformed nodes (" + std::to_string(stats.node_expansion_ratio) +
-                 "x expansion)");
-        LOG_INFO("VG coverage: " + std::to_string(stats.uncovered_node_count) + " uncovered nodes");
-    } else {
-        throw std::runtime_error("Unknown graph flavor: " + config.graph_flavor);
-    }
+    auto stats = vg_transform->getStats();
+    LOG_INFO("VG transform: " + std::to_string(stats.original_node_count) +
+             " original nodes → " + std::to_string(stats.transformed_node_count) +
+             " transformed nodes (" + std::to_string(stats.node_expansion_ratio) +
+             "x expansion)");
+    LOG_INFO("VG coverage: " + std::to_string(stats.uncovered_node_count) + " uncovered nodes");
 
     if (!aln_graph.validate()) {
         throw std::runtime_error("AlnGraph validation failed after transformation");
@@ -312,8 +294,6 @@ IndexPipelineResult run_index_pipeline(
         std::move(squiggle_result.alignment_signals));
     result.seed_store = std::make_unique<HashSeedStore>(std::move(seed_store));
 
-    result.graph_flavor = imported.flavor;
-    result.graph_k = config.graph_k;
     result.pore_k = pore_k;
     result.model_name = model.name();
     result.fuzzy_quantizer = fuzzy_cfg.backend;

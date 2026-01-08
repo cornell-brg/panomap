@@ -53,8 +53,8 @@ TEST_CASE("GraphStore serialization round-trip") {
     source_metadata.piru_version_major = 1;
     source_metadata.piru_version_minor = 2;
     source_metadata.piru_version_patch = 3;
-    source_metadata.graph_flavor = 1; // DBG
-    source_metadata.graph_k = 63;
+    source_metadata.graph_flavor = 2; // VG
+    source_metadata.graph_k = 0;      // Not used for VG
     source_metadata.pore_k = 9;
     source_metadata.model_name = "test_model";
     source_metadata.fuzzy_quantizer = "rh2";
@@ -77,8 +77,8 @@ TEST_CASE("GraphStore serialization round-trip") {
     CHECK(loaded_metadata.piru_version_major == piru::Version::kMajor);
     CHECK(loaded_metadata.piru_version_minor == piru::Version::kMinor);
     CHECK(loaded_metadata.piru_version_patch == piru::Version::kPatch);
-    CHECK(loaded_metadata.graph_flavor == 1);
-    CHECK(loaded_metadata.graph_k == 63);
+    CHECK(loaded_metadata.graph_flavor == 2);
+    CHECK(loaded_metadata.graph_k == 0);
     CHECK(loaded_metadata.pore_k == 9);
     CHECK(loaded_metadata.model_name == "test_model");
     CHECK(loaded_metadata.fuzzy_quantizer == "rh2");
@@ -377,8 +377,8 @@ TEST_CASE("Full index serialization round-trip") {
 
     // Metadata
     piru::io::index::IndexMetadata source_metadata;
-    source_metadata.graph_flavor = 1;
-    source_metadata.graph_k = 15;
+    source_metadata.graph_flavor = 2;  // VG
+    source_metadata.graph_k = 0;       // Not used for VG
     source_metadata.pore_k = 9;
     
     // 2. Create a temporary directory.
@@ -398,7 +398,7 @@ TEST_CASE("Full index serialization round-trip") {
     REQUIRE(loaded_index.signals != nullptr);
     REQUIRE(loaded_index.seeds != nullptr);
     
-    CHECK(loaded_index.metadata.graph_k == 15);
+    CHECK(loaded_index.metadata.graph_k == 0);
     CHECK(loaded_index.metadata.pore_k == 9);
 
     CHECK(loaded_index.graph->nodeCount() == 2);
@@ -426,8 +426,8 @@ TEST_CASE("load_index rejects alignment quantizer/signal mismatch") {
     // Graph metadata declares int16 align quantizer
     piru::io::index::IndexMetadata metadata;
     metadata.align_quantizer = "int16";
-    metadata.graph_flavor = 1;
-    metadata.graph_k = 15;
+    metadata.graph_flavor = 2;  // VG
+    metadata.graph_k = 0;       // Not used for VG
     metadata.pore_k = 9;
 
     // Graph

@@ -44,9 +44,7 @@ int handle_index(const std::vector<std::string>& args) {
     config.options = {
         {'h', "help", false, "Show help"},
         {'\0', "index-backend", true, "Index pipeline: classic (default) or simple"},
-        {'g', "graph", true, "Graph type: vg (default) or dbg"},
         {'v', "verbose", false, "Enable verbose logging (DEBUG level)"},
-        {'k', "graph-k", true, "DBG k-mer size (default: auto-detect from overlap)"},
         {'m', "model", true, "Pore model (builtin name: r9.4/r10.4 or model file path)"},
         {'o', "output", true, "Output index directory (default: <graph-file>.piru)"},
         {'t', "threads", true, "Worker threads"},
@@ -77,7 +75,6 @@ int handle_index(const std::vector<std::string>& args) {
         piru::logger.set_level(piru::LogLevel::DEBUG);
     }
     const std::string model_arg = parsed.values.count("model") ? parsed.values.at("model") : "r10.4";
-    const std::string graph_type = parsed.values.count("graph") ? parsed.values.at("graph") : "vg";
 
     if (parsed.positionals.empty()) {
         LOG_ERROR("index: missing required <graph-file>");
@@ -85,7 +82,6 @@ int handle_index(const std::vector<std::string>& args) {
         return 1;
     }
     const std::string graph_path = parsed.positionals.front();
-    const std::string graph_flavor = graph_type;
 
     auto model = load_model_or_file(model_arg);
     if (!model) {
@@ -103,13 +99,7 @@ int handle_index(const std::vector<std::string>& args) {
     }
 
     piru::io::ImportedGraph imported;
-    if (graph_flavor == "vg") {
-        imported.flavor = piru::io::ImportedGraphFlavor::kVg;
-    } else if (graph_flavor == "dbg") {
-        imported.flavor = piru::io::ImportedGraphFlavor::kDbg;
-    } else {
-        imported.flavor = piru::io::ImportedGraphFlavor::kUnknown;
-    }
+    imported.flavor = piru::io::ImportedGraphFlavor::kVg;
 
     if (!loader->load(imported)) {
         LOG_ERROR("index: failed to read graph file '" + graph_path + "'");
@@ -129,31 +119,6 @@ int handle_index(const std::vector<std::string>& args) {
     // -------------------------------------------------------------------------
 
     const std::size_t pore_k = model->k();
-    std::size_t graph_k = 0;
-
-    // Auto-detect graph_k from overlap (DBG case)
-    if (!parsed.values.count("graph-k") && graph_flavor == "dbg") {
-        if (!imported.edges.empty() && imported.edges.front().overlap_bases.has_value()) {
-            const auto overlap = *imported.edges.front().overlap_bases;
-            graph_k = overlap + 1;
-        }
-    } else if (parsed.values.count("graph-k")) {
-        graph_k = std::stoul(parsed.values.at("graph-k"));
-    }
-
-    // VG graphs don't need graph_k
-    if (graph_flavor != "vg") {
-        if (graph_k == 0) {
-            LOG_ERROR("index: cannot determine graph k-mer size (provide --graph-k)");
-            return 1;
-        }
-
-        if (graph_k < pore_k) {
-            LOG_ERROR("index: graph k=" + std::to_string(graph_k) + " < pore k=" +
-                      std::to_string(pore_k) + " (invalid)");
-            return 1;
-        }
-    }
 
     // Use defaults from IndexPipelineConfig (single source of truth)
     piru::index::IndexPipelineConfig defaults;
@@ -168,30 +133,28 @@ int handle_index(const std::vector<std::string>& args) {
                                       ? parsed.values.at("seed-mode")
                                       : defaults.seed_mode;
 
-    std::string output_dir = graph_path + ".piru";
+    // Default output in current directory (stem without extension)
+    std::string output_base = std::filesystem::path(graph_path).stem().string();
     if (parsed.values.count("output")) {
-        output_dir = parsed.values.at("output");
+        output_base = parsed.values.at("output");
     }
 
-    LOG_INFO("input: " + graph_path + " (type=" + graph_flavor + ", graph_k=" +
-             std::to_string(graph_k) + ")");
+    LOG_INFO("input: " + graph_path);
     LOG_INFO("model: " + model->name() + " (k=" + std::to_string(pore_k) + ")");
     LOG_INFO("seeds: k=" + std::to_string(seed_k) + ", stride=" + std::to_string(seed_stride) +
              ", filter=" + std::to_string(seed_filter) + ", mode=" + seed_mode);
-    LOG_INFO("output: " + output_dir);
+    LOG_INFO("output: " + output_base);
 
     // -------------------------------------------------------------------------
     // Run Indexing Pipeline (shared with map --graph)
     // -------------------------------------------------------------------------
 
     piru::index::IndexPipelineConfig index_config;
-    index_config.graph_flavor = graph_flavor;
     index_config.linearizer = "superbubble";  // index command always uses superbubble
     if (parsed.values.count("index-backend")) {
         index_config.pipeline_mode = parsed.values.at("index-backend");
         LOG_INFO("Using index backend: " + index_config.pipeline_mode);
     }
-    index_config.graph_k = graph_k;
     index_config.seed_k = seed_k;
     index_config.seed_stride = seed_stride;
     index_config.seed_filter = seed_filter;
@@ -212,17 +175,17 @@ int handle_index(const std::vector<std::string>& args) {
     PIRU_PROFILE_START(profile, "serialize");
 
     if (index_config.pipeline_mode == "simple") {
-        // Simple index: single file format (.pir2)
-        std::string output_path = output_dir;
-        if (!output_path.ends_with(".pir2")) {
-            output_path += ".pir2";
+        // Simple index: single file format (.pirx)
+        std::string output_path = output_base;
+        if (!output_path.ends_with(".pirx")) {
+            output_path += ".pirx";
         }
 
         piru::io::index::SimpleIndexMetadata metadata;
         metadata.model_name = result.model_name;
         metadata.pore_k = result.pore_k;
         metadata.fuzzy_quantizer = result.fuzzy_quantizer;
-        metadata.graph_flavor = graph_flavor;
+        metadata.graph_flavor = "vg";
 
         piru::io::index::save_simple_index(
             output_path,
@@ -239,9 +202,11 @@ int handle_index(const std::vector<std::string>& args) {
             return 1;
         }
 
+        std::string output_dir = output_base + ".piru";
+
         piru::io::index::IndexMetadata metadata;
-        metadata.graph_flavor = result.graph_flavor == piru::io::ImportedGraphFlavor::kDbg ? 1 : 2;
-        metadata.graph_k = result.graph_k;
+        metadata.graph_flavor = 2;  // VG format
+        metadata.graph_k = 0;       // Not used for VG
         metadata.pore_k = result.pore_k;
         metadata.model_name = result.model_name;
         metadata.fuzzy_quantizer = result.fuzzy_quantizer;
