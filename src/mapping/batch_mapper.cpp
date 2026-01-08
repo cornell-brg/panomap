@@ -199,7 +199,6 @@ void BatchBuffer::resize(std::size_t capacity) {
     raw_reads.resize(capacity);
     normalized.resize(capacity);
     fuzzy_quantized.resize(capacity);
-    alignment_quantized.resize(capacity);
     seeds.resize(capacity);
     seed_hits.resize(capacity);
     anchors.resize(capacity);
@@ -212,7 +211,6 @@ void BatchBuffer::clear() {
         raw_reads[i] = io::RawRead{};
         normalized[i] = signal::NormalizedSignal{};
         fuzzy_quantized[i].tokens.clear();
-        alignment_quantized[i] = signal::AlignmentQuantizedSignal{};
         seeds[i].seeds.clear();
         seed_hits[i].clear();
         anchors[i].clear();
@@ -235,7 +233,6 @@ PipelineComponents BatchMapper::create_components() const {
     comps.event_pipeline = signal::make_event_pipeline(config_.event_pipeline_config);
 
     comps.fuzzy_quantizer = signal::make_fuzzy_quantizer(config_.fuzzy_config);
-    comps.alignment_quantizer = signal::make_alignment_quantizer(config_.alignment_config);
     comps.seed_extractor = signal::make_seed_extractor(config_.seed_config);
     comps.seed_store = config_.seed_store;
     comps.graph_store = config_.graph_store;
@@ -284,19 +281,9 @@ PipelineComponents BatchMapper::create_components() const {
     const auto* adj_store = dynamic_cast<const index::AdjListGraphStore*>(config_.graph_store);
     if (adj_store && config_.result_writer) {
         comps.result_formatter = std::make_unique<ResultFormatter>(
-            adj_store->graph(), config_.signal_store, config_.formatter_config);
+            adj_store->graph(), nullptr, config_.formatter_config);
         LOG_INFO("Result formatter enabled for output (min_secondary_ratio=" +
                  std::to_string(config_.formatter_config.min_secondary_ratio) + ")");
-    }
-
-    // Create chain aligner if alignment is enabled
-    if (config_.enable_alignment) {
-        comps.chain_aligner = std::make_unique<alignment::ChainAligner>(config_.align_config);
-        comps.signal_store = config_.signal_store;
-        std::string backend_name =
-            config_.align_config.backend == alignment::AlignerBackend::kPathGuided ? "path-guided" :
-            config_.align_config.backend == alignment::AlignerBackend::kRadius ? "radius" : "auto";
-        LOG_INFO("Signal-level alignment enabled: backend=" + backend_name);
     }
 
     return comps;
@@ -406,7 +393,6 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
                   static_cast<double>(read.len_raw_signal) / batch.normalized[index].samples.size()));
 
     batch.fuzzy_quantized[index] = components_.fuzzy_quantizer->quantize(batch.normalized[index]);
-    batch.alignment_quantized[index] = components_.alignment_quantizer->quantize(batch.normalized[index]);
     batch.seeds[index] = components_.seed_extractor->extract(batch.fuzzy_quantized[index]);
 
 #ifdef PIRU_DUMP_GRAPHS
@@ -470,7 +456,7 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
     if (!config_.dump_anchors_dir.empty()) {
         std::size_t dump_num = anchor_dump_counter.fetch_add(1);
         std::string anchor_file = config_.dump_anchors_dir + "/read_" + std::to_string(dump_num) + "_anchors.tsv";
-        dumpAnchorsToFile(anchor_file.c_str(), anchors, read.read_id, config_.graph_store, config_.signal_store);
+        dumpAnchorsToFile(anchor_file.c_str(), anchors, read.read_id, config_.graph_store, nullptr);
     }
 
     // Cluster anchors
@@ -485,37 +471,6 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
         Mapping mapping;
         mapping.anchors = cluster.anchors;
         mapping.chain_score = cluster.cluster_score;
-
-        // Run alignment if enabled
-        if (components_.chain_aligner && components_.signal_store && config_.graph_store &&
-            cluster.anchors.size() >= 2) {
-            // Convert SeedAnchors to alignment::Anchors
-            std::vector<alignment::Anchor> align_anchors;
-            align_anchors.reserve(cluster.anchors.size());
-            for (const auto& seed_anchor : cluster.anchors) {
-                alignment::Anchor a;
-                a.graph_pos.node_id = static_cast<std::uint32_t>(seed_anchor.target.node_id);
-                a.graph_pos.offset = static_cast<std::uint32_t>(seed_anchor.target.offset);
-                a.query_pos = static_cast<std::uint32_t>(seed_anchor.read_pos);
-                align_anchors.push_back(a);
-            }
-
-            // Run alignment
-            auto align_result = components_.chain_aligner->align(
-                *config_.graph_store, *components_.signal_store,
-                batch.alignment_quantized[index], align_anchors);
-
-            if (align_result.valid()) {
-                mapping.alignment_cost = align_result.total_cost;
-                std::size_t query_len = cluster.anchors.back().read_pos - cluster.anchors.front().read_pos;
-                if (query_len > 0) {
-                    mapping.normalized_alignment_cost = align_result.normalizedCost(query_len);
-                }
-                mapping.alignment_path = std::move(align_result.path);
-                mapping.segments_aligned = align_result.segments_aligned;
-            }
-        }
-
         result.mappings.push_back(std::move(mapping));
     }
 
@@ -524,7 +479,7 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
     if (!config_.dump_chains_dir.empty()) {
         std::size_t dump_num = chain_dump_counter.fetch_add(1);
         std::string chain_file = config_.dump_chains_dir + "/read_" + std::to_string(dump_num) + "_chain.tsv";
-        dumpChainToFile(chain_file.c_str(), result, read.read_id, config_.graph_store, config_.signal_store);
+        dumpChainToFile(chain_file.c_str(), result, read.read_id, config_.graph_store, nullptr);
     }
 }
 

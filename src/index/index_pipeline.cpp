@@ -4,20 +4,12 @@
 
 #include <chrono>
 #include <memory>
-#include <set>
 #include <stdexcept>
 
-#include "index/linearizer_factory.hpp"
 #include "index/path_walk_indexer.hpp"
-#include "index/pseudo_linearize.hpp"
-#include "index/seed_builder.hpp"
-#include "index/squigglize.hpp"
 #include "index/simple_expand.hpp"
-#include "index/vg_transform_factory.hpp"
-#include "signal/alignment_quantizers/alignment_quantizer_factory.hpp"
 #include "signal/fuzzy_quantizers/fuzzy_quantizer_factory.hpp"
 #include "signal/seed_extractors/seed_extractor_factory.hpp"
-#include "alignment/signal_utils.hpp"
 #include "util/logging.hpp"
 
 #ifdef PIRU_DUMP_GRAPHS
@@ -31,138 +23,30 @@ IndexPipelineResult run_index_pipeline(
     const io::KmerModel& model,
     const IndexPipelineConfig& config) {
 
-    // -------------------------------------------------------------------------
-    // Simple Pipeline Mode
-    // -------------------------------------------------------------------------
-    if (config.pipeline_mode == "simple") {
-        auto stage_start = std::chrono::high_resolution_clock::now();
-
-        // Stage 1: Simple ±expand (2x nodes)
-        AlnGraph aln_graph = simpleExpand(imported);
-
-        auto stage_elapsed = std::chrono::duration<double>(
-            std::chrono::high_resolution_clock::now() - stage_start).count();
-        LOG_INFO("[1/2] Transforming graph to directional graph: " + std::to_string(aln_graph.nodeCount()) +
-                 " nodes, " + std::to_string(aln_graph.edgeCount()) + " edges, " +
-                 std::to_string(aln_graph.pathCount()) + " paths [" +
-                 std::to_string(stage_elapsed) + "s]");
-
-#ifdef PIRU_DUMP_GRAPHS
-        GfaExporter::dumpAlnGraph(aln_graph, "simple_expanded.gfa", AlnGraphDumpMode::Bases);
-        LOG_INFO("Exported simple expanded graph to simple_expanded.gfa");
-#endif
-
-        // Stage 2: Unified path-walk (squigglize + linearize + index)
-        stage_start = std::chrono::high_resolution_clock::now();
-
-        // Create fuzzy quantizer
-        signal::FuzzyQuantizerConfig fuzzy_cfg;
-        fuzzy_cfg.backend = config.fuzzy_quantizer;
-        fuzzy_cfg.pore_model = model.name();
-        fuzzy_cfg.fine_min = config.fuzzy_fine_min;
-        fuzzy_cfg.fine_max = config.fuzzy_fine_max;
-        fuzzy_cfg.fine_range = config.fuzzy_fine_range;
-        fuzzy_cfg.n_bins = config.fuzzy_n_bins;
-        auto fuzzy_quantizer = signal::make_fuzzy_quantizer(fuzzy_cfg);
-        if (!fuzzy_quantizer) {
-            throw std::runtime_error("Failed to create fuzzy quantizer: " + config.fuzzy_quantizer);
-        }
-
-        // Create seed extractor
-        signal::SeedExtractorConfig extractor_cfg;
-        extractor_cfg.backend = "kmer";
-        extractor_cfg.k = config.seed_k;
-        extractor_cfg.stride = config.seed_stride;
-        extractor_cfg.qbits = 4;
-        auto extractor = signal::make_seed_extractor(extractor_cfg);
-        if (!extractor) {
-            throw std::runtime_error("Failed to create seed extractor");
-        }
-
-        // Run unified path-walk indexing
-        PathWalkIndexConfig pwi_config;
-        pwi_config.seed_k = config.seed_k;
-        pwi_config.seed_stride = config.seed_stride;
-        pwi_config.seed_filter = config.seed_filter;
-
-        auto pwi_result = pathWalkIndex(aln_graph, model, *fuzzy_quantizer, *extractor, pwi_config);
-
-        stage_elapsed = std::chrono::duration<double>(
-            std::chrono::high_resolution_clock::now() - stage_start).count();
-        LOG_INFO("[2/2] path-walk indexed: " + std::to_string(pwi_result.seeds_unique) +
-                 " unique seeds [" + std::to_string(stage_elapsed) + "s]");
-
-        // Copy path lengths to graph paths (for result_formatter coordinate flipping)
-        for (std::size_t i = 0; i < aln_graph.pathCount(); ++i) {
-            aln_graph.mutablePath(i).length = pwi_result.path_lengths[i];
-        }
-
-        // Package result
-        IndexPipelineResult result;
-        result.graph_store = std::make_unique<AdjListGraphStore>(std::move(aln_graph));
-        result.seed_store = std::move(pwi_result.seed_store);
-        result.linearization_coords = std::move(pwi_result.linearization_coords);
-        result.pore_k = model.k();
-        result.model_name = model.name();
-        result.fuzzy_quantizer = fuzzy_cfg.backend;
-        // No signal_store for simple pipeline
-
-        return result;
-    }
-
-    // -------------------------------------------------------------------------
-    // Classic Pipeline Mode
-    // -------------------------------------------------------------------------
-    IndexPipelineResult result;
-    const std::size_t pore_k = model.k();
-
-    // -------------------------------------------------------------------------
-    // Stage 1: Graph Transformation (ImportedGraph -> AlnGraph)
-    // -------------------------------------------------------------------------
-
-    AlnGraph aln_graph;
-
     auto stage_start = std::chrono::high_resolution_clock::now();
 
-    // VG transformation using path-guided approach
-    TransformConfig transform_config;
-    transform_config.uncovered_strategy = "expand";
-
-    auto vg_transform = makeVGTransform("path_guided", transform_config);
-    aln_graph = vg_transform->apply(imported, 0, pore_k);
-
-    auto stats = vg_transform->getStats();
-    LOG_INFO("VG transform: " + std::to_string(stats.original_node_count) +
-             " original nodes → " + std::to_string(stats.transformed_node_count) +
-             " transformed nodes (" + std::to_string(stats.node_expansion_ratio) +
-             "x expansion)");
-    LOG_INFO("VG coverage: " + std::to_string(stats.uncovered_node_count) + " uncovered nodes");
-
-    if (!aln_graph.validate()) {
-        throw std::runtime_error("AlnGraph validation failed after transformation");
-    }
-
-#ifdef PIRU_DUMP_GRAPHS
-    GfaExporter::dumpAlnGraph(aln_graph, "transformed_graph.gfa", AlnGraphDumpMode::Bases);
-#endif
+    // Stage 1: Simple ±expand (2x nodes)
+    AlnGraph aln_graph = simpleExpand(imported);
 
     auto stage_elapsed = std::chrono::duration<double>(
         std::chrono::high_resolution_clock::now() - stage_start).count();
-    LOG_INFO("[1/4] transformed: " + std::to_string(aln_graph.nodeCount()) +
-             " directional nodes (originally " + std::to_string(imported.nodes.size()) +
-             " bidirected nodes) [" + std::to_string(stage_elapsed) + "s]");
+    LOG_INFO("[1/2] Transforming graph to directional graph: " + std::to_string(aln_graph.nodeCount()) +
+             " nodes, " + std::to_string(aln_graph.edgeCount()) + " edges, " +
+             std::to_string(aln_graph.pathCount()) + " paths [" +
+             std::to_string(stage_elapsed) + "s]");
 
-    // -------------------------------------------------------------------------
-    // Stage 2: Squigglization + Quantization
-    // -------------------------------------------------------------------------
-    // Note: Squigglization happens before linearization so we can use
-    // actual signal sizes for linear coordinate computation.
+#ifdef PIRU_DUMP_GRAPHS
+    GfaExporter::dumpAlnGraph(aln_graph, "simple_expanded.gfa", AlnGraphDumpMode::Bases);
+    LOG_INFO("Exported simple expanded graph to simple_expanded.gfa");
+#endif
 
+    // Stage 2: Unified path-walk (squigglize + linearize + index)
     stage_start = std::chrono::high_resolution_clock::now();
 
+    // Create fuzzy quantizer
     signal::FuzzyQuantizerConfig fuzzy_cfg;
     fuzzy_cfg.backend = config.fuzzy_quantizer;
-    fuzzy_cfg.pore_model = model.name();  // For chemistry-specific defaults (R9 vs R10)
+    fuzzy_cfg.pore_model = model.name();
     fuzzy_cfg.fine_min = config.fuzzy_fine_min;
     fuzzy_cfg.fine_max = config.fuzzy_fine_max;
     fuzzy_cfg.fine_range = config.fuzzy_fine_range;
@@ -172,134 +56,43 @@ IndexPipelineResult run_index_pipeline(
         throw std::runtime_error("Failed to create fuzzy quantizer: " + config.fuzzy_quantizer);
     }
 
-    signal::AlignmentQuantizerConfig align_cfg;
-    align_cfg.backend = config.alignment_quantizer;
-    if (config.alignment_scale > 0.0) {
-        align_cfg.scale = config.alignment_scale;
-    }
-    auto alignment_quantizer = signal::make_alignment_quantizer(align_cfg);
-    if (!alignment_quantizer) {
-        throw std::runtime_error("Failed to create alignment quantizer: " +
-                                 config.alignment_quantizer);
-    }
-
-    const auto squiggle_result = squigglizeAndQuantize(
-        aln_graph, model, *fuzzy_quantizer, *alignment_quantizer);
-
-#ifdef PIRU_DUMP_GRAPHS
-    GfaExporter::dumpAlnGraph(aln_graph, "raw_signals.gfa", AlnGraphDumpMode::RawSignal,
-                              &squiggle_result.raw_signals);
-    GfaExporter::dumpAlnGraph(aln_graph, "fuzzy_quantized.gfa", AlnGraphDumpMode::FuzzyQuantized,
-                              &squiggle_result.fuzzy_signals);
-    GfaExporter::dumpAlnGraph(aln_graph, "aln_quantized.gfa", AlnGraphDumpMode::AlnQuantized,
-                              &squiggle_result.alignment_signals);
-#endif
-
-    std::size_t total_samples = 0;
-    std::set<std::int16_t> unique_tokens;
-    for (const auto& sig : squiggle_result.fuzzy_signals) {
-        total_samples += sig.tokens.size();
-        for (const auto token : sig.tokens) {
-            unique_tokens.insert(token);
-        }
-    }
-
-    stage_elapsed = std::chrono::duration<double>(
-        std::chrono::high_resolution_clock::now() - stage_start).count();
-    LOG_INFO("[2/4] squigglized: " + std::to_string(total_samples) + " signal samples, " +
-             std::to_string(unique_tokens.size()) + " unique fuzzy tokens [" +
-             std::to_string(stage_elapsed) + "s]");
-
-    // Extract signal sizes for linearization.
-    std::vector<std::size_t> signal_sizes;
-    signal_sizes.reserve(aln_graph.nodeCount());
-    for (const auto& sig : squiggle_result.alignment_signals) {
-        signal_sizes.push_back(alignment::signalLength(sig));
-    }
-
-    // -------------------------------------------------------------------------
-    // Stage 3: Linearization
-    // -------------------------------------------------------------------------
-
-    stage_start = std::chrono::high_resolution_clock::now();
-
-    auto linearizer = make_linearizer(config.linearizer);
-    if (!linearizer) {
-        throw std::runtime_error("Failed to create linearizer: " + config.linearizer);
-    }
-
-    result.linearization_coords = linearizer->linearize(aln_graph, signal_sizes);
-
-    stage_elapsed = std::chrono::duration<double>(
-        std::chrono::high_resolution_clock::now() - stage_start).count();
-    LOG_INFO("[3/4] linearized with " + linearizer->name() + " backend [" +
-             std::to_string(stage_elapsed) + "s]");
-
-    // For superbubble backend, also store in graph nodes for serialization compatibility
-    if (config.linearizer == "superbubble") {
-        // Extract chain_id and linear_position from linearization coords
-        for (std::size_t i = 0; i < aln_graph.nodeCount(); ++i) {
-            if (!result.linearization_coords[i].empty()) {
-                const auto& coord = result.linearization_coords[i][0];
-                aln_graph.mutableNode(i).chain_id = static_cast<std::int64_t>(coord.path_id);
-                aln_graph.mutableNode(i).linear_position = coord.ref_coord;
-            } else {
-                aln_graph.mutableNode(i).chain_id = -1;
-                aln_graph.mutableNode(i).linear_position = -1;
-            }
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    // Stage 4: Seed Extraction & Indexing
-    // -------------------------------------------------------------------------
-
-    stage_start = std::chrono::high_resolution_clock::now();
-
+    // Create seed extractor
     signal::SeedExtractorConfig extractor_cfg;
     extractor_cfg.backend = "kmer";
     extractor_cfg.k = config.seed_k;
     extractor_cfg.stride = config.seed_stride;
     extractor_cfg.qbits = 4;
-
-    LOG_DEBUG("Seed extraction config: k=" + std::to_string(config.seed_k) +
-             ", stride=" + std::to_string(config.seed_stride) +
-             ", qbits=" + std::to_string(extractor_cfg.qbits) +
-             ", backend=" + extractor_cfg.backend);
-
     auto extractor = signal::make_seed_extractor(extractor_cfg);
     if (!extractor) {
         throw std::runtime_error("Failed to create seed extractor");
     }
 
-    SeedBuildConfig seed_cfg;
-    seed_cfg.keep_least_frequent_fraction = config.seed_filter;
+    // Run unified path-walk indexing
+    PathWalkIndexConfig pwi_config;
+    pwi_config.seed_k = config.seed_k;
+    pwi_config.seed_stride = config.seed_stride;
+    pwi_config.seed_filter = config.seed_filter;
 
-    // Pass nullptr for node-based seeding, or &aln_graph for path-guided seeding
-    const AlnGraph* graph_for_seeding = (config.seed_mode == "path") ? &aln_graph : nullptr;
-    auto seed_store = buildSeedStore(graph_for_seeding, squiggle_result.fuzzy_signals, *extractor, seed_cfg);
+    auto pwi_result = pathWalkIndex(aln_graph, model, *fuzzy_quantizer, *extractor, pwi_config);
 
     stage_elapsed = std::chrono::duration<double>(
         std::chrono::high_resolution_clock::now() - stage_start).count();
-    LOG_INFO("[4/4] indexed: " + std::to_string(seed_store.size()) +
-             " unique seeds (max_freq=" + std::to_string(seed_store.max_hash_frequency()) +
-             ") [" + std::to_string(stage_elapsed) + "s]");
+    LOG_INFO("[2/2] path-walk indexed: " + std::to_string(pwi_result.seeds_unique) +
+             " unique seeds [" + std::to_string(stage_elapsed) + "s]");
 
-    // -------------------------------------------------------------------------
-    // Package results
-    // -------------------------------------------------------------------------
+    // Copy path lengths to graph paths (for result_formatter coordinate flipping)
+    for (std::size_t i = 0; i < aln_graph.pathCount(); ++i) {
+        aln_graph.mutablePath(i).length = pwi_result.path_lengths[i];
+    }
 
+    // Package result
+    IndexPipelineResult result;
     result.graph_store = std::make_unique<AdjListGraphStore>(std::move(aln_graph));
-    result.signal_store = std::make_unique<VectorSignalStore>(
-        std::move(squiggle_result.alignment_signals));
-    result.seed_store = std::make_unique<HashSeedStore>(std::move(seed_store));
-
-    result.pore_k = pore_k;
+    result.seed_store = std::move(pwi_result.seed_store);
+    result.linearization_coords = std::move(pwi_result.linearization_coords);
+    result.pore_k = model.k();
     result.model_name = model.name();
     result.fuzzy_quantizer = fuzzy_cfg.backend;
-    result.alignment_quantizer = align_cfg.backend;
-    result.alignment_scale = alignment_quantizer->scale();
-    result.alignment_offset = alignment_quantizer->offset();
 
     return result;
 }

@@ -9,7 +9,6 @@
 
 #include "concurrency/executor.hpp"
 #include "io/reads/read_provider.hpp"
-#include "signal/alignment_quantizers/alignment_quantizer_factory.hpp"
 #include "signal/event_pipelines/event_pipeline_factory.hpp"
 #include "signal/fuzzy_quantizers/fuzzy_quantizer_factory.hpp"
 #include "signal/seed_extractors/seed_extractor_factory.hpp"
@@ -22,7 +21,6 @@
 #include "mapping/anchor_expander.hpp"
 #include "mapping/map_result.hpp"
 #include "mapping/result_formatter.hpp"
-#include "alignment/chain_aligner.hpp"
 #include "io/results/result_writer.hpp"
 
 namespace piru::mapping {
@@ -49,23 +47,16 @@ struct BatchMapperConfig {
 
     signal::EventPipelineConfig event_pipeline_config{};  // Unified event detection + normalization
     signal::FuzzyQuantizerConfig fuzzy_config{};
-    signal::AlignmentQuantizerConfig alignment_config{};
     signal::SeedExtractorConfig seed_config{};
     SeedClustererConfig clusterer_config{};
     const index::SeedStore* seed_store{nullptr};  // non-owning pointer to loaded SeedStore
     const index::GraphStore* graph_store{nullptr};  // non-owning pointer to loaded GraphStore
-    const index::SignalStore* signal_store{nullptr};  // non-owning pointer to loaded SignalStore (for alignment)
-
     // Linearization coordinates (needed for DP chaining)
     // Non-owning pointer to linearization coords (from in-memory indexing or future deserialization)
     const std::vector<std::vector<index::LinearCoordinate>>* linearization_coords{nullptr};
 
     // Result writer for output (non-owning, optional)
     io::ResultWriter* result_writer{nullptr};
-
-    // Alignment configuration (optional signal-level alignment)
-    bool enable_alignment{false};
-    alignment::ChainAlignerConfig align_config{};
 
     // Debug dump directories (empty = disabled)
     std::string dump_anchors_dir{};  // Dump anchors per read
@@ -92,7 +83,6 @@ struct BatchBuffer {
     std::vector<io::RawRead> raw_reads;
     std::vector<signal::NormalizedSignal> normalized;
     std::vector<signal::FuzzyQuantizedSignal> fuzzy_quantized;
-    std::vector<signal::AlignmentQuantizedSignal> alignment_quantized;
     std::vector<signal::SeedBuffer> seeds;
     std::vector<std::vector<SeedHitRecord>> seed_hits;
     std::vector<std::vector<Anchor>> anchors;  // Debug: anchors after expansion
@@ -106,16 +96,13 @@ struct BatchBuffer {
 struct PipelineComponents {
     signal::EventPipelinePtr event_pipeline;
     signal::FuzzyQuantizerPtr fuzzy_quantizer;
-    signal::AlignmentQuantizerPtr alignment_quantizer;
     signal::SeedExtractorPtr seed_extractor;
     const index::SeedStore* seed_store{nullptr};  // non-owning; loaded index
     const index::GraphStore* graph_store{nullptr};  // non-owning; loaded index
-    const index::SignalStore* signal_store{nullptr};  // non-owning; for alignment
     SeedLookup lookup{nullptr, nullptr, 0};
     AnchorExpanderPtr expander;  // Expands SeedHits to Anchors
     SeedClustererPtr clusterer;
-    std::unique_ptr<ResultFormatter> result_formatter;       // Formats map results to PAF/GAF
-    std::unique_ptr<alignment::ChainAligner> chain_aligner;  // Optional signal-level alignment
+    std::unique_ptr<ResultFormatter> result_formatter;  // Formats map results to PAF/GAF
 };
 
 class BatchMapper {

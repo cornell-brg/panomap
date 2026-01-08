@@ -11,7 +11,6 @@
 #include "index/graph_store.hpp"
 #include "index/linearizer.hpp"
 #include "index/seed_store.hpp"
-#include "index/signal_store.hpp"
 #include "io/graphs/graph.hpp"
 #include "io/models/model.hpp"
 
@@ -22,26 +21,6 @@ namespace piru::index {
 // IMPORTANT: These defaults are shared by both `piru index` and `piru map --graph`.
 // This is the single source of truth for indexing parameters.
 struct IndexPipelineConfig {
-    // -------------------------------------------------------------------------
-    // Pipeline Mode
-    // -------------------------------------------------------------------------
-
-    // Pipeline backend: "simple" or "classic"
-    // - simple: all in one go path indexing (current default)
-    // - classic: Existing path-guided transform with context handling
-    std::string pipeline_mode{"simple"};
-
-    // -------------------------------------------------------------------------
-    // Linearization Parameters
-    // -------------------------------------------------------------------------
-
-    // Linearization backend: "superbubble" or "path-walk"
-    // - superbubble: Uses pseudo-linearization with local chain coordinates
-    //                (supports serialization, works without reference paths)
-    // - path-walk:   Walks reference paths to assign global coordinates
-    //                (requires graph with paths, needed for DP chaining)
-    std::string linearizer{"superbubble"};
-
     // -------------------------------------------------------------------------
     // Signal Processing Parameters
     // -------------------------------------------------------------------------
@@ -54,14 +33,6 @@ struct IndexPipelineConfig {
     float fuzzy_fine_max{2.0f};    // Maximum value for fine quantization region
     float fuzzy_fine_range{0.4f};  // Range per fine quantization bin
     std::uint32_t fuzzy_n_bins{0}; // Number of bins (0 = use 2^qbits = 16)
-
-    // Alignment quantizer: "int16", "int8", or "passthrough"
-    // - Converts normalized signal to integer format for alignment
-    // - int16: 16-bit signed integers with auto-scaling (default)
-    std::string alignment_quantizer{"int16"};
-
-    // Alignment quantizer scale override (0 = auto-detect from signal range)
-    double alignment_scale{0.0};
 
     // -------------------------------------------------------------------------
     // Seed Extraction Parameters
@@ -113,7 +84,6 @@ struct IndexPipelineConfig {
 struct IndexPipelineResult {
     // Core index components
     std::unique_ptr<GraphStore> graph_store;
-    std::unique_ptr<SignalStore> signal_store;
     std::unique_ptr<SeedStore> seed_store;
 
     // Linearization coordinates (needed for DP chaining)
@@ -123,9 +93,6 @@ struct IndexPipelineResult {
     std::size_t pore_k{0};
     std::string model_name;
     std::string fuzzy_quantizer;
-    std::string alignment_quantizer;
-    double alignment_scale{1.0};
-    double alignment_offset{0.0};
 };
 
 // Run the full indexing pipeline on an imported graph.

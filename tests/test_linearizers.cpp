@@ -4,8 +4,6 @@
 
 #include "index/linearizer_factory.hpp"
 #include "index/path_walk_linearizer.hpp"
-#include "index/pseudo_linearize.hpp"
-#include "index/superbubble_linearizer.hpp"
 
 using namespace piru::index;
 
@@ -84,33 +82,6 @@ AlnGraph createBubbleGraph() {
   graph.addEdge({2, 3, 0});  // C -> D
 
   return graph;
-}
-
-TEST_CASE("SuperbubbleLinearizer on linear graph") {
-  AlnGraph graph = createLinearGraph();
-
-  // Add path
-  AlnPath path;
-  path.name = "path1";
-  path.steps.push_back({"A", false});
-  path.steps.push_back({"B", false});
-  path.steps.push_back({"C", false});
-  graph.addPath(path);
-
-  auto signal_sizes = createMockSignalSizes(graph);
-  SuperbubbleLinearizer linearizer;
-  auto coords = linearizer.linearize(graph, signal_sizes);
-
-  REQUIRE(coords.size() == 3);
-
-  // All nodes should get coordinates (linear graph forms one chain).
-  // Each node gets exactly one coordinate.
-  CHECK(coords[0].size() >= 0);  // Node A
-  CHECK(coords[1].size() >= 0);  // Node B
-  CHECK(coords[2].size() >= 0);  // Node C
-
-  // Check that linearizer name is correct
-  CHECK(linearizer.name() == "superbubble");
 }
 
 TEST_CASE("PathWalkLinearizer on linear graph with single path") {
@@ -299,12 +270,6 @@ TEST_CASE("PathWalkLinearizer with varying signal sizes") {
 }
 
 TEST_CASE("Linearizer factory creates correct backends") {
-  SUBCASE("superbubble backend") {
-    auto linearizer = make_linearizer("superbubble");
-    REQUIRE(linearizer != nullptr);
-    CHECK(linearizer->name() == "superbubble");
-  }
-
   SUBCASE("path-walk backend") {
     auto linearizer = make_linearizer("path-walk");
     REQUIRE(linearizer != nullptr);

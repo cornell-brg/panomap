@@ -10,7 +10,6 @@
 #include "cli/parse.hpp"
 #include "index/index_pipeline.hpp"
 #include "io/graphs/graph_loader_factory.hpp"
-#include "io/index/serialization.hpp"
 #include "io/index/simple_serialization.hpp"
 #include "io/models/model_factory.hpp"
 #include "util/logging.hpp"
@@ -43,10 +42,9 @@ int handle_index(const std::vector<std::string>& args) {
     config.positional_help = {"<graph-file>      Graph file to index"};
     config.options = {
         {'h', "help", false, "Show help"},
-        {'\0', "index-backend", true, "Index pipeline: simple (default) or classic"},
         {'v', "verbose", false, "Enable verbose logging (DEBUG level)"},
         {'m', "model", true, "Pore model (builtin name: r9.4/r10.4 or model file path)"},
-        {'o', "output", true, "Output index directory (default: <graph-file>.piru)"},
+        {'o', "output", true, "Output index file (default: <graph-file>.pirx)"},
         {'t', "threads", true, "Worker threads"},
         {'p', "profile", false, "Emit timing profile (tree)"},
         {'\0', "", false, "\nSeed Generation Options:"},
@@ -54,9 +52,6 @@ int handle_index(const std::vector<std::string>& args) {
         {'\0', "seed-stride", true, "Seed stride (default: 1)"},
         {'\0', "seed-filter", true, "Keep least frequent seed fraction (default: 0.9)"},
         {'\0', "seed-mode", true, "Seeding mode: node, path (default)"},
-        {'\0', "", false, "\nAlignment Quantization Options:"},
-        {'\0', "aq-backend", true, "Backend: int16 (default), int8, passthrough"},
-        {'\0', "aq-scale", true, "Manual scale override (expert)"},
     };
     config.on_error = [](const std::string&) { std::cerr << "index: invalid option\n"; };
 
@@ -150,21 +145,11 @@ int handle_index(const std::vector<std::string>& args) {
     // -------------------------------------------------------------------------
 
     piru::index::IndexPipelineConfig index_config;
-    index_config.linearizer = "superbubble";  // index command always uses superbubble
-    if (parsed.values.count("index-backend")) {
-        index_config.pipeline_mode = parsed.values.at("index-backend");
-        LOG_INFO("Using index backend: " + index_config.pipeline_mode);
-    }
     index_config.seed_k = seed_k;
     index_config.seed_stride = seed_stride;
     index_config.seed_filter = seed_filter;
     index_config.seed_mode = seed_mode;
     index_config.fuzzy_quantizer = "rh2";
-    index_config.alignment_quantizer =
-        parsed.values.count("aq-backend") ? parsed.values.at("aq-backend") : "int16";
-    if (parsed.values.count("aq-scale")) {
-        index_config.alignment_scale = std::stod(parsed.values.at("aq-scale"));
-    }
 
     auto result = piru::index::run_index_pipeline(imported, *model, index_config);
 
@@ -174,59 +159,25 @@ int handle_index(const std::vector<std::string>& args) {
 
     PIRU_PROFILE_START(profile, "serialize");
 
-    if (index_config.pipeline_mode == "simple") {
-        // Simple index: single file format (.pirx)
-        std::string output_path = output_base;
-        if (!output_path.ends_with(".pirx")) {
-            output_path += ".pirx";
-        }
-
-        piru::io::index::SimpleIndexMetadata metadata;
-        metadata.model_name = result.model_name;
-        metadata.pore_k = result.pore_k;
-        metadata.fuzzy_quantizer = result.fuzzy_quantizer;
-        metadata.graph_flavor = "vg";
-
-        piru::io::index::save_simple_index(
-            output_path,
-            *result.graph_store,
-            *result.seed_store,
-            result.linearization_coords,
-            metadata);
-
-        LOG_INFO("Simple index written to " + output_path);
-    } else {
-        // Classic index: directory with multiple files
-        if (!result.signal_store) {
-            LOG_ERROR("Classic pipeline requires signal store");
-            return 1;
-        }
-
-        std::string output_dir = output_base + ".piru";
-
-        piru::io::index::IndexMetadata metadata;
-        metadata.graph_flavor = 2;  // VG format
-        metadata.graph_k = 0;       // Not used for VG
-        metadata.pore_k = result.pore_k;
-        metadata.model_name = result.model_name;
-        metadata.fuzzy_quantizer = result.fuzzy_quantizer;
-        metadata.align_quantizer = result.alignment_quantizer;
-        metadata.source_path = graph_path;
-
-        if (!std::filesystem::exists(output_dir)) {
-            std::filesystem::create_directory(output_dir);
-        }
-
-        std::filesystem::path dir_path(output_dir);
-        std::string basename = dir_path.filename().string();
-
-        piru::io::index::write_graph(dir_path / (basename + ".graph"), *result.graph_store, metadata);
-        piru::io::index::write_signals(dir_path / (basename + ".signals"), *result.signal_store,
-                                        result.alignment_scale, result.alignment_offset);
-        piru::io::index::write_seeds(dir_path / (basename + ".seeds"), *result.seed_store);
-
-        LOG_INFO("Index written to " + output_dir);
+    std::string output_path = output_base;
+    if (!output_path.ends_with(".pirx")) {
+        output_path += ".pirx";
     }
+
+    piru::io::index::SimpleIndexMetadata metadata;
+    metadata.model_name = result.model_name;
+    metadata.pore_k = result.pore_k;
+    metadata.fuzzy_quantizer = result.fuzzy_quantizer;
+    metadata.graph_flavor = "vg";
+
+    piru::io::index::save_simple_index(
+        output_path,
+        *result.graph_store,
+        *result.seed_store,
+        result.linearization_coords,
+        metadata);
+
+    LOG_INFO("Index written to " + output_path);
 
     PIRU_PROFILE_STOP(profile, "serialize");
 
