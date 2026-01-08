@@ -2,6 +2,7 @@
 
 #include "index/index_pipeline.hpp"
 
+#include <chrono>
 #include <memory>
 #include <set>
 #include <stdexcept>
@@ -37,6 +38,8 @@ IndexPipelineResult run_index_pipeline(
     // -------------------------------------------------------------------------
 
     AlnGraph aln_graph;
+
+    auto stage_start = std::chrono::high_resolution_clock::now();
 
     if (config.graph_flavor == "dbg") {
         if (config.graph_k == 0) {
@@ -74,15 +77,19 @@ IndexPipelineResult run_index_pipeline(
     GfaExporter::dumpAlnGraph(aln_graph, "transformed_graph.gfa", AlnGraphDumpMode::Bases);
 #endif
 
+    auto stage_elapsed = std::chrono::duration<double>(
+        std::chrono::high_resolution_clock::now() - stage_start).count();
     LOG_INFO("[1/4] transformed: " + std::to_string(aln_graph.nodeCount()) +
              " directional nodes (originally " + std::to_string(imported.nodes.size()) +
-             " bidirected nodes)");
+             " bidirected nodes) [" + std::to_string(stage_elapsed) + "s]");
 
     // -------------------------------------------------------------------------
     // Stage 2: Squigglization + Quantization
     // -------------------------------------------------------------------------
     // Note: Squigglization happens before linearization so we can use
     // actual signal sizes for linear coordinate computation.
+
+    stage_start = std::chrono::high_resolution_clock::now();
 
     signal::FuzzyQuantizerConfig fuzzy_cfg;
     fuzzy_cfg.backend = config.fuzzy_quantizer;
@@ -128,8 +135,11 @@ IndexPipelineResult run_index_pipeline(
         }
     }
 
+    stage_elapsed = std::chrono::duration<double>(
+        std::chrono::high_resolution_clock::now() - stage_start).count();
     LOG_INFO("[2/4] squigglized: " + std::to_string(total_samples) + " signal samples, " +
-             std::to_string(unique_tokens.size()) + " unique fuzzy tokens");
+             std::to_string(unique_tokens.size()) + " unique fuzzy tokens [" +
+             std::to_string(stage_elapsed) + "s]");
 
     // Extract signal sizes for linearization.
     std::vector<std::size_t> signal_sizes;
@@ -142,6 +152,8 @@ IndexPipelineResult run_index_pipeline(
     // Stage 3: Linearization
     // -------------------------------------------------------------------------
 
+    stage_start = std::chrono::high_resolution_clock::now();
+
     auto linearizer = make_linearizer(config.linearizer);
     if (!linearizer) {
         throw std::runtime_error("Failed to create linearizer: " + config.linearizer);
@@ -149,7 +161,10 @@ IndexPipelineResult run_index_pipeline(
 
     result.linearization_coords = linearizer->linearize(aln_graph, signal_sizes);
 
-    LOG_INFO("[3/4] linearized with " + linearizer->name() + " backend");
+    stage_elapsed = std::chrono::duration<double>(
+        std::chrono::high_resolution_clock::now() - stage_start).count();
+    LOG_INFO("[3/4] linearized with " + linearizer->name() + " backend [" +
+             std::to_string(stage_elapsed) + "s]");
 
     // For superbubble backend, also store in graph nodes for serialization compatibility
     if (config.linearizer == "superbubble") {
@@ -169,6 +184,8 @@ IndexPipelineResult run_index_pipeline(
     // -------------------------------------------------------------------------
     // Stage 4: Seed Extraction & Indexing
     // -------------------------------------------------------------------------
+
+    stage_start = std::chrono::high_resolution_clock::now();
 
     signal::SeedExtractorConfig extractor_cfg;
     extractor_cfg.backend = "kmer";
@@ -193,8 +210,11 @@ IndexPipelineResult run_index_pipeline(
     const AlnGraph* graph_for_seeding = (config.seed_mode == "path") ? &aln_graph : nullptr;
     auto seed_store = buildSeedStore(graph_for_seeding, squiggle_result.fuzzy_signals, *extractor, seed_cfg);
 
+    stage_elapsed = std::chrono::duration<double>(
+        std::chrono::high_resolution_clock::now() - stage_start).count();
     LOG_INFO("[4/4] indexed: " + std::to_string(seed_store.size()) +
-             " unique seeds (max_freq=" + std::to_string(seed_store.max_hash_frequency()) + ")");
+             " unique seeds (max_freq=" + std::to_string(seed_store.max_hash_frequency()) +
+             ") [" + std::to_string(stage_elapsed) + "s]");
 
     // -------------------------------------------------------------------------
     // Package results

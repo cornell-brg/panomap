@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT
 #include "index/path_guided_transform.hpp"
 #include <algorithm>
+#include <chrono>
 #include <stdexcept>
+#include "util/logging.hpp"
 
 namespace piru::index {
 
@@ -267,16 +269,8 @@ std::unordered_map<std::string, std::size_t> PathGuidedTransform::walkPathsAndAd
       auto to_it = variant_map.find(to_key);
 
       if (from_it != variant_map.end() && to_it != variant_map.end()) {
-        // Check if edge already exists
-        bool edge_exists = false;
-        for (const auto& existing_edge : graph.edges()) {
-          if (existing_edge.from == from_it->second && existing_edge.to == to_it->second) {
-            edge_exists = true;
-            break;
-          }
-        }
-
-        if (!edge_exists) {
+        // O(degree) edge existence check
+        if (!graph.hasEdge(from_it->second, to_it->second)) {
           AlnEdge edge;
           edge.from = from_it->second;
           edge.to = to_it->second;
@@ -316,16 +310,8 @@ std::unordered_map<std::string, std::size_t> PathGuidedTransform::walkPathsAndAd
       auto to_it = variant_map.find(to_key);
 
       if (from_it != variant_map.end() && to_it != variant_map.end()) {
-        // Check if edge already exists
-        bool edge_exists = false;
-        for (const auto& existing_edge : graph.edges()) {
-          if (existing_edge.from == from_it->second && existing_edge.to == to_it->second) {
-            edge_exists = true;
-            break;
-          }
-        }
-
-        if (!edge_exists) {
+        // O(degree) edge existence check
+        if (!graph.hasEdge(from_it->second, to_it->second)) {
           AlnEdge edge;
           edge.from = from_it->second;
           edge.to = to_it->second;
@@ -345,12 +331,25 @@ std::unordered_map<std::string, std::size_t> PathGuidedTransform::walkPathsAndAd
 AlnGraph PathGuidedTransform::apply(const piru::io::ImportedGraph& imported,
                                      std::size_t graph_k,
                                      std::size_t pore_k) {
+  auto total_start = std::chrono::high_resolution_clock::now();
+  auto step_start = total_start;
+
   // Task 1: Transform to directional AlnGraph
   auto [graph, node_mapping] = importedGraphToAlnGraph(imported);
+
+  auto elapsed = std::chrono::duration<double>(
+      std::chrono::high_resolution_clock::now() - step_start).count();
+  LOG_DEBUG("  VG transform step 1 (node mapping setup): " + std::to_string(elapsed) + "s");
+  step_start = std::chrono::high_resolution_clock::now();
 
   // Task 2 & 3: Walk paths, add context, track coverage
   std::unordered_set<std::string> covered_nodes;
   auto variant_map = walkPathsAndAddContext(graph, imported, node_mapping, pore_k, covered_nodes);
+
+  elapsed = std::chrono::duration<double>(
+      std::chrono::high_resolution_clock::now() - step_start).count();
+  LOG_DEBUG("  VG transform step 2 (walk paths + context): " + std::to_string(elapsed) + "s");
+  step_start = std::chrono::high_resolution_clock::now();
 
   // Compute statistics
   stats_.original_node_count = imported.nodes.size();
@@ -375,6 +374,11 @@ AlnGraph PathGuidedTransform::apply(const piru::io::ImportedGraph& imported,
     const std::size_t k_minus_1 = pore_k - 1;
     expandUncoveredNodes(graph, uncovered_node_ids, node_mapping, k_minus_1, imported);
   }
+
+  elapsed = std::chrono::duration<double>(
+      std::chrono::high_resolution_clock::now() - step_start).count();
+  LOG_DEBUG("  VG transform step 3 (expand uncovered): " + std::to_string(elapsed) + "s");
+  step_start = std::chrono::high_resolution_clock::now();
 
   // Stage 4: Create edges for all imported graph connections
   // Use variant_map to find nodes with proper context, fall back to base nodes
@@ -447,16 +451,8 @@ AlnGraph PathGuidedTransform::apply(const piru::io::ImportedGraph& imported,
       continue;  // Skip if nodes don't exist
     }
 
-    // Check if edge already exists
-    bool edge_exists = false;
-    for (const auto& existing_edge : graph.edges()) {
-      if (existing_edge.from == from_aln_id && existing_edge.to == to_aln_id) {
-        edge_exists = true;
-        break;
-      }
-    }
-
-    if (!edge_exists) {
+    // O(degree) edge existence check
+    if (!graph.hasEdge(from_aln_id, to_aln_id)) {
       AlnEdge edge;
       edge.from = from_aln_id;
       edge.to = to_aln_id;
@@ -507,15 +503,8 @@ AlnGraph PathGuidedTransform::apply(const piru::io::ImportedGraph& imported,
       continue;
     }
 
-    edge_exists = false;
-    for (const auto& existing_edge : graph.edges()) {
-      if (existing_edge.from == rev_from_aln_id && existing_edge.to == rev_to_aln_id) {
-        edge_exists = true;
-        break;
-      }
-    }
-
-    if (!edge_exists) {
+    // O(degree) edge existence check
+    if (!graph.hasEdge(rev_from_aln_id, rev_to_aln_id)) {
       AlnEdge rev_edge;
       rev_edge.from = rev_from_aln_id;
       rev_edge.to = rev_to_aln_id;
@@ -523,6 +512,14 @@ AlnGraph PathGuidedTransform::apply(const piru::io::ImportedGraph& imported,
       graph.addEdge(rev_edge);
     }
   }
+
+  elapsed = std::chrono::duration<double>(
+      std::chrono::high_resolution_clock::now() - step_start).count();
+  LOG_DEBUG("  VG transform step 4 (create edges): " + std::to_string(elapsed) + "s");
+
+  auto total_elapsed = std::chrono::duration<double>(
+      std::chrono::high_resolution_clock::now() - total_start).count();
+  LOG_DEBUG("  VG transform total: " + std::to_string(total_elapsed) + "s");
 
   return graph;
 }

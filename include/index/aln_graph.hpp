@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -75,6 +76,13 @@ public:
 
     const std::vector<std::size_t>& outgoing(std::size_t idx) const { return out_edges_.at(idx); }
     const std::vector<std::size_t>& incoming(std::size_t idx) const { return in_edges_.at(idx); }
+
+    // O(degree) edge existence check using adjacency list
+    bool hasEdge(std::size_t from, std::size_t to) const {
+        if (from >= out_edges_.size()) return false;
+        const auto& neighbors = out_edges_[from];
+        return std::find(neighbors.begin(), neighbors.end(), to) != neighbors.end();
+    }
 
     const std::vector<AlnEdge>& edges() const { return edges_; }
 
