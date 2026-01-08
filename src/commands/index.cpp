@@ -43,7 +43,7 @@ int handle_index(const std::vector<std::string>& args) {
     config.positional_help = {"<graph-file>      Graph file to index"};
     config.options = {
         {'h', "help", false, "Show help"},
-        {'\0', "index-backend", true, "Index pipeline: classic (default) or simple"},
+        {'\0', "index-backend", true, "Index pipeline: simple (default) or classic"},
         {'v', "verbose", false, "Enable verbose logging (DEBUG level)"},
         {'m', "model", true, "Pore model (builtin name: r9.4/r10.4 or model file path)"},
         {'o', "output", true, "Output index directory (default: <graph-file>.piru)"},

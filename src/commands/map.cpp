@@ -72,7 +72,7 @@ int handle_map(const std::vector<std::string>& args) {
         {'p', "profile", false, "Emit timing profile (tree)"},
         {'v', "verbose", false, "Enable verbose logging (DEBUG level)"},
         {'\0', "", false, "\nIn-Memory Indexing Options (with --graph):"},
-        {'\0', "index-backend", true, "Index pipeline: classic (default) or simple"},
+        {'\0', "index-backend", true, "Index pipeline: simple (default) or classic"},
         {'\0', "linearizer", true, "Linearizer backend: path-walk (default) or superbubble"},
         {'\0', "", false, "\nMapping Options:"},
         {'\0', "max-seed-freq", true, "Maximum seed frequency for lookup (default: use index threshold)"},

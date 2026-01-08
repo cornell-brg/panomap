@@ -26,15 +26,10 @@ struct IndexPipelineConfig {
     // Pipeline Mode
     // -------------------------------------------------------------------------
 
-    // Pipeline backend: "classic" or "simple"
-    // - classic: Existing path-guided transform with context handling (default)
-    // - simple: Simplified 2x expansion (DEV039)
-    std::string pipeline_mode{"classic"};
-
-    // -------------------------------------------------------------------------
-    // Graph Parameters
-    // -------------------------------------------------------------------------
-    // Note: Only VG graph format is supported. DBG support was removed.
+    // Pipeline backend: "simple" or "classic"
+    // - simple: all in one go path indexing (current default)
+    // - classic: Existing path-guided transform with context handling
+    std::string pipeline_mode{"simple"};
 
     // -------------------------------------------------------------------------
     // Linearization Parameters
