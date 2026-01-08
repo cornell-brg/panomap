@@ -78,6 +78,7 @@ add_executable(piru
     src/io/reads/slow5_provider.cpp
     src/io/models/builtin_models.cpp
     src/io/index/serialization.cpp
+    src/io/index/simple_serialization.cpp
     src/cli/parse.cpp
     src/signal/event_pipeline_factory.cpp
     src/signal/event_pipelines/scrappie_event_pipeline.cpp
@@ -95,6 +96,8 @@ add_executable(piru
     src/index/aln_graph.cpp
     src/index/transform_dbg.cpp
     src/index/path_guided_transform.cpp
+    src/index/simple_expand.cpp
+    src/index/path_walk_indexer.cpp
     src/index/vg_transform_factory.cpp
     src/index/pseudo_linearize.cpp
     src/index/linearizer_factory.cpp

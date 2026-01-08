@@ -8,10 +8,12 @@
 #include <stdexcept>
 
 #include "index/linearizer_factory.hpp"
+#include "index/path_walk_indexer.hpp"
 #include "index/pseudo_linearize.hpp"
 #include "index/seed_builder.hpp"
 #include "index/squigglize.hpp"
 #include "index/transform_dbg.hpp"
+#include "index/simple_expand.hpp"
 #include "index/vg_transform_factory.hpp"
 #include "signal/alignment_quantizers/alignment_quantizer_factory.hpp"
 #include "signal/fuzzy_quantizers/fuzzy_quantizer_factory.hpp"
@@ -30,6 +32,91 @@ IndexPipelineResult run_index_pipeline(
     const io::KmerModel& model,
     const IndexPipelineConfig& config) {
 
+    // -------------------------------------------------------------------------
+    // Simple Pipeline Mode (DEV039)
+    // -------------------------------------------------------------------------
+    if (config.pipeline_mode == "simple") {
+        LOG_INFO("Using simple index pipeline");
+
+        auto stage_start = std::chrono::high_resolution_clock::now();
+
+        // Stage 1: Simple ±expand (2x nodes)
+        AlnGraph aln_graph = simpleExpand(imported);
+
+        auto stage_elapsed = std::chrono::duration<double>(
+            std::chrono::high_resolution_clock::now() - stage_start).count();
+        LOG_INFO("[1/?] simple expand: " + std::to_string(aln_graph.nodeCount()) +
+                 " nodes, " + std::to_string(aln_graph.edgeCount()) + " edges, " +
+                 std::to_string(aln_graph.pathCount()) + " paths [" +
+                 std::to_string(stage_elapsed) + "s]");
+
+#ifdef PIRU_DUMP_GRAPHS
+        GfaExporter::dumpAlnGraph(aln_graph, "simple_expanded.gfa", AlnGraphDumpMode::Bases);
+        LOG_INFO("Exported simple expanded graph to simple_expanded.gfa");
+#endif
+
+        // Stage 2: Unified path-walk (squigglize + linearize + index)
+        stage_start = std::chrono::high_resolution_clock::now();
+
+        // Create fuzzy quantizer
+        signal::FuzzyQuantizerConfig fuzzy_cfg;
+        fuzzy_cfg.backend = config.fuzzy_quantizer;
+        fuzzy_cfg.pore_model = model.name();
+        fuzzy_cfg.fine_min = config.fuzzy_fine_min;
+        fuzzy_cfg.fine_max = config.fuzzy_fine_max;
+        fuzzy_cfg.fine_range = config.fuzzy_fine_range;
+        fuzzy_cfg.n_bins = config.fuzzy_n_bins;
+        auto fuzzy_quantizer = signal::make_fuzzy_quantizer(fuzzy_cfg);
+        if (!fuzzy_quantizer) {
+            throw std::runtime_error("Failed to create fuzzy quantizer: " + config.fuzzy_quantizer);
+        }
+
+        // Create seed extractor
+        signal::SeedExtractorConfig extractor_cfg;
+        extractor_cfg.backend = "kmer";
+        extractor_cfg.k = config.seed_k;
+        extractor_cfg.stride = config.seed_stride;
+        extractor_cfg.qbits = 4;
+        auto extractor = signal::make_seed_extractor(extractor_cfg);
+        if (!extractor) {
+            throw std::runtime_error("Failed to create seed extractor");
+        }
+
+        // Run unified path-walk indexing
+        PathWalkIndexConfig pwi_config;
+        pwi_config.seed_k = config.seed_k;
+        pwi_config.seed_stride = config.seed_stride;
+        pwi_config.seed_filter = config.seed_filter;
+
+        auto pwi_result = pathWalkIndex(aln_graph, model, *fuzzy_quantizer, *extractor, pwi_config);
+
+        stage_elapsed = std::chrono::duration<double>(
+            std::chrono::high_resolution_clock::now() - stage_start).count();
+        LOG_INFO("[2/2] path-walk indexed: " + std::to_string(pwi_result.seeds_unique) +
+                 " unique seeds [" + std::to_string(stage_elapsed) + "s]");
+
+        // Copy path lengths to graph paths (for result_formatter coordinate flipping)
+        for (std::size_t i = 0; i < aln_graph.pathCount(); ++i) {
+            aln_graph.mutablePath(i).length = pwi_result.path_lengths[i];
+        }
+
+        // Package result
+        IndexPipelineResult result;
+        result.graph_store = std::make_unique<AdjListGraphStore>(std::move(aln_graph));
+        result.seed_store = std::move(pwi_result.seed_store);
+        result.linearization_coords = std::move(pwi_result.linearization_coords);
+        result.graph_flavor = imported.flavor;
+        result.pore_k = model.k();
+        result.model_name = model.name();
+        result.fuzzy_quantizer = fuzzy_cfg.backend;
+        // No signal_store for simple pipeline
+
+        return result;
+    }
+
+    // -------------------------------------------------------------------------
+    // Classic Pipeline Mode
+    // -------------------------------------------------------------------------
     IndexPipelineResult result;
     const std::size_t pore_k = model.k();
 

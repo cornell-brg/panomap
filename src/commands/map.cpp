@@ -11,6 +11,7 @@
 #include "index/index_pipeline.hpp"
 #include "io/graphs/graph_loader_factory.hpp"
 #include "io/index/serialization.hpp"
+#include "io/index/simple_serialization.hpp"
 #include "io/models/model_factory.hpp"
 #include "io/reads/read_provider_factory.hpp"
 #include "io/results/result_writer_factory.hpp"
@@ -71,6 +72,7 @@ int handle_map(const std::vector<std::string>& args) {
         {'p', "profile", false, "Emit timing profile (tree)"},
         {'v', "verbose", false, "Enable verbose logging (DEBUG level)"},
         {'\0', "", false, "\nIn-Memory Indexing Options (with --graph):"},
+        {'\0', "index-backend", true, "Index pipeline: classic (default) or simple"},
         {'\0', "linearizer", true, "Linearizer backend: path-walk (default) or superbubble"},
         {'\0', "graph-type", true, "Graph type: vg (default) or dbg"},
         {'\0', "graph-k", true, "DBG k-mer size (default: auto-detect from overlap)"},
@@ -228,29 +230,45 @@ int handle_map(const std::vector<std::string>& args) {
         const std::string index_path = parsed.values.at("index");
         LOG_INFO("loading index from " + index_path);
 
-        auto loaded_index = piru::io::index::load_index(index_path);
-        if (!loaded_index.graph) {
-            LOG_ERROR("map: failed to load index from '" + index_path + "'");
-            return 1;
+        // Detect simple index (.pir2) vs classic index (directory)
+        if (piru::io::index::is_simple_index(index_path)) {
+            auto loaded = piru::io::index::load_simple_index(index_path);
+
+            LOG_INFO("simple index loaded: " + std::to_string(loaded.graph->nodeCount()) + " nodes");
+            LOG_INFO("index metadata: model=" + loaded.metadata.model_name +
+                     ", fuzzy=" + loaded.metadata.fuzzy_quantizer +
+                     ", seeds=" + loaded.seeds->extractor_name());
+
+            graph_store = std::move(loaded.graph);
+            seed_store = std::move(loaded.seeds);
+            linearization_coords = std::move(loaded.linearization_coords);
+            fuzzy_quantizer_name = loaded.metadata.fuzzy_quantizer;
+            pore_model_name = loaded.metadata.model_name;
+            // No signal_store for simple index
+        } else {
+            auto loaded_index = piru::io::index::load_index(index_path);
+            if (!loaded_index.graph) {
+                LOG_ERROR("map: failed to load index from '" + index_path + "'");
+                return 1;
+            }
+            if (!loaded_index.seeds) {
+                LOG_ERROR("map: index is missing seeds; cannot perform lookups");
+                return 1;
+            }
+
+            LOG_INFO("index loaded: " + std::to_string(loaded_index.graph->nodeCount()) + " nodes");
+            LOG_INFO("index metadata: fuzzy=" + loaded_index.metadata.fuzzy_quantizer +
+                     ", align=" + loaded_index.metadata.align_quantizer +
+                     ", seeds=" + loaded_index.seeds->extractor_name());
+
+            graph_store = std::move(loaded_index.graph);
+            signal_store = std::move(loaded_index.signals);
+            seed_store = std::move(loaded_index.seeds);
+            fuzzy_quantizer_name = loaded_index.metadata.fuzzy_quantizer;
+            pore_model_name = loaded_index.metadata.model_name;
+            // Note: Linearization coords not serialized for classic index
+            // Superbubble uses graph.node.chain_id/linear_position instead
         }
-        if (!loaded_index.seeds) {
-            LOG_ERROR("map: index is missing seeds; cannot perform lookups");
-            return 1;
-        }
-
-        LOG_INFO("index loaded: " + std::to_string(loaded_index.graph->nodeCount()) + " nodes");
-        LOG_INFO("index metadata: fuzzy=" + loaded_index.metadata.fuzzy_quantizer +
-                 ", align=" + loaded_index.metadata.align_quantizer +
-                 ", seeds=" + loaded_index.seeds->extractor_name());
-
-        graph_store = std::move(loaded_index.graph);
-        signal_store = std::move(loaded_index.signals);
-        seed_store = std::move(loaded_index.seeds);
-        fuzzy_quantizer_name = loaded_index.metadata.fuzzy_quantizer;
-        pore_model_name = loaded_index.metadata.model_name;
-
-        // Note: Linearization coords not serialized yet (Phase 7 TODO)
-        // Superbubble uses graph.node.chain_id/linear_position instead
 
         // Warn if user tries to override seed/fuzzy params with pre-built index
         if (parsed.values.count("seed-k") || parsed.values.count("seed-stride") ||
@@ -312,6 +330,12 @@ int handle_map(const std::vector<std::string>& args) {
         piru::index::IndexPipelineConfig index_config;
         index_config.graph_flavor = graph_type;
         index_config.linearizer = linearizer;
+
+        // Pipeline mode: classic (default) or simple
+        if (parsed.values.count("index-backend")) {
+            index_config.pipeline_mode = parsed.values.at("index-backend");
+            LOG_INFO("Using index backend: " + index_config.pipeline_mode);
+        }
 
         // Auto-detect graph_k from edge overlap (DBG only)
         if (!parsed.values.count("graph-k") && graph_type == "dbg") {
@@ -537,21 +561,25 @@ int handle_map(const std::vector<std::string>& args) {
 
     // Configure alignment if enabled
     if (parsed.values.count("align")) {
-        map_config.enable_alignment = true;
-
-        // Parse alignment backend
-        const std::string align_backend = parsed.values.count("align-backend")
-                                              ? parsed.values.at("align-backend")
-                                              : "path-guided";
-        if (align_backend == "radius") {
-            map_config.align_config.backend = piru::alignment::AlignerBackend::kRadius;
-        } else if (align_backend == "auto") {
-            map_config.align_config.backend = piru::alignment::AlignerBackend::kAuto;
+        if (!signal_store) {
+            LOG_WARN("--align requires signal store (not available with simple pipeline), disabling");
         } else {
-            map_config.align_config.backend = piru::alignment::AlignerBackend::kPathGuided;
-        }
+            map_config.enable_alignment = true;
 
-        LOG_INFO("Signal-level alignment enabled: backend=" + align_backend);
+            // Parse alignment backend
+            const std::string align_backend = parsed.values.count("align-backend")
+                                                  ? parsed.values.at("align-backend")
+                                                  : "path-guided";
+            if (align_backend == "radius") {
+                map_config.align_config.backend = piru::alignment::AlignerBackend::kRadius;
+            } else if (align_backend == "auto") {
+                map_config.align_config.backend = piru::alignment::AlignerBackend::kAuto;
+            } else {
+                map_config.align_config.backend = piru::alignment::AlignerBackend::kPathGuided;
+            }
+
+            LOG_INFO("Signal-level alignment enabled: backend=" + align_backend);
+        }
     }
 
     // Configure debug dump directories

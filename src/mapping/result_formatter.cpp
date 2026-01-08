@@ -222,6 +222,11 @@ const std::string& ResultFormatter::getPathName(std::size_t path_id) const {
 }
 
 std::size_t ResultFormatter::computePathLength(std::size_t path_id) const {
+  // Use precomputed path length if available (simple pipeline)
+  if (path_id < graph_.pathCount() && graph_.paths()[path_id].length > 0) {
+    return graph_.paths()[path_id].length;
+  }
+
   if (!path_lengths_computed_) {
     // Compute all path lengths on first access
     const auto& paths = graph_.paths();
@@ -235,6 +240,13 @@ std::size_t ResultFormatter::computePathLength(std::size_t path_id) const {
 
     for (std::size_t p = 0; p < paths.size(); ++p) {
       const auto& path = paths[p];
+
+      // Skip if already set
+      if (path.length > 0) {
+        path_lengths_[p] = path.length;
+        continue;
+      }
+
       std::size_t cumulative_len = 0;
 
       for (std::size_t step_idx = 0; step_idx < path.steps.size(); ++step_idx) {

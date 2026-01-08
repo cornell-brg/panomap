@@ -23,11 +23,20 @@ namespace piru::index {
 // This is the single source of truth for indexing parameters.
 struct IndexPipelineConfig {
     // -------------------------------------------------------------------------
+    // Pipeline Mode
+    // -------------------------------------------------------------------------
+
+    // Pipeline backend: "classic" or "simple"
+    // - classic: Existing path-guided transform with context handling (default)
+    // - simple: Simplified 2x expansion (DEV039)
+    std::string pipeline_mode{"classic"};
+
+    // -------------------------------------------------------------------------
     // Graph Parameters
     // -------------------------------------------------------------------------
 
-    // Graph type: "dbg" (de Bruijn graph) or "vg" (variation graph)
-    std::string graph_flavor{"dbg"};
+    // Graph type: "vg" (variation graph) or "dbg" (de Bruijn graph)
+    std::string graph_flavor{"vg"};
 
     // DBG k-mer size (bases)
     // - For DBG: node overlap length + 1
