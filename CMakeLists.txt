@@ -92,8 +92,7 @@ add_executable(piru
     src/index/aln_graph.cpp
     src/index/simple_expand.cpp
     src/index/path_walk_indexer.cpp
-    src/index/linearizer_factory.cpp
-    src/index/path_walk_linearizer.cpp
+    src/index/node_first_indexer.cpp
     src/index/index_pipeline.cpp
     src/mapping/batch_mapper.cpp
     src/mapping/seed_clusterer_factory.cpp

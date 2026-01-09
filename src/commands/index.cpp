@@ -52,6 +52,8 @@ int handle_index(const std::vector<std::string>& args) {
         {'\0', "seed-stride", true, "Seed stride (default: 1)"},
         {'\0', "seed-filter", true, "Keep least frequent seed fraction (default: 0.9)"},
         {'\0', "seed-mode", true, "Seeding mode: node, path (default)"},
+        {'\0', "", false, "\nIndexer Options:"},
+        {'\0', "indexer-backend", true, "Indexer backend: node-first, path-walk (default)"},
     };
     config.on_error = [](const std::string&) { std::cerr << "index: invalid option\n"; };
 
@@ -150,6 +152,9 @@ int handle_index(const std::vector<std::string>& args) {
     index_config.seed_filter = seed_filter;
     index_config.seed_mode = seed_mode;
     index_config.fuzzy_quantizer = "rh2";
+    if (parsed.values.count("indexer-backend")) {
+        index_config.indexer_backend = parsed.values.at("indexer-backend");
+    }
 
     auto result = piru::index::run_index_pipeline(imported, *model, index_config);
 

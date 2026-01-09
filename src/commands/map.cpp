@@ -84,6 +84,7 @@ int handle_map(const std::vector<std::string>& args) {
         {'\0', "chain-max-skip", true, "DP chain: stop after N consecutive failed attempts (default: 25)"},
         {'\0', "chain-merge", true, "DP chain: merge overlapping chains (default: true)"},
         {'\0', "", false, "\nSignal Processing Options (only with --graph):"},
+        {'\0', "indexer-backend", true, "Indexer backend: node-first, path-walk (default)"},
         {'\0', "event-pipeline", true, "Event pipeline backend: rawhash (default), scrappie, passthrough"},
         {'\0', "event-w1", true, "Event detection short window length (default: 3)"},
         {'\0', "event-w2", true, "Event detection long window length (default: backend-specific)"},
@@ -240,12 +241,12 @@ int handle_map(const std::vector<std::string>& args) {
         fuzzy_quantizer_name = loaded.metadata.fuzzy_quantizer;
         pore_model_name = loaded.metadata.model_name;
 
-        // Warn if user tries to override seed/fuzzy params with pre-built index
+        // Warn if user tries to override seed/fuzzy/indexer params with pre-built index
         if (parsed.values.count("seed-k") || parsed.values.count("seed-stride") ||
-            parsed.values.count("seed-mode") ||
+            parsed.values.count("seed-mode") || parsed.values.count("indexer-backend") ||
             parsed.values.count("fuzzy-backend") || parsed.values.count("fuzzy-fine-min") ||
             parsed.values.count("fuzzy-fine-max") || parsed.values.count("fuzzy-fine-range")) {
-            LOG_WARN("--seed-* and --fuzzy-* flags are ignored with --index (use --graph for experimentation)");
+            LOG_WARN("--seed-*, --fuzzy-*, and --indexer-backend flags are ignored with --index (use --graph for experimentation)");
         }
 
     } else {
@@ -285,6 +286,12 @@ int handle_map(const std::vector<std::string>& args) {
 
         // Step 3: Configure indexing pipeline
         piru::index::IndexPipelineConfig index_config;
+
+        // Apply CLI overrides for indexer backend
+        if (parsed.values.count("indexer-backend")) {
+            index_config.indexer_backend = parsed.values.at("indexer-backend");
+            LOG_DEBUG("Using indexer backend=" + index_config.indexer_backend);
+        }
 
         // Apply CLI overrides for seed extraction (affects in-memory indexing)
         if (parsed.values.count("seed-k")) {

@@ -22,6 +22,16 @@ namespace piru::index {
 // This is the single source of truth for indexing parameters.
 struct IndexPipelineConfig {
     // -------------------------------------------------------------------------
+    // Indexer Backend
+    // -------------------------------------------------------------------------
+
+    // Indexer backend: "node-first" or "path-walk"
+    // - node-first: Two-pass approach processing node interiors once (faster for shared nodes)
+    //               Uses global normalization across all nodes
+    // - path-walk: Original per-path processing (per-path normalization)
+    std::string indexer_backend{"path-walk"};
+
+    // -------------------------------------------------------------------------
     // Signal Processing Parameters
     // -------------------------------------------------------------------------
 
