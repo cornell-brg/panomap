@@ -75,7 +75,8 @@ TEST_CASE("PathWalkExpander: Empty input returns empty output") {
     std::vector<std::vector<LinearCoordinate>> coords(1);
     coords[0] = {{0, 100}};
 
-    PathWalkExpander expander(coords);
+    std::vector<std::size_t> path_lengths(100, 1000000);  // Large lengths to not filter any anchors
+    PathWalkExpander expander(coords, path_lengths);
     auto anchors = expander.expand({});
 
     CHECK(anchors.empty());
@@ -86,7 +87,8 @@ TEST_CASE("PathWalkExpander: Single seed on single path produces one anchor") {
     std::vector<std::vector<LinearCoordinate>> coords(1);
     coords[0] = {{0, 100}};
 
-    PathWalkExpander expander(coords);
+    std::vector<std::size_t> path_lengths(100, 1000000);  // Large lengths to not filter any anchors
+    PathWalkExpander expander(coords, path_lengths);
 
     // Seed hit at node 0, offset 10, query position 50, span 20
     std::vector<SeedHitRecord> hits = {make_hit(0, 10, 50, 20)};
@@ -110,7 +112,8 @@ TEST_CASE("PathWalkExpander: Single seed on multiple paths produces multiple anc
     coords[0] = {};  // Node 0 has no coordinates
     coords[1] = {{0, 200}, {1, 500}};
 
-    PathWalkExpander expander(coords);
+    std::vector<std::size_t> path_lengths(100, 1000000);  // Large lengths to not filter any anchors
+    PathWalkExpander expander(coords, path_lengths);
 
     // Seed hit at node 1, offset 5, query position 100, span 15
     std::vector<SeedHitRecord> hits = {make_hit(1, 5, 100, 15)};
@@ -142,7 +145,8 @@ TEST_CASE("PathWalkExpander: Seed with no coordinates produces no anchors") {
     coords[0] = {{0, 100}};
     coords[1] = {};  // Empty vector = no coordinates
 
-    PathWalkExpander expander(coords);
+    std::vector<std::size_t> path_lengths(100, 1000000);  // Large lengths to not filter any anchors
+    PathWalkExpander expander(coords, path_lengths);
 
     // Seed hit at node 1 (no coordinates)
     std::vector<SeedHitRecord> hits = {make_hit(1, 0, 50, 20)};
@@ -158,7 +162,8 @@ TEST_CASE("PathWalkExpander: Offset handling adds to ref_coord") {
     std::vector<std::vector<LinearCoordinate>> coords(1);
     coords[0] = {{0, 1000}};
 
-    PathWalkExpander expander(coords);
+    std::vector<std::size_t> path_lengths(100, 1000000);  // Large lengths to not filter any anchors
+    PathWalkExpander expander(coords, path_lengths);
 
     // Seed at offset 50
     std::vector<SeedHitRecord> hits = {make_hit(0, 50, 100, 20)};
@@ -174,7 +179,8 @@ TEST_CASE("PathWalkExpander: Zero offset produces ref_coord equal to node start"
     std::vector<std::vector<LinearCoordinate>> coords(1);
     coords[0] = {{0, 2000}};
 
-    PathWalkExpander expander(coords);
+    std::vector<std::size_t> path_lengths(100, 1000000);  // Large lengths to not filter any anchors
+    PathWalkExpander expander(coords, path_lengths);
 
     // Seed at offset 0
     std::vector<SeedHitRecord> hits = {make_hit(0, 0, 100, 20)};
@@ -191,7 +197,8 @@ TEST_CASE("PathWalkExpander: Multiple seeds produce multiple anchors") {
     coords[0] = {{0, 100}};
     coords[1] = {{0, 200}};
 
-    PathWalkExpander expander(coords);
+    std::vector<std::size_t> path_lengths(100, 1000000);  // Large lengths to not filter any anchors
+    PathWalkExpander expander(coords, path_lengths);
 
     std::vector<SeedHitRecord> hits = {
         make_hit(0, 10, 50, 20),   // First seed on node 0
@@ -218,7 +225,8 @@ TEST_CASE("PathWalkExpander: Node appearing on same path multiple times produces
     std::vector<std::vector<LinearCoordinate>> coords(1);
     coords[0] = {{0, 100}, {0, 500}};  // Same path_id, different positions
 
-    PathWalkExpander expander(coords);
+    std::vector<std::size_t> path_lengths(100, 1000000);  // Large lengths to not filter any anchors
+    PathWalkExpander expander(coords, path_lengths);
 
     // Single seed hit at node 0
     std::vector<SeedHitRecord> hits = {make_hit(0, 10, 50, 20)};
@@ -243,7 +251,8 @@ TEST_CASE("PathWalkExpander: Invalid node_id is skipped") {
     std::vector<std::vector<LinearCoordinate>> coords(1);
     coords[0] = {{0, 100}};
 
-    PathWalkExpander expander(coords);
+    std::vector<std::size_t> path_lengths(100, 1000000);  // Large lengths to not filter any anchors
+    PathWalkExpander expander(coords, path_lengths);
 
     // Seed hit at node 5 (out of bounds)
     std::vector<SeedHitRecord> hits = {make_hit(5, 0, 50, 20)};
@@ -259,7 +268,8 @@ TEST_CASE("PathWalkExpander: Mix of valid and invalid nodes") {
     coords[0] = {{0, 100}};
     coords[1] = {};  // No coordinates
 
-    PathWalkExpander expander(coords);
+    std::vector<std::size_t> path_lengths(100, 1000000);  // Large lengths to not filter any anchors
+    PathWalkExpander expander(coords, path_lengths);
 
     std::vector<SeedHitRecord> hits = {
         make_hit(0, 10, 50, 20),   // Valid (has coords)
@@ -280,7 +290,8 @@ TEST_CASE("PathWalkExpander: Seed length propagates to anchor") {
     std::vector<std::vector<LinearCoordinate>> coords(1);
     coords[0] = {{0, 100}};
 
-    PathWalkExpander expander(coords);
+    std::vector<std::size_t> path_lengths(100, 1000000);  // Large lengths to not filter any anchors
+    PathWalkExpander expander(coords, path_lengths);
 
     // Seed with specific length (e.g., after merging)
     std::vector<SeedHitRecord> hits = {make_hit(0, 0, 100, 50)};

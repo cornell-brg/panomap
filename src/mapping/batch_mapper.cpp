@@ -10,6 +10,7 @@
 #include <ostream>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 
 #include "alignment/signal_utils.hpp"
@@ -171,6 +172,68 @@ void dumpChainToFile(const char* filename,
     LOG_INFO("Dumped chain with " + std::to_string(primary.anchors.size()) + " anchors to " + std::string(filename));
 }
 
+// Dump hit statistics for a read to analyze frequency distributions.
+void dumpHitStatsToFile(const char* filename,
+                        const std::string& read_id,
+                        const signal::SeedBuffer& seeds,
+                        const std::vector<SeedHitRecord>& hits,
+                        std::size_t freq_threshold) {
+    std::ofstream out(filename);
+    if (!out.is_open()) {
+        LOG_WARN("Failed to open hit stats file: " + std::string(filename));
+        return;
+    }
+
+    // Collect frequency statistics
+    std::vector<std::size_t> frequencies;
+    frequencies.reserve(hits.size());
+    for (const auto& hit : hits) {
+        frequencies.push_back(hit.frequency);
+    }
+
+    // Sort for percentiles
+    std::sort(frequencies.begin(), frequencies.end());
+
+    // Compute stats
+    std::size_t total_hits = hits.size();
+    std::size_t min_freq = frequencies.empty() ? 0 : frequencies.front();
+    std::size_t max_freq = frequencies.empty() ? 0 : frequencies.back();
+    std::size_t median_freq = frequencies.empty() ? 0 : frequencies[frequencies.size() / 2];
+    std::size_t p90_freq = frequencies.empty() ? 0 : frequencies[frequencies.size() * 9 / 10];
+
+    // Count unique hashes that got hits vs total seeds
+    std::unordered_set<std::uint64_t> hashes_with_hits;
+    for (const auto& hit : hits) {
+        hashes_with_hits.insert(hit.hash);
+    }
+
+    // Write summary header
+    out << "#SUMMARY\tread_id\tnum_seeds\tseeds_with_hits\ttotal_hits\tfreq_threshold\n";
+    out << "#SUMMARY\t" << read_id << "\t" << seeds.seeds.size() << "\t"
+        << hashes_with_hits.size() << "\t" << total_hits << "\t" << freq_threshold << "\n";
+
+    out << "#FREQ_STATS\tmin\tmax\tmedian\tp90\n";
+    out << "#FREQ_STATS\t" << min_freq << "\t" << max_freq << "\t" << median_freq << "\t" << p90_freq << "\n";
+
+    // Write per-seed details header
+    out << "#SEEDS\thash\tread_pos\thit_count\n";
+
+    // Group hits by hash to get per-seed hit counts
+    std::unordered_map<std::uint64_t, std::pair<std::size_t, std::size_t>> hash_info;  // hash -> (read_pos, freq)
+    for (const auto& hit : hits) {
+        if (hash_info.find(hit.hash) == hash_info.end()) {
+            hash_info[hit.hash] = {hit.read_pos, hit.frequency};
+        }
+    }
+
+    // Write per-seed info
+    for (const auto& [hash, info] : hash_info) {
+        out << std::hex << hash << std::dec << "\t" << info.first << "\t" << info.second << "\n";
+    }
+
+    out.close();
+}
+
 }  // namespace
 
 void SeedLookup::lookup(const signal::SeedBuffer& seeds, std::vector<SeedHitRecord>& out_hits) const {
@@ -243,7 +306,11 @@ PipelineComponents BatchMapper::create_components() const {
     // Create AnchorExpander based on linearization type
     if (config_.linearization_coords) {
         // Path-walk linearization → PathWalkExpander
-        comps.expander = std::make_unique<PathWalkExpander>(*config_.linearization_coords);
+        if (!config_.path_lengths) {
+            throw std::runtime_error("PathWalkExpander requires path_lengths for bounds checking");
+        }
+        comps.expander = std::make_unique<PathWalkExpander>(
+            *config_.linearization_coords, *config_.path_lengths);
     } else {
         // Superbubble linearization → SuperbubbleExpander
         if (!config_.graph_store) {
@@ -435,6 +502,16 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
 
     // Lookup seeds in the index and collect hits.
     components_.lookup.lookup(batch.seeds[index], batch.seed_hits[index]);
+
+    // Dump hit stats if --dump-hit-stats is set
+    static std::atomic<std::size_t> hit_stats_dump_counter{0};
+    if (!config_.dump_hit_stats_dir.empty()) {
+        std::size_t dump_num = hit_stats_dump_counter.fetch_add(1);
+        std::string hit_stats_file = config_.dump_hit_stats_dir + "/read_" + std::to_string(dump_num) + "_hits.tsv";
+        std::size_t freq_threshold = config_.seed_store ? config_.seed_store->frequency_threshold() : 0;
+        dumpHitStatsToFile(hit_stats_file.c_str(), read.read_id, batch.seeds[index],
+                           batch.seed_hits[index], freq_threshold);
+    }
 
     // Expand seed hits to anchors (explicit expansion stage)
     auto anchors = components_.expander->expand(batch.seed_hits[index]);

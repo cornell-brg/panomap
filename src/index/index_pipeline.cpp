@@ -97,6 +97,7 @@ IndexPipelineResult run_index_pipeline(
         pwi_config.seed_k = config.seed_k;
         pwi_config.seed_stride = config.seed_stride;
         pwi_config.seed_filter = config.seed_filter;
+        pwi_config.dump_norm_stats_path = config.dump_norm_stats_path;
 
         auto pwi_result = pathWalkIndex(aln_graph, model, *fuzzy_quantizer, *extractor, pwi_config);
 
@@ -117,6 +118,7 @@ IndexPipelineResult run_index_pipeline(
 
     // Package remaining result fields
     result.graph_store = std::make_unique<AdjListGraphStore>(std::move(aln_graph));
+    result.path_lengths = std::move(path_lengths);  // For anchor bounds checking
     result.pore_k = model.k();
     result.model_name = model.name();
     result.fuzzy_quantizer = fuzzy_cfg.backend;

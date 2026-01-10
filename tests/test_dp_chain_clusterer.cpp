@@ -31,7 +31,8 @@ TEST_CASE("DPChainClusterer: Empty input returns empty output") {
     std::vector<std::vector<LinearCoordinate>> coords(1);
     coords[0] = {{0, 100}};
 
-    PathWalkExpander expander(coords);
+    std::vector<std::size_t> path_lengths(100, 1000000);  // Large lengths to not filter any anchors
+    PathWalkExpander expander(coords, path_lengths);
     auto anchors = expander.expand({});
 
     DPChainClustererConfig config;
@@ -48,7 +49,8 @@ TEST_CASE("DPChainClusterer: Single seed produces single anchor chain") {
     std::vector<std::vector<LinearCoordinate>> coords(1);
     coords[0] = {{0, 100}};
 
-    PathWalkExpander expander(coords);
+    std::vector<std::size_t> path_lengths(100, 1000000);  // Large lengths to not filter any anchors
+    PathWalkExpander expander(coords, path_lengths);
     DPChainClustererConfig config;
     config.min_chain_score = 10;  // Lower threshold
 
@@ -72,7 +74,8 @@ TEST_CASE("DPChainClusterer: Linear colinear chain selects all anchors") {
     coords[1] = {{0, 200}};   // Node 1 at ref 200
     coords[2] = {{0, 300}};   // Node 2 at ref 300
 
-    PathWalkExpander expander(coords);
+    std::vector<std::size_t> path_lengths(100, 1000000);  // Large lengths to not filter any anchors
+    PathWalkExpander expander(coords, path_lengths);
     DPChainClustererConfig config;
     config.max_dist = 5000;
     config.max_diag_dev = 500;
@@ -103,7 +106,8 @@ TEST_CASE("DPChainClusterer: Large diagonal deviation breaks chain") {
     coords[0] = {{0, 100}};
     coords[1] = {{0, 200}};
 
-    PathWalkExpander expander(coords);
+    std::vector<std::size_t> path_lengths(100, 1000000);  // Large lengths to not filter any anchors
+    PathWalkExpander expander(coords, path_lengths);
     DPChainClustererConfig config;
     config.max_dist = 5000;
     config.max_diag_dev = 50;  // Strict diagonal constraint
@@ -131,7 +135,8 @@ TEST_CASE("DPChainClusterer: Distance filter prevents chaining far-apart anchors
     coords[0] = {{0, 100}};
     coords[1] = {{0, 10000}};  // Far away
 
-    PathWalkExpander expander(coords);
+    std::vector<std::size_t> path_lengths(100, 1000000);  // Large lengths to not filter any anchors
+    PathWalkExpander expander(coords, path_lengths);
     DPChainClustererConfig config;
     config.max_dist = 1000;  // Strict distance limit
     config.max_diag_dev = 500;
@@ -159,7 +164,8 @@ TEST_CASE("DPChainClusterer: Rejects cross-path chains") {
     coords[0] = {{0, 100}};
     coords[1] = {{1, 200}};  // Different path
 
-    PathWalkExpander expander(coords);
+    std::vector<std::size_t> path_lengths(100, 1000000);  // Large lengths to not filter any anchors
+    PathWalkExpander expander(coords, path_lengths);
     DPChainClustererConfig config;
     config.max_dist = 5000;
     config.max_diag_dev = 500;
@@ -187,7 +193,8 @@ TEST_CASE("DPChainClusterer: Prefers higher-scoring chain") {
     coords[1] = {{0, 200}};
     coords[2] = {{0, 300}};
 
-    PathWalkExpander expander(coords);
+    std::vector<std::size_t> path_lengths(100, 1000000);  // Large lengths to not filter any anchors
+    PathWalkExpander expander(coords, path_lengths);
     DPChainClustererConfig config;
     config.max_dist = 5000;
     config.max_diag_dev = 500;
@@ -216,7 +223,8 @@ TEST_CASE("DPChainClusterer: Min chain score threshold filters weak chains") {
     std::vector<std::vector<LinearCoordinate>> coords(1);
     coords[0] = {{0, 100}};
 
-    PathWalkExpander expander(coords);
+    std::vector<std::size_t> path_lengths(100, 1000000);  // Large lengths to not filter any anchors
+    PathWalkExpander expander(coords, path_lengths);
     DPChainClustererConfig config;
     config.min_chain_score = 1000;  // Very high threshold
     config.anchor_weight = 1.0;
@@ -239,7 +247,8 @@ TEST_CASE("DPChainClusterer: Overlapping anchors incur penalty") {
     coords[0] = {{0, 100}};
     coords[1] = {{0, 150}};  // Close together (potential overlap)
 
-    PathWalkExpander expander(coords);
+    std::vector<std::size_t> path_lengths(100, 1000000);  // Large lengths to not filter any anchors
+    PathWalkExpander expander(coords, path_lengths);
     DPChainClustererConfig config;
     config.max_dist = 5000;
     config.max_diag_dev = 500;
@@ -269,7 +278,8 @@ TEST_CASE("DPChainClusterer: Backward query positions are rejected") {
     coords[0] = {{0, 100}};
     coords[1] = {{0, 200}};
 
-    PathWalkExpander expander(coords);
+    std::vector<std::size_t> path_lengths(100, 1000000);  // Large lengths to not filter any anchors
+    PathWalkExpander expander(coords, path_lengths);
     DPChainClustererConfig config;
     config.max_dist = 5000;
     config.max_diag_dev = 500;
@@ -296,7 +306,8 @@ TEST_CASE("DPChainClusterer: Node appearing on multiple paths expands correctly"
     std::vector<std::vector<LinearCoordinate>> coords(1);
     coords[0] = {{0, 100}, {1, 500}};  // Same node on path 0 and path 1
 
-    PathWalkExpander expander(coords);
+    std::vector<std::size_t> path_lengths(100, 1000000);  // Large lengths to not filter any anchors
+    PathWalkExpander expander(coords, path_lengths);
     DPChainClustererConfig config;
     config.max_dist = 5000;
     config.max_diag_dev = 500;
@@ -322,7 +333,8 @@ TEST_CASE("DPChainClusterer: Chain preserves order from backtracking") {
     coords[1] = {{0, 200}};
     coords[2] = {{0, 300}};
 
-    PathWalkExpander expander(coords);
+    std::vector<std::size_t> path_lengths(100, 1000000);  // Large lengths to not filter any anchors
+    PathWalkExpander expander(coords, path_lengths);
     DPChainClustererConfig config;
     config.max_dist = 5000;
     config.max_diag_dev = 500;

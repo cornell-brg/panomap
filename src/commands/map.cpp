@@ -71,7 +71,8 @@ int handle_map(const std::vector<std::string>& args) {
         {'p', "profile", false, "Emit timing profile (tree)"},
         {'v', "verbose", false, "Enable verbose logging (DEBUG level)"},
         {'\0', "", false, "\nMapping Options:"},
-        {'\0', "max-seed-freq", true, "Maximum seed frequency for lookup (default: use index threshold)"},
+        {'\0', "max-seed-freq", true, "Maximum seed frequency for lookup (absolute cap)"},
+        {'\0', "seed-filter", true, "Recompute threshold at percentile (0.0-1.0, e.g., 0.5 = 50th)"},
         {'\0', "clusterer", true, "Clusterer backend: dp-chain (default), fse, probe"},
         {'\0', "chain-max-dist", true, "DP chain: max query/ref distance between anchors (default: 500)"},
         {'\0', "chain-max-diag-dev", true, "DP chain: max diagonal deviation (default: 500)"},
@@ -102,6 +103,7 @@ int handle_map(const std::vector<std::string>& args) {
         {'\0', "", false, "\nDebug Options:"},
         {'\0', "dump-anchors", true, "Dump anchors to directory (one file per read)"},
         {'\0', "dump-chains", true, "Dump chains to directory (one file per read)"},
+        {'\0', "dump-hit-stats", true, "Dump seed hit statistics to directory (one file per read)"},
         {'\0', "no-anchor-merge", false, "Disable anchor merging (for heatmap debugging)"},
         {'\0', "", false, "\nOutput Options:"},
         {'o', "output", true, "Output file path (format auto-detected from extension: .paf, .gaf, .gam, .json)"},
@@ -206,6 +208,7 @@ int handle_map(const std::vector<std::string>& args) {
     std::unique_ptr<piru::index::GraphStore> graph_store;
     std::unique_ptr<piru::index::SeedStore> seed_store;
     std::vector<std::vector<piru::index::LinearCoordinate>> linearization_coords;
+    std::vector<std::size_t> path_lengths;  // For anchor bounds checking
     std::string fuzzy_quantizer_name;
     std::string pore_model_name;  // Track pore model for event pipeline parameter selection
     float fuzzy_fine_min{-2.0f};
@@ -234,6 +237,14 @@ int handle_map(const std::vector<std::string>& args) {
         LOG_INFO("index metadata: model=" + loaded.metadata.model_name +
                  ", fuzzy=" + loaded.metadata.fuzzy_quantizer +
                  ", seeds=" + loaded.seeds->extractor_name());
+
+        // Extract path lengths from loaded graph BEFORE moving (AdjListGraphStore has path access)
+        const auto& aln_graph = loaded.graph->graph();
+        const auto& paths = aln_graph.paths();
+        path_lengths.resize(paths.size());
+        for (std::size_t i = 0; i < paths.size(); ++i) {
+            path_lengths[i] = paths[i].length;
+        }
 
         graph_store = std::move(loaded.graph);
         seed_store = std::move(loaded.seeds);
@@ -334,6 +345,7 @@ int handle_map(const std::vector<std::string>& args) {
         graph_store = std::move(index_result.graph_store);
         seed_store = std::move(index_result.seed_store);
         linearization_coords = std::move(index_result.linearization_coords);
+        path_lengths = std::move(index_result.path_lengths);
         fuzzy_quantizer_name = index_result.fuzzy_quantizer;
         pore_model_name = model_arg;
 
@@ -388,6 +400,7 @@ int handle_map(const std::vector<std::string>& args) {
     map_config.seed_store = seed_store.get();
     map_config.graph_store = graph_store.get();
     map_config.linearization_coords = &linearization_coords;  // For DP chaining
+    map_config.path_lengths = &path_lengths;  // For anchor bounds checking
 
     // Configure fuzzy quantizer from index metadata
     if (!fuzzy_quantizer_name.empty()) {
@@ -489,12 +502,22 @@ int handle_map(const std::vector<std::string>& args) {
         map_config.event_pipeline_config.override_peak_height = std::stof(parsed.values.at("event-peak"));
     }
 
-    // Override seed frequency threshold if specified
-    if (parsed.values.count("max-seed-freq")) {
+    // Recompute threshold from percentile if specified (takes precedence)
+    if (parsed.values.count("seed-filter")) {
+        const double percentile = std::stod(parsed.values.at("seed-filter"));
+        const_cast<piru::index::HashSeedStore*>(hash_seed_store)->recompute_threshold_from_percentile(percentile);
+        LOG_INFO("Recomputed seed frequency threshold at " + std::to_string(percentile * 100) + "th percentile");
+    }
+    // Override seed frequency threshold to absolute value if specified
+    else if (parsed.values.count("max-seed-freq")) {
         const std::size_t override_threshold = std::stoull(parsed.values.at("max-seed-freq"));
         const_cast<piru::index::HashSeedStore*>(hash_seed_store)->set_frequency_threshold(override_threshold);
         LOG_INFO("Overriding seed frequency threshold to " + std::to_string(override_threshold));
     }
+
+    // Log the seed frequency threshold being used
+    LOG_INFO("Seed frequency threshold: " + std::to_string(hash_seed_store->frequency_threshold()) +
+             " (seeds with freq > " + std::to_string(hash_seed_store->frequency_threshold()) + " will be skipped)");
 
     // Configure result writer if specified
     if (result_writer) {
@@ -511,6 +534,11 @@ int handle_map(const std::vector<std::string>& args) {
         map_config.dump_chains_dir = parsed.values.at("dump-chains");
         std::filesystem::create_directories(map_config.dump_chains_dir);
         LOG_INFO("Dumping chains to: " + map_config.dump_chains_dir);
+    }
+    if (parsed.values.count("dump-hit-stats")) {
+        map_config.dump_hit_stats_dir = parsed.values.at("dump-hit-stats");
+        std::filesystem::create_directories(map_config.dump_hit_stats_dir);
+        LOG_INFO("Dumping hit stats to: " + map_config.dump_hit_stats_dir);
     }
     if (parsed.values.count("no-anchor-merge")) {
         map_config.enable_anchor_merge = false;

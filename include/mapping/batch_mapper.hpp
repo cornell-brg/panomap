@@ -54,13 +54,16 @@ struct BatchMapperConfig {
     // Linearization coordinates (needed for DP chaining)
     // Non-owning pointer to linearization coords (from in-memory indexing or future deserialization)
     const std::vector<std::vector<index::LinearCoordinate>>* linearization_coords{nullptr};
+    // Path lengths for anchor bounds checking (parallel to graph paths)
+    const std::vector<std::size_t>* path_lengths{nullptr};
 
     // Result writer for output (non-owning, optional)
     io::ResultWriter* result_writer{nullptr};
 
     // Debug dump directories (empty = disabled)
-    std::string dump_anchors_dir{};  // Dump anchors per read
-    std::string dump_chains_dir{};   // Dump chains per read
+    std::string dump_anchors_dir{};    // Dump anchors per read
+    std::string dump_chains_dir{};     // Dump chains per read
+    std::string dump_hit_stats_dir{};  // Dump seed hit statistics per read
 
     // Anchor merging (disable for debugging/heatmap comparison)
     bool enable_anchor_merge{true};

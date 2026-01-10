@@ -51,9 +51,11 @@ using AnchorExpanderPtr = std::unique_ptr<AnchorExpander>;
 // Seeds with no linearization coordinates (empty vector) are skipped.
 class PathWalkExpander : public AnchorExpander {
 public:
-    // Construct expander with linearization coordinates from a Linearizer.
+    // Construct expander with linearization coordinates and path lengths.
     // coords[node_id] = vector of LinearCoordinate for that node
-    explicit PathWalkExpander(const std::vector<std::vector<index::LinearCoordinate>>& coords);
+    // path_lengths[path_id] = length of that path (for bounds checking)
+    PathWalkExpander(const std::vector<std::vector<index::LinearCoordinate>>& coords,
+                     const std::vector<std::size_t>& path_lengths);
 
     std::vector<Anchor> expand(const std::vector<SeedHitRecord>& hits) const override;
 
@@ -61,6 +63,7 @@ public:
 
 private:
     const std::vector<std::vector<index::LinearCoordinate>>& coords_;
+    const std::vector<std::size_t>& path_lengths_;
 };
 
 // Superbubble expansion: uses GraphStore chain_id and linear_position.

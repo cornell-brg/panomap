@@ -68,6 +68,23 @@ public:
     void set_max_hash_frequency(std::size_t freq) { max_hash_frequency_ = freq; }
     void set_frequency_threshold(std::size_t threshold) { frequency_threshold_ = threshold; }
     void set_filter_fraction(double fraction) { filter_fraction_ = fraction; }
+
+    // Recompute frequency threshold from percentile (0.0-1.0)
+    // e.g., 0.5 = 50th percentile, 0.9 = 90th percentile
+    void recompute_threshold_from_percentile(double percentile) {
+        if (store_.empty()) return;
+        std::vector<std::size_t> frequencies;
+        frequencies.reserve(store_.size());
+        for (const auto& [hash, hits] : store_) {
+            frequencies.push_back(hits.size());
+        }
+        std::sort(frequencies.begin(), frequencies.end());
+        double fraction = std::clamp(percentile, 0.0, 1.0);
+        std::size_t pos = static_cast<std::size_t>(frequencies.size() * fraction);
+        pos = std::min(pos, frequencies.size() - 1);
+        frequency_threshold_ = frequencies[pos] + 1;
+        filter_fraction_ = percentile;
+    }
     void set_extractor_name(std::string name) { extractor_name_ = std::move(name); }
     void set_params(std::map<std::string, std::string> p) { params_ = std::move(p); }
 

@@ -10,6 +10,7 @@
 
 #include "signal/signal_types.hpp"
 #include "util/logging.hpp"
+#include "util/timing.hpp"
 
 namespace piru::index {
 
@@ -173,6 +174,7 @@ NodeFirstIndexResult nodeFirstIndex(
     // =========================================================================
     // Pass 1a: Squigglize node interiors, accumulate global stats
     // =========================================================================
+    timing::start("nodefirst:squigglize");
 
     // Per-node raw k-mer values (temporary storage for pass 1)
     std::vector<std::vector<float>> node_raw_values(graph.nodeCount());
@@ -213,10 +215,12 @@ NodeFirstIndexResult nodeFirstIndex(
             ++global_count;
         }
     }
+    timing::stop("nodefirst:squigglize");
 
     // =========================================================================
     // Pass 1b: Compute global mean/std
     // =========================================================================
+    timing::start("nodefirst:norm_quant");
 
     if (global_count == 0) {
         LOG_WARN("NodeFirstIndex: No k-mer values found in graph");
@@ -284,6 +288,7 @@ NodeFirstIndexResult nodeFirstIndex(
             }
         }
     }
+    timing::stop("nodefirst:norm_quant");
 
     // Free raw values - no longer needed
     node_raw_values.clear();
@@ -292,6 +297,7 @@ NodeFirstIndexResult nodeFirstIndex(
     // =========================================================================
     // Pass 2: Boundary fill (path walks)
     // =========================================================================
+    timing::start("nodefirst:hash_boundary");
 
     for (std::size_t path_idx = 0; path_idx < graph.pathCount(); ++path_idx) {
         const auto& path = graph.paths()[path_idx];
@@ -365,13 +371,10 @@ NodeFirstIndexResult nodeFirstIndex(
             path_base_pos += node_len;
         }
 
-        // Record path length in signal samples (total bases - pore_k + 1)
-        if (path_base_pos >= static_cast<std::size_t>(pore_k)) {
-            result.path_lengths[path_idx] = path_base_pos - static_cast<std::size_t>(pore_k) + 1;
-        } else {
-            result.path_lengths[path_idx] = 0;
-        }
+        // Record path length in base space (matches linearization coords)
+        result.path_lengths[path_idx] = path_base_pos;
     }
+    timing::stop("nodefirst:hash_boundary");
 
     // =========================================================================
     // Finalize: dedup, compute stats

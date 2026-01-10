@@ -4,9 +4,11 @@
 
 #include <algorithm>
 #include <cmath>
+#include <fstream>
 #include <limits>
 
 #include "util/logging.hpp"
+#include "util/timing.hpp"
 
 namespace piru::index {
 
@@ -35,16 +37,17 @@ struct NodeBoundary {
     std::size_t base_start;
 };
 
-/* Map signal position back to (node_id, local_offset). */
+/* Map signal position back to (node_id, local_offset). Binary search since boundaries are sorted. */
 std::pair<std::size_t, std::size_t> signalPositionToNodeOffset(
     std::size_t signal_pos,
     const std::vector<NodeBoundary>& boundaries) {
-    for (auto it = boundaries.rbegin(); it != boundaries.rend(); ++it) {
-        if (signal_pos >= it->base_start) {
-            return {it->node_id, signal_pos - it->base_start};
-        }
+    // Find first boundary with base_start > signal_pos, then back up one
+    auto it = std::upper_bound(boundaries.begin(), boundaries.end(), signal_pos,
+        [](std::size_t pos, const NodeBoundary& b) { return pos < b.base_start; });
+    if (it != boundaries.begin()) {
+        --it;
     }
-    return {boundaries[0].node_id, signal_pos};
+    return {it->node_id, signal_pos - it->base_start};
 }
 
 }  // namespace
@@ -74,6 +77,17 @@ PathWalkIndexResult pathWalkIndex(
     result.seed_store->set_params(std::move(params));
     result.seed_store->set_filter_fraction(config.seed_filter);
 
+    // Optional: dump per-path normalization stats to file
+    std::ofstream norm_stats_file;
+    if (!config.dump_norm_stats_path.empty()) {
+        norm_stats_file.open(config.dump_norm_stats_path);
+        if (norm_stats_file) {
+            norm_stats_file << "path_name\tmean\tstddev\tnum_kmers\n";
+        } else {
+            LOG_WARN("Could not open norm stats file: " + config.dump_norm_stats_path);
+        }
+    }
+
     // Process each path independently
     for (std::size_t path_idx = 0; path_idx < graph.pathCount(); ++path_idx) {
         const auto& path = graph.paths()[path_idx];
@@ -97,6 +111,7 @@ PathWalkIndexResult pathWalkIndex(
         }
 
         // Step 2: Squigglize (slide k-mer window, k-mers can cross node boundaries)
+        timing::start("pathwalk:squigglize");
         std::vector<float> raw_signal;
         raw_signal.reserve(path_sequence.size() - pore_k + 1);
 
@@ -121,10 +136,12 @@ PathWalkIndexResult pathWalkIndex(
             sum += val;
             ++count;
         }
+        timing::stop("pathwalk:squigglize");
 
         if (count == 0) continue;
 
         // Step 3: Compute per-path normalization stats
+        timing::start("pathwalk:norm_quant");
         const double path_mean = sum / static_cast<double>(count);
 
         double variance = 0.0;
@@ -136,6 +153,11 @@ PathWalkIndexResult pathWalkIndex(
         }
         variance /= static_cast<double>(count);
         const double path_std = (variance > 0.0) ? std::sqrt(variance) : 0.0;
+
+        // Dump stats if enabled
+        if (norm_stats_file) {
+            norm_stats_file << path.name << "\t" << path_mean << "\t" << path_std << "\t" << count << "\n";
+        }
 
         // Step 4: Normalize and fuzzy quantize
         signal::NormalizedSignal normalized;
@@ -149,7 +171,9 @@ PathWalkIndexResult pathWalkIndex(
         }
 
         auto fuzzy = fuzzy_quantizer.quantize(normalized);
-        result.path_lengths[path_idx] = fuzzy.tokens.size();
+        timing::stop("pathwalk:norm_quant");
+        // Use base length (not signal length) since linearization coords are in base space
+        result.path_lengths[path_idx] = path_sequence.size();
         result.total_path_length += fuzzy.tokens.size();
 
         // Step 5: Record linear coordinates (node_id -> path positions for chaining)
@@ -159,13 +183,23 @@ PathWalkIndexResult pathWalkIndex(
         }
 
         // Step 6: Extract seeds and insert into index
+        timing::start("pathwalk:hash");
+        timing::start("pathwalk:hash_extract");
         const auto seeds = extractor.extract(fuzzy);
+        timing::stop("pathwalk:hash_extract");
         result.seeds_extracted += seeds.seeds.size();
 
+        timing::start("pathwalk:hash_insert");
         for (const auto& seed : seeds.seeds) {
+            timing::start("pathwalk:hash_pos_lookup");
             auto [node_id, local_offset] = signalPositionToNodeOffset(seed.position, boundaries);
+            timing::stop("pathwalk:hash_pos_lookup");
+            timing::start("pathwalk:hash_store_insert");
             result.seed_store->insert(seed.hash, SeedHit{node_id, local_offset, seed.length});
+            timing::stop("pathwalk:hash_store_insert");
         }
+        timing::stop("pathwalk:hash_insert");
+        timing::stop("pathwalk:hash");
     }
 
     // Dedup seeds from shared regions across paths

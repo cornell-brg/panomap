@@ -77,6 +77,14 @@ struct IndexPipelineConfig {
     double seed_filter{0.5};
 
     // -------------------------------------------------------------------------
+    // Debug Options
+    // -------------------------------------------------------------------------
+
+    // Dump per-path normalization stats to file (path-walk backend only)
+    // Format: TSV with columns: path_name, mean, stddev, num_kmers
+    std::string dump_norm_stats_path;
+
+    // -------------------------------------------------------------------------
     // Note on Additional Parameters
     // -------------------------------------------------------------------------
     //
@@ -98,6 +106,9 @@ struct IndexPipelineResult {
 
     // Linearization coordinates (needed for DP chaining)
     std::vector<std::vector<LinearCoordinate>> linearization_coords;
+
+    // Path lengths in base space (for anchor bounds checking)
+    std::vector<std::size_t> path_lengths;
 
     // Metadata
     std::size_t pore_k{0};
