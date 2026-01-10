@@ -182,24 +182,67 @@ PathWalkIndexResult pathWalkIndex(
                 path_idx, static_cast<std::int64_t>(boundary.base_start));
         }
 
-        // Step 6: Extract seeds and insert into index
+        // Step 6: Extract seeds into temporary per-path store
         timing::start("pathwalk:hash");
         timing::start("pathwalk:hash_extract");
         const auto seeds = extractor.extract(fuzzy);
         timing::stop("pathwalk:hash_extract");
         result.seeds_extracted += seeds.seeds.size();
 
+        // Collect seeds for this path into temporary store
         timing::start("pathwalk:hash_insert");
+        HashSeedStore path_seed_store;
         for (const auto& seed : seeds.seeds) {
-            timing::start("pathwalk:hash_pos_lookup");
             auto [node_id, local_offset] = signalPositionToNodeOffset(seed.position, boundaries);
-            timing::stop("pathwalk:hash_pos_lookup");
-            timing::start("pathwalk:hash_store_insert");
-            result.seed_store->insert(seed.hash, SeedHit{node_id, local_offset, seed.length});
-            timing::stop("pathwalk:hash_store_insert");
+            path_seed_store.insert(seed.hash, SeedHit{node_id, local_offset, seed.length});
         }
         timing::stop("pathwalk:hash_insert");
+
+        // Step 7: Per-path frequency filtering
+        timing::start("pathwalk:per_path_filter");
+
+        // Compute per-path frequency threshold
+        std::size_t path_threshold = std::numeric_limits<std::size_t>::max();
+        std::size_t path_max_freq = 0;
+        if (!path_seed_store.data().empty()) {
+            std::vector<std::size_t> path_frequencies;
+            path_frequencies.reserve(path_seed_store.data().size());
+            for (const auto& [hash, hits] : path_seed_store.data()) {
+                path_frequencies.push_back(hits.size());
+            }
+            std::sort(path_frequencies.begin(), path_frequencies.end());
+            path_max_freq = path_frequencies.back();
+
+            if (config.seed_filter < 1.0) {
+                double fraction = std::clamp(config.seed_filter, 0.0, 1.0);
+                std::size_t pos = static_cast<std::size_t>(path_frequencies.size() * fraction);
+                pos = std::min(pos, path_frequencies.size() - 1);
+                path_threshold = path_frequencies[pos] + 1;
+            }
+        }
+
+        // Merge passing seeds into global store
+        std::size_t path_seeds_added = 0;
+        std::size_t path_seeds_filtered = 0;
+        for (const auto& [hash, hits] : path_seed_store.data()) {
+            if (hits.size() < path_threshold) {
+                // Passes per-path filter - add all hits to global store
+                for (const auto& hit : hits) {
+                    result.seed_store->insert(hash, hit);
+                }
+                path_seeds_added += hits.size();
+            } else {
+                path_seeds_filtered += hits.size();
+            }
+        }
+        timing::stop("pathwalk:per_path_filter");
         timing::stop("pathwalk:hash");
+
+        LOG_INFO("Path " + path.name + ": " + std::to_string(path_seed_store.data().size()) +
+                 " unique hashes, max_freq=" + std::to_string(path_max_freq) +
+                 ", threshold=" + std::to_string(path_threshold) +
+                 ", added=" + std::to_string(path_seeds_added) +
+                 ", filtered=" + std::to_string(path_seeds_filtered));
     }
 
     // Dedup seeds from shared regions across paths
@@ -232,7 +275,8 @@ PathWalkIndexResult pathWalkIndex(
 
     LOG_INFO("PathWalkIndex: " + std::to_string(result.seeds_extracted) +
              " seeds extracted, " + std::to_string(result.seeds_unique) +
-             " unique (max_freq=" + std::to_string(max_freq) + ")");
+             " unique (max_freq=" + std::to_string(max_freq) +
+             ", global_threshold=" + std::to_string(threshold) + ")");
 
     return result;
 }

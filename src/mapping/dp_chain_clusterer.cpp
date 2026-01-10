@@ -354,8 +354,8 @@ ClusterSummary DPChainClusterer::cluster(const std::vector<Anchor>& anchors) con
 
 bool DPChainClusterer::can_chain(const Anchor& j, const Anchor& i) const {
     // Check order: j must come before i in sorted order (already guaranteed by DP loop)
-    // But also check that query positions are in order
-    if (i.query_pos < j.query_pos) {
+    // Query positions must strictly increase - equal positions are alternatives, not a chain
+    if (i.query_pos <= j.query_pos) {
         return false;
     }
 

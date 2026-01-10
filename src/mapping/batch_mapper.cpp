@@ -303,10 +303,10 @@ void dumpPathChainsToFile(const char* filename,
         return static_cast<double>(a.length) * anchor_weight;
     };
 
-    // Lambda: can chain j -> i
+    // Lambda: can chain j -> i (query must strictly advance)
     auto can_chain = [max_dist, max_diag_dev](const Anchor& j, const Anchor& i) {
         if (i.path_id != j.path_id) return false;
-        if (i.query_pos < j.query_pos) return false;
+        if (i.query_pos <= j.query_pos) return false;
         std::int64_t delta_ref = i.ref_coord - j.ref_coord;
         std::int64_t delta_query = static_cast<std::int64_t>(i.query_pos) -
                                    static_cast<std::int64_t>(j.query_pos);
