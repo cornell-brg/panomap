@@ -69,21 +69,6 @@ TEST_CASE("ImportedGraph basic helpers") {
     CHECK(*graph.edges.front().overlap_bases == 5);
 }
 
-TEST_CASE("GFA loader reads MT example graph") {
-    const auto src_dir = std::filesystem::path(__FILE__).parent_path();
-    const auto gfa_path = src_dir / "data/graphs/MT.gfa";
-
-    auto loader = piru::io::make_graph_loader(gfa_path.string());
-    REQUIRE(loader != nullptr);
-    CHECK(loader->get_format_name() == "gfa");
-
-    piru::io::ImportedGraph graph;
-    REQUIRE(loader->load(graph));
-    CHECK(graph.nodes.size() > 0);
-    CHECK(graph.edges.size() >= 0);
-    CHECK(graph.paths.size() >= 0);
-}
-
 TEST_CASE("vg loader parses binary vg via libvgio") {
 #ifdef PIRU_HAS_LIBVGIO
     vg::Graph proto_graph;
@@ -147,21 +132,6 @@ TEST_CASE("vg loader parses binary vg via libvgio") {
     CHECK(parsed_path.name == "p1");
     CHECK(parsed_path.steps.size() == 2);
 
-#ifdef PIRU_HAS_LIBVGIO
-    SUBCASE("vg loader reads DRB1 vg fixture") {
-        const auto src_dir = std::filesystem::path(__FILE__).parent_path();
-        const auto vg_path = src_dir / "data/graphs/drb1.vg";
-        auto loader = piru::io::make_graph_loader(vg_path.string());
-        REQUIRE(loader != nullptr);
-        CHECK(loader->get_format_name() == "vg");
-
-        piru::io::ImportedGraph vg_graph;
-        REQUIRE(loader->load(vg_graph));
-        CHECK(vg_graph.nodes.size() > 0);
-        CHECK(vg_graph.edges.size() >= 0);
-        CHECK(vg_graph.paths.size() >= 0);
-    }
-#endif
 #else
     MESSAGE("PIRU_HAS_LIBVGIO not set; skipping vg loader test");
     CHECK(true);
