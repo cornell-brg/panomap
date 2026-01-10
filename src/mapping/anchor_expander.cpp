@@ -9,8 +9,9 @@ namespace piru::mapping {
 // ============================================================================
 
 PathWalkExpander::PathWalkExpander(
-    const std::vector<std::vector<index::LinearCoordinate>>& coords)
-    : coords_(coords) {}
+    const std::vector<std::vector<index::LinearCoordinate>>& coords,
+    const std::vector<std::size_t>& path_lengths)
+    : coords_(coords), path_lengths_(path_lengths) {}
 
 std::vector<Anchor> PathWalkExpander::expand(const std::vector<SeedHitRecord>& hits) const {
     std::vector<Anchor> anchors;
@@ -35,9 +36,20 @@ std::vector<Anchor> PathWalkExpander::expand(const std::vector<SeedHitRecord>& h
 
         // Emit one anchor per coordinate occurrence
         for (const auto& coord : node_coords) {
+            std::int64_t ref_coord = coord.ref_coord + static_cast<std::int64_t>(hit.target.offset);
+            std::int64_t anchor_end = ref_coord + static_cast<std::int64_t>(hit.span);
+
+            // Skip anchors that extend past path boundary (cross-node seeds at path end)
+            if (coord.path_id < path_lengths_.size()) {
+                std::int64_t path_len = static_cast<std::int64_t>(path_lengths_[coord.path_id]);
+                if (anchor_end > path_len || ref_coord < 0) {
+                    continue;
+                }
+            }
+
             Anchor anchor;
             anchor.query_pos = hit.read_pos;
-            anchor.ref_coord = coord.ref_coord + static_cast<std::int64_t>(hit.target.offset);
+            anchor.ref_coord = ref_coord;
             anchor.length = hit.span;
             anchor.path_id = coord.path_id;
             anchor.node_id = node_id;

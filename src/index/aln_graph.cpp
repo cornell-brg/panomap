@@ -2,7 +2,7 @@
 #include "index/aln_graph.hpp"
 
 #include <algorithm>
-// #include <stdexcept> // stdexcept is no longer needed after removing the old commented logic
+#include <unordered_set>
 
 namespace piru::index {
 
@@ -52,6 +52,13 @@ bool AlnGraph::validate() const {
 
     if (!ok) return false;
 
+    // Build label set for O(1) lookups (instead of O(N) per step)
+    std::unordered_set<std::string> label_set;
+    label_set.reserve(nodes_.size());
+    for (const auto& node : nodes_) {
+        label_set.insert(node.label);
+    }
+
     // Path node references and overlap semantics.
     for (const auto& path : paths_) {
         // Validate overlap vector size
@@ -61,14 +68,8 @@ bool AlnGraph::validate() const {
         }
 
         for (const auto& step : path.steps) {
-            bool node_found = false;
-            for (const auto& node : nodes_) {
-                if (node.label == step.node_id) {
-                    node_found = true;
-                    break;
-                }
-            }
-            if (!node_found) {
+            // O(1) lookup instead of O(N) scan
+            if (label_set.find(step.node_id) == label_set.end()) {
                 ok = false;
                 break;
             }

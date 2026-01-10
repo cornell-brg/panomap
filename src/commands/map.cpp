@@ -10,7 +10,7 @@
 #include "cli/parse.hpp"
 #include "index/index_pipeline.hpp"
 #include "io/graphs/graph_loader_factory.hpp"
-#include "io/index/serialization.hpp"
+#include "io/index/simple_serialization.hpp"
 #include "io/models/model_factory.hpp"
 #include "io/reads/read_provider_factory.hpp"
 #include "io/results/result_writer_factory.hpp"
@@ -70,12 +70,9 @@ int handle_map(const std::vector<std::string>& args) {
         {'t', "threads", true, "Worker threads (-1 = auto)"},
         {'p', "profile", false, "Emit timing profile (tree)"},
         {'v', "verbose", false, "Enable verbose logging (DEBUG level)"},
-        {'\0', "", false, "\nIn-Memory Indexing Options (with --graph):"},
-        {'\0', "linearizer", true, "Linearizer backend: path-walk (default) or superbubble"},
-        {'\0', "graph-type", true, "Graph type: vg (default) or dbg"},
-        {'\0', "graph-k", true, "DBG k-mer size (default: auto-detect from overlap)"},
         {'\0', "", false, "\nMapping Options:"},
-        {'\0', "max-seed-freq", true, "Maximum seed frequency for lookup (default: use index threshold)"},
+        {'\0', "max-seed-freq", true, "Maximum seed frequency for lookup (absolute cap)"},
+        {'\0', "seed-filter", true, "Recompute threshold at percentile (0.0-1.0, e.g., 0.5 = 50th)"},
         {'\0', "clusterer", true, "Clusterer backend: dp-chain (default), fse, probe"},
         {'\0', "chain-max-dist", true, "DP chain: max query/ref distance between anchors (default: 500)"},
         {'\0', "chain-max-diag-dev", true, "DP chain: max diagonal deviation (default: 500)"},
@@ -87,9 +84,8 @@ int handle_map(const std::vector<std::string>& args) {
         {'\0', "chain-max-chains", true, "DP chain: max chains to extract (default: 10)"},
         {'\0', "chain-max-skip", true, "DP chain: stop after N consecutive failed attempts (default: 25)"},
         {'\0', "chain-merge", true, "DP chain: merge overlapping chains (default: true)"},
-        {'\0', "align", false, "Enable signal-level alignment for chain evaluation"},
-        {'\0', "align-backend", true, "Alignment backend: path-guided (default), radius, auto"},
         {'\0', "", false, "\nSignal Processing Options (only with --graph):"},
+        {'\0', "indexer-backend", true, "Indexer backend: node-first, path-walk (default)"},
         {'\0', "event-pipeline", true, "Event pipeline backend: rawhash (default), scrappie, passthrough"},
         {'\0', "event-w1", true, "Event detection short window length (default: 3)"},
         {'\0', "event-w2", true, "Event detection long window length (default: backend-specific)"},
@@ -107,6 +103,8 @@ int handle_map(const std::vector<std::string>& args) {
         {'\0', "", false, "\nDebug Options:"},
         {'\0', "dump-anchors", true, "Dump anchors to directory (one file per read)"},
         {'\0', "dump-chains", true, "Dump chains to directory (one file per read)"},
+        {'\0', "dump-hit-stats", true, "Dump seed hit statistics to directory (one file per read)"},
+        {'\0', "dump-path-chains", true, "Dump best chain per path to directory (diagnostic)"},
         {'\0', "no-anchor-merge", false, "Disable anchor merging (for heatmap debugging)"},
         {'\0', "", false, "\nOutput Options:"},
         {'o', "output", true, "Output file path (format auto-detected from extension: .paf, .gaf, .gam, .json)"},
@@ -209,9 +207,9 @@ int handle_map(const std::vector<std::string>& args) {
     //       because path-walk coordinates are not yet serialized to disk.
 
     std::unique_ptr<piru::index::GraphStore> graph_store;
-    std::unique_ptr<piru::index::SignalStore> signal_store;
     std::unique_ptr<piru::index::SeedStore> seed_store;
     std::vector<std::vector<piru::index::LinearCoordinate>> linearization_coords;
+    std::vector<std::size_t> path_lengths;  // For anchor bounds checking
     std::string fuzzy_quantizer_name;
     std::string pore_model_name;  // Track pore model for event pipeline parameter selection
     float fuzzy_fine_min{-2.0f};
@@ -228,36 +226,39 @@ int handle_map(const std::vector<std::string>& args) {
         const std::string index_path = parsed.values.at("index");
         LOG_INFO("loading index from " + index_path);
 
-        auto loaded_index = piru::io::index::load_index(index_path);
-        if (!loaded_index.graph) {
-            LOG_ERROR("map: failed to load index from '" + index_path + "'");
-            return 1;
-        }
-        if (!loaded_index.seeds) {
-            LOG_ERROR("map: index is missing seeds; cannot perform lookups");
+        // Load simple index (.pirx format)
+        if (!piru::io::index::is_simple_index(index_path)) {
+            LOG_ERROR("map: unsupported index format '" + index_path + "' (expected .pirx file)");
             return 1;
         }
 
-        LOG_INFO("index loaded: " + std::to_string(loaded_index.graph->nodeCount()) + " nodes");
-        LOG_INFO("index metadata: fuzzy=" + loaded_index.metadata.fuzzy_quantizer +
-                 ", align=" + loaded_index.metadata.align_quantizer +
-                 ", seeds=" + loaded_index.seeds->extractor_name());
+        auto loaded = piru::io::index::load_simple_index(index_path);
 
-        graph_store = std::move(loaded_index.graph);
-        signal_store = std::move(loaded_index.signals);
-        seed_store = std::move(loaded_index.seeds);
-        fuzzy_quantizer_name = loaded_index.metadata.fuzzy_quantizer;
-        pore_model_name = loaded_index.metadata.model_name;
+        LOG_INFO("simple index loaded: " + std::to_string(loaded.graph->nodeCount()) + " nodes");
+        LOG_INFO("index metadata: model=" + loaded.metadata.model_name +
+                 ", fuzzy=" + loaded.metadata.fuzzy_quantizer +
+                 ", seeds=" + loaded.seeds->extractor_name());
 
-        // Note: Linearization coords not serialized yet (Phase 7 TODO)
-        // Superbubble uses graph.node.chain_id/linear_position instead
+        // Extract path lengths from loaded graph BEFORE moving (AdjListGraphStore has path access)
+        const auto& aln_graph = loaded.graph->graph();
+        const auto& paths = aln_graph.paths();
+        path_lengths.resize(paths.size());
+        for (std::size_t i = 0; i < paths.size(); ++i) {
+            path_lengths[i] = paths[i].length;
+        }
 
-        // Warn if user tries to override seed/fuzzy params with pre-built index
+        graph_store = std::move(loaded.graph);
+        seed_store = std::move(loaded.seeds);
+        linearization_coords = std::move(loaded.linearization_coords);
+        fuzzy_quantizer_name = loaded.metadata.fuzzy_quantizer;
+        pore_model_name = loaded.metadata.model_name;
+
+        // Warn if user tries to override seed/fuzzy/indexer params with pre-built index
         if (parsed.values.count("seed-k") || parsed.values.count("seed-stride") ||
-            parsed.values.count("seed-mode") ||
+            parsed.values.count("seed-mode") || parsed.values.count("indexer-backend") ||
             parsed.values.count("fuzzy-backend") || parsed.values.count("fuzzy-fine-min") ||
             parsed.values.count("fuzzy-fine-max") || parsed.values.count("fuzzy-fine-range")) {
-            LOG_WARN("--seed-* and --fuzzy-* flags are ignored with --index (use --graph for experimentation)");
+            LOG_WARN("--seed-*, --fuzzy-*, and --indexer-backend flags are ignored with --index (use --graph for experimentation)");
         }
 
     } else {
@@ -266,15 +267,8 @@ int handle_map(const std::vector<std::string>& args) {
         // ---------------------------------------------------------------------
         const std::string graph_path = parsed.values.at("graph");
         const std::string model_arg = parsed.values.at("model");
-        const std::string linearizer = parsed.values.count("linearizer")
-                                           ? parsed.values.at("linearizer")
-                                           : "path-walk";
-        const std::string graph_type = parsed.values.count("graph-type")
-                                           ? parsed.values.at("graph-type")
-                                           : "vg";
 
-        LOG_INFO("Running in-memory indexing: graph=" + graph_path +
-                 ", linearizer=" + linearizer);
+        LOG_INFO("Running in-memory indexing: graph=" + graph_path);
 
         // Step 1: Load pore model (built-in or file)
         auto model = load_model_or_file(model_arg);
@@ -290,13 +284,7 @@ int handle_map(const std::vector<std::string>& args) {
         }
 
         piru::io::ImportedGraph imported;
-        if (graph_type == "vg") {
-            imported.flavor = piru::io::ImportedGraphFlavor::kVg;
-        } else if (graph_type == "dbg") {
-            imported.flavor = piru::io::ImportedGraphFlavor::kDbg;
-        } else {
-            imported.flavor = piru::io::ImportedGraphFlavor::kUnknown;
-        }
+        imported.flavor = piru::io::ImportedGraphFlavor::kVg;
 
         if (!loader->load(imported)) {
             LOG_ERROR("map: failed to read graph file '" + graph_path + "'");
@@ -310,17 +298,11 @@ int handle_map(const std::vector<std::string>& args) {
 
         // Step 3: Configure indexing pipeline
         piru::index::IndexPipelineConfig index_config;
-        index_config.graph_flavor = graph_type;
-        index_config.linearizer = linearizer;
 
-        // Auto-detect graph_k from edge overlap (DBG only)
-        if (!parsed.values.count("graph-k") && graph_type == "dbg") {
-            if (!imported.edges.empty() && imported.edges.front().overlap_bases.has_value()) {
-                const auto overlap = *imported.edges.front().overlap_bases;
-                index_config.graph_k = overlap + 1;
-            }
-        } else if (parsed.values.count("graph-k")) {
-            index_config.graph_k = std::stoul(parsed.values.at("graph-k"));
+        // Apply CLI overrides for indexer backend
+        if (parsed.values.count("indexer-backend")) {
+            index_config.indexer_backend = parsed.values.at("indexer-backend");
+            LOG_DEBUG("Using indexer backend=" + index_config.indexer_backend);
         }
 
         // Apply CLI overrides for seed extraction (affects in-memory indexing)
@@ -358,13 +340,13 @@ int handle_map(const std::vector<std::string>& args) {
         }
 
         // Step 4: Run full indexing pipeline
-        // (transform → linearize → squigglize → quantize → seed extraction)
+        // (simple expand → path-walk index)
         auto index_result = piru::index::run_index_pipeline(imported, *model, index_config);
 
         graph_store = std::move(index_result.graph_store);
-        signal_store = std::move(index_result.signal_store);
         seed_store = std::move(index_result.seed_store);
         linearization_coords = std::move(index_result.linearization_coords);
+        path_lengths = std::move(index_result.path_lengths);
         fuzzy_quantizer_name = index_result.fuzzy_quantizer;
         pore_model_name = model_arg;
 
@@ -419,6 +401,7 @@ int handle_map(const std::vector<std::string>& args) {
     map_config.seed_store = seed_store.get();
     map_config.graph_store = graph_store.get();
     map_config.linearization_coords = &linearization_coords;  // For DP chaining
+    map_config.path_lengths = &path_lengths;  // For anchor bounds checking
 
     // Configure fuzzy quantizer from index metadata
     if (!fuzzy_quantizer_name.empty()) {
@@ -520,38 +503,26 @@ int handle_map(const std::vector<std::string>& args) {
         map_config.event_pipeline_config.override_peak_height = std::stof(parsed.values.at("event-peak"));
     }
 
-    // Override seed frequency threshold if specified
-    if (parsed.values.count("max-seed-freq")) {
+    // Recompute threshold from percentile if specified (takes precedence)
+    if (parsed.values.count("seed-filter")) {
+        const double percentile = std::stod(parsed.values.at("seed-filter"));
+        const_cast<piru::index::HashSeedStore*>(hash_seed_store)->recompute_threshold_from_percentile(percentile);
+        LOG_INFO("Recomputed seed frequency threshold at " + std::to_string(percentile * 100) + "th percentile");
+    }
+    // Override seed frequency threshold to absolute value if specified
+    else if (parsed.values.count("max-seed-freq")) {
         const std::size_t override_threshold = std::stoull(parsed.values.at("max-seed-freq"));
         const_cast<piru::index::HashSeedStore*>(hash_seed_store)->set_frequency_threshold(override_threshold);
         LOG_INFO("Overriding seed frequency threshold to " + std::to_string(override_threshold));
     }
 
+    // Log the seed frequency threshold being used
+    LOG_INFO("Seed frequency threshold: " + std::to_string(hash_seed_store->frequency_threshold()) +
+             " (seeds with freq > " + std::to_string(hash_seed_store->frequency_threshold()) + " will be skipped)");
+
     // Configure result writer if specified
     if (result_writer) {
         map_config.result_writer = result_writer.get();
-    }
-
-    // Configure signal store for alignment (if available)
-    map_config.signal_store = signal_store.get();
-
-    // Configure alignment if enabled
-    if (parsed.values.count("align")) {
-        map_config.enable_alignment = true;
-
-        // Parse alignment backend
-        const std::string align_backend = parsed.values.count("align-backend")
-                                              ? parsed.values.at("align-backend")
-                                              : "path-guided";
-        if (align_backend == "radius") {
-            map_config.align_config.backend = piru::alignment::AlignerBackend::kRadius;
-        } else if (align_backend == "auto") {
-            map_config.align_config.backend = piru::alignment::AlignerBackend::kAuto;
-        } else {
-            map_config.align_config.backend = piru::alignment::AlignerBackend::kPathGuided;
-        }
-
-        LOG_INFO("Signal-level alignment enabled: backend=" + align_backend);
     }
 
     // Configure debug dump directories
@@ -564,6 +535,16 @@ int handle_map(const std::vector<std::string>& args) {
         map_config.dump_chains_dir = parsed.values.at("dump-chains");
         std::filesystem::create_directories(map_config.dump_chains_dir);
         LOG_INFO("Dumping chains to: " + map_config.dump_chains_dir);
+    }
+    if (parsed.values.count("dump-hit-stats")) {
+        map_config.dump_hit_stats_dir = parsed.values.at("dump-hit-stats");
+        std::filesystem::create_directories(map_config.dump_hit_stats_dir);
+        LOG_INFO("Dumping hit stats to: " + map_config.dump_hit_stats_dir);
+    }
+    if (parsed.values.count("dump-path-chains")) {
+        map_config.dump_path_chains_dir = parsed.values.at("dump-path-chains");
+        std::filesystem::create_directories(map_config.dump_path_chains_dir);
+        LOG_INFO("Dumping path chains to: " + map_config.dump_path_chains_dir);
     }
     if (parsed.values.count("no-anchor-merge")) {
         map_config.enable_anchor_merge = false;

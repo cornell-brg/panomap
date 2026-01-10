@@ -42,18 +42,14 @@ if(DOCTEST_AVAILABLE)
         test_models.cpp
         test_graphs.cpp
         test_aln_graph.cpp
-        test_path_guided_transform.cpp
         test_results.cpp
         test_reads.cpp
         test_signal_fuzzy_quantize.cpp
-        test_signal_alignment_quantize.cpp
         test_signal_seed_extractors.cpp
         test_mapping_batch.cpp
         test_index_pipeline.cpp
-        test_serialization.cpp
         test_cli.cpp
         test_gfa_exporter.cpp
-        test_linearizers.cpp
         test_seed_merger.cpp
         test_anchor_expander.cpp
         test_dp_chain_clusterer.cpp
@@ -83,7 +79,6 @@ if(DOCTEST_AVAILABLE)
         ${CMAKE_SOURCE_DIR}/src/io/results/alignment_conversion.cpp
         ${CMAKE_SOURCE_DIR}/src/io/results/result_writer_factory.cpp
         ${CMAKE_SOURCE_DIR}/src/io/models/builtin_models.cpp
-        ${CMAKE_SOURCE_DIR}/src/io/index/serialization.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/event_pipeline_factory.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/event_pipelines/scrappie_event_pipeline.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/event_pipelines/rawhash_event_pipeline.cpp
@@ -92,21 +87,9 @@ if(DOCTEST_AVAILABLE)
         ${CMAKE_SOURCE_DIR}/src/signal/fuzzy_quantizers/passthrough_fuzzy_quantizer.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/fuzzy_quantizers/piru_fuzzy_quantizer.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/fuzzy_quantizers/rh2_fuzzy_quantizer.cpp
-        ${CMAKE_SOURCE_DIR}/src/signal/alignment_quantizers/alignment_quantizer_factory.cpp
-        ${CMAKE_SOURCE_DIR}/src/signal/alignment_quantizers/passthrough_alignment_quantizer.cpp
-        ${CMAKE_SOURCE_DIR}/src/signal/alignment_quantizers/int_alignment_quantizer.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/seed_extractors/seed_extractor_factory.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/seed_extractors/kmer_seed_extractor.cpp
         ${CMAKE_SOURCE_DIR}/src/index/aln_graph.cpp
-        ${CMAKE_SOURCE_DIR}/src/index/squigglize.cpp
-        ${CMAKE_SOURCE_DIR}/src/index/seed_builder.cpp
-        ${CMAKE_SOURCE_DIR}/src/index/transform_dbg.cpp
-        ${CMAKE_SOURCE_DIR}/src/index/path_guided_transform.cpp
-        ${CMAKE_SOURCE_DIR}/src/index/vg_transform_factory.cpp
-        ${CMAKE_SOURCE_DIR}/src/index/pseudo_linearize.cpp
-        ${CMAKE_SOURCE_DIR}/src/index/linearizer_factory.cpp
-        ${CMAKE_SOURCE_DIR}/src/index/superbubble_linearizer.cpp
-        ${CMAKE_SOURCE_DIR}/src/index/path_walk_linearizer.cpp
         ${CMAKE_SOURCE_DIR}/src/mapping/batch_mapper.cpp
         ${CMAKE_SOURCE_DIR}/src/mapping/seed_clusterer_factory.cpp
         ${CMAKE_SOURCE_DIR}/src/mapping/seed_merger.cpp

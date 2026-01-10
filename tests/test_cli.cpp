@@ -9,11 +9,14 @@
 // It does not check for correctness of the output.
 
 TEST_CASE("CLI smoke test: piru index") {
-    const std::string temp_dir = std::filesystem::temp_directory_path() / "piru_cli_test_index";
-    std::filesystem::create_directory(temp_dir);
+    const std::string output_base = std::filesystem::temp_directory_path() / "piru_cli_test_index";
+    const std::string index_file = output_base + ".pirx";
+
+    // Clean up any previous run
+    std::filesystem::remove(index_file);
 
     const std::string graph_path = "../tests/data/graphs/sample.gfa";
-    const std::string command = "./piru index --graph-k 15 --output " + temp_dir + " " + graph_path;
+    const std::string command = "./piru index --output " + output_base + " " + graph_path;
 
     // The command needs to be run from the build directory.
     // The test runner (ctest) runs from piru/build, so the relative path is correct.
@@ -21,11 +24,9 @@ TEST_CASE("CLI smoke test: piru index") {
 
     CHECK(ret == 0);
 
-    // Check that the three index files were created.
-    CHECK(std::filesystem::exists(temp_dir + "/piru_cli_test_index.graph"));
-    CHECK(std::filesystem::exists(temp_dir + "/piru_cli_test_index.signals"));
-    CHECK(std::filesystem::exists(temp_dir + "/piru_cli_test_index.seeds"));
+    // Check that the simple index file was created (default is now simple backend)
+    CHECK(std::filesystem::exists(index_file));
 
     // Clean up
-    std::filesystem::remove_all(temp_dir);
+    std::filesystem::remove(index_file);
 }

@@ -6,10 +6,12 @@
 #include <atomic>
 #include <cstdlib>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <ostream>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 
 #include "alignment/signal_utils.hpp"
@@ -171,6 +173,282 @@ void dumpChainToFile(const char* filename,
     LOG_INFO("Dumped chain with " + std::to_string(primary.anchors.size()) + " anchors to " + std::string(filename));
 }
 
+// Dump hit statistics for a read to analyze frequency distributions.
+void dumpHitStatsToFile(const char* filename,
+                        const std::string& read_id,
+                        const signal::SeedBuffer& seeds,
+                        const std::vector<SeedHitRecord>& hits,
+                        std::size_t freq_threshold) {
+    std::ofstream out(filename);
+    if (!out.is_open()) {
+        LOG_WARN("Failed to open hit stats file: " + std::string(filename));
+        return;
+    }
+
+    // Collect frequency statistics
+    std::vector<std::size_t> frequencies;
+    frequencies.reserve(hits.size());
+    for (const auto& hit : hits) {
+        frequencies.push_back(hit.frequency);
+    }
+
+    // Sort for percentiles
+    std::sort(frequencies.begin(), frequencies.end());
+
+    // Compute stats
+    std::size_t total_hits = hits.size();
+    std::size_t min_freq = frequencies.empty() ? 0 : frequencies.front();
+    std::size_t max_freq = frequencies.empty() ? 0 : frequencies.back();
+    std::size_t median_freq = frequencies.empty() ? 0 : frequencies[frequencies.size() / 2];
+    std::size_t p90_freq = frequencies.empty() ? 0 : frequencies[frequencies.size() * 9 / 10];
+
+    // Count unique hashes that got hits vs total seeds
+    std::unordered_set<std::uint64_t> hashes_with_hits;
+    for (const auto& hit : hits) {
+        hashes_with_hits.insert(hit.hash);
+    }
+
+    // Write summary header
+    out << "#SUMMARY\tread_id\tnum_seeds\tseeds_with_hits\ttotal_hits\tfreq_threshold\n";
+    out << "#SUMMARY\t" << read_id << "\t" << seeds.seeds.size() << "\t"
+        << hashes_with_hits.size() << "\t" << total_hits << "\t" << freq_threshold << "\n";
+
+    out << "#FREQ_STATS\tmin\tmax\tmedian\tp90\n";
+    out << "#FREQ_STATS\t" << min_freq << "\t" << max_freq << "\t" << median_freq << "\t" << p90_freq << "\n";
+
+    // Write per-seed details header
+    out << "#SEEDS\thash\tread_pos\thit_count\n";
+
+    // Group hits by hash to get per-seed hit counts
+    std::unordered_map<std::uint64_t, std::pair<std::size_t, std::size_t>> hash_info;  // hash -> (read_pos, freq)
+    for (const auto& hit : hits) {
+        if (hash_info.find(hit.hash) == hash_info.end()) {
+            hash_info[hit.hash] = {hit.read_pos, hit.frequency};
+        }
+    }
+
+    // Write per-seed info
+    for (const auto& [hash, info] : hash_info) {
+        out << std::hex << hash << std::dec << "\t" << info.first << "\t" << info.second << "\n";
+    }
+
+    out.close();
+}
+
+// Dump best chain per path for diagnostic analysis.
+// Runs DP chaining on anchors and extracts best chain per path by finding
+// max dp[i] for each path_id and backtracking.
+void dumpPathChainsToFile(const char* filename,
+                          const std::string& read_id,
+                          std::size_t read_length,
+                          const std::vector<Anchor>& anchors,
+                          const index::GraphStore* graph_store,
+                          const SeedClustererConfig& clusterer_config) {
+    std::ofstream out(filename);
+    if (!out.is_open()) {
+        LOG_WARN("Failed to open path chains file: " + std::string(filename));
+        return;
+    }
+
+    // Get path names if available
+    const auto* adj_store = dynamic_cast<const index::AdjListGraphStore*>(graph_store);
+    const std::vector<index::AlnPath>* paths = nullptr;
+    std::size_t total_paths = 0;
+    if (adj_store) {
+        paths = &adj_store->graph().paths();
+        total_paths = paths->size();
+    }
+
+    // Write header
+    out << "read_id\tpath_id\tpath_name\tchain_score\tnum_anchors\t"
+        << "query_start\tquery_end\tquery_coverage\tref_start\tref_end\tref_span\n";
+
+    if (anchors.empty()) {
+        // No anchors - output zeros for all paths
+        for (std::size_t pid = 0; pid < total_paths; ++pid) {
+            std::string path_name = paths ? (*paths)[pid].name : "path" + std::to_string(pid);
+            out << read_id << "\t" << pid << "\t" << path_name << "\t"
+                << "0\t0\t0\t0\t0.0\t0\t0\t0\n";
+        }
+        out.close();
+        return;
+    }
+
+    // Sort anchors by (path_id, ref_coord, query_pos) - same as DPChainClusterer
+    std::vector<Anchor> sorted_anchors = anchors;
+    std::sort(sorted_anchors.begin(), sorted_anchors.end(),
+              [](const Anchor& a, const Anchor& b) {
+                  if (a.path_id != b.path_id) return a.path_id < b.path_id;
+                  if (a.ref_coord != b.ref_coord) return a.ref_coord < b.ref_coord;
+                  return a.query_pos < b.query_pos;
+              });
+
+    const std::size_t n = sorted_anchors.size();
+
+    // DP arrays
+    std::vector<double> dp(n, 0.0);
+    std::vector<int> pred(n, -1);
+
+    // DP parameters from config
+    const double anchor_weight = clusterer_config.dp_anchor_weight;
+    const double gap_penalty = clusterer_config.dp_gap_penalty;
+    const double diag_penalty = clusterer_config.dp_diag_penalty;
+    const double overlap_penalty = clusterer_config.dp_overlap_penalty;
+    const std::size_t max_dist = clusterer_config.dp_max_dist;
+    const std::size_t max_diag_dev = clusterer_config.dp_max_diag_dev;
+    const std::size_t max_skip = clusterer_config.dp_max_skip;
+
+    // Lambda: anchor score
+    auto anchor_score = [anchor_weight](const Anchor& a) {
+        return static_cast<double>(a.length) * anchor_weight;
+    };
+
+    // Lambda: can chain j -> i (query must strictly advance)
+    auto can_chain = [max_dist, max_diag_dev](const Anchor& j, const Anchor& i) {
+        if (i.path_id != j.path_id) return false;
+        if (i.query_pos <= j.query_pos) return false;
+        std::int64_t delta_ref = i.ref_coord - j.ref_coord;
+        std::int64_t delta_query = static_cast<std::int64_t>(i.query_pos) -
+                                   static_cast<std::int64_t>(j.query_pos);
+        if (delta_ref < 0 || delta_query < 0) return false;
+        if (static_cast<std::size_t>(delta_ref) > max_dist ||
+            static_cast<std::size_t>(delta_query) > max_dist) return false;
+        std::int64_t diag_dev = std::abs(delta_ref - delta_query);
+        if (static_cast<std::size_t>(diag_dev) > max_diag_dev) return false;
+        return true;
+    };
+
+    // Lambda: gap cost
+    auto gap_cost = [gap_penalty, diag_penalty, overlap_penalty](const Anchor& j, const Anchor& i) {
+        std::int64_t j_ref_end = j.ref_coord + static_cast<std::int64_t>(j.length);
+        std::int64_t j_query_end = static_cast<std::int64_t>(j.query_pos + j.length);
+        std::int64_t ref_gap = i.ref_coord - j_ref_end;
+        std::int64_t query_gap = static_cast<std::int64_t>(i.query_pos) - j_query_end;
+        double avg_gap = (std::max<std::int64_t>(0, ref_gap) + std::max<std::int64_t>(0, query_gap)) / 2.0;
+        double cost = avg_gap * gap_penalty;
+        std::int64_t delta_ref = i.ref_coord - j.ref_coord;
+        std::int64_t delta_query = static_cast<std::int64_t>(i.query_pos) - static_cast<std::int64_t>(j.query_pos);
+        cost += std::abs(delta_ref - delta_query) * diag_penalty;
+        if (ref_gap < 0 || query_gap < 0) {
+            double avg_overlap = (std::abs(std::min<std::int64_t>(0, ref_gap)) +
+                                  std::abs(std::min<std::int64_t>(0, query_gap))) / 2.0;
+            cost += avg_overlap * overlap_penalty;
+        }
+        return cost;
+    };
+
+    // DP loop - compute best score for each anchor
+    for (std::size_t i = 0; i < n; ++i) {
+        const auto& anchor_i = sorted_anchors[i];
+        double best_score = anchor_score(anchor_i);
+        int best_pred = -1;
+
+        std::size_t num_skipped = 0;
+        for (std::size_t j = i; j > 0 && num_skipped < max_skip; ) {
+            --j;
+            const auto& anchor_j = sorted_anchors[j];
+            if (anchor_j.path_id != anchor_i.path_id) break;
+            if (anchor_i.ref_coord - anchor_j.ref_coord > static_cast<std::int64_t>(max_dist)) break;
+            if (!can_chain(anchor_j, anchor_i)) {
+                ++num_skipped;
+                continue;
+            }
+            num_skipped = 0;
+            double cost = gap_cost(anchor_j, anchor_i);
+            double score = dp[j] + anchor_score(anchor_i) - cost;
+            if (score > best_score) {
+                best_score = score;
+                best_pred = static_cast<int>(j);
+            }
+        }
+        dp[i] = best_score;
+        pred[i] = best_pred;
+    }
+
+    // For each path, find anchor with max dp score and backtrack
+    struct PathChainInfo {
+        double score{0.0};
+        std::vector<std::size_t> chain_indices;
+    };
+    std::unordered_map<std::size_t, PathChainInfo> best_per_path;
+
+    // Find max dp score per path
+    for (std::size_t i = 0; i < n; ++i) {
+        std::size_t pid = sorted_anchors[i].path_id;
+        auto& info = best_per_path[pid];
+        if (dp[i] > info.score) {
+            info.score = dp[i];
+            // Backtrack to get chain
+            info.chain_indices.clear();
+            int cur = static_cast<int>(i);
+            while (cur != -1) {
+                info.chain_indices.push_back(static_cast<std::size_t>(cur));
+                cur = pred[cur];
+            }
+            std::reverse(info.chain_indices.begin(), info.chain_indices.end());
+        }
+    }
+
+    // Collect all paths with their scores
+    std::vector<std::pair<double, std::size_t>> scored_paths;
+    for (std::size_t pid = 0; pid < total_paths; ++pid) {
+        auto it = best_per_path.find(pid);
+        double path_score = (it != best_per_path.end()) ? it->second.score : 0.0;
+        scored_paths.emplace_back(path_score, pid);
+    }
+    // Sort by score descending
+    std::sort(scored_paths.begin(), scored_paths.end(), std::greater<>());
+
+    // Write one row per path
+    for (const auto& [score, path_id] : scored_paths) {
+        std::string path_name = "path" + std::to_string(path_id);
+        if (paths && path_id < paths->size()) {
+            path_name = (*paths)[path_id].name;
+        }
+
+        auto it = best_per_path.find(path_id);
+        if (it == best_per_path.end() || it->second.chain_indices.empty()) {
+            out << read_id << "\t" << path_id << "\t" << path_name << "\t"
+                << "0\t0\t0\t0\t0.0\t0\t0\t0\n";
+            continue;
+        }
+
+        const auto& chain_indices = it->second.chain_indices;
+
+        // Compute query/ref spans from chain anchors
+        std::size_t query_min = sorted_anchors[chain_indices.front()].query_pos;
+        std::size_t query_max = query_min;
+        std::int64_t ref_min = sorted_anchors[chain_indices.front()].ref_coord;
+        std::int64_t ref_max = ref_min;
+
+        for (std::size_t idx : chain_indices) {
+            const auto& a = sorted_anchors[idx];
+            query_min = std::min(query_min, a.query_pos);
+            query_max = std::max(query_max, a.query_pos + a.length);
+            ref_min = std::min(ref_min, a.ref_coord);
+            ref_max = std::max(ref_max, a.ref_coord + static_cast<std::int64_t>(a.length));
+        }
+
+        double query_coverage = read_length > 0
+            ? 100.0 * (query_max - query_min) / read_length
+            : 0.0;
+
+        out << read_id << "\t"
+            << path_id << "\t"
+            << path_name << "\t"
+            << std::fixed << std::setprecision(2) << it->second.score << "\t"
+            << chain_indices.size() << "\t"
+            << query_min << "\t"
+            << query_max << "\t"
+            << std::setprecision(1) << query_coverage << "\t"
+            << ref_min << "\t"
+            << ref_max << "\t"
+            << (ref_max - ref_min) << "\n";
+    }
+
+    out.close();
+}
+
 }  // namespace
 
 void SeedLookup::lookup(const signal::SeedBuffer& seeds, std::vector<SeedHitRecord>& out_hits) const {
@@ -199,7 +477,6 @@ void BatchBuffer::resize(std::size_t capacity) {
     raw_reads.resize(capacity);
     normalized.resize(capacity);
     fuzzy_quantized.resize(capacity);
-    alignment_quantized.resize(capacity);
     seeds.resize(capacity);
     seed_hits.resize(capacity);
     anchors.resize(capacity);
@@ -212,7 +489,6 @@ void BatchBuffer::clear() {
         raw_reads[i] = io::RawRead{};
         normalized[i] = signal::NormalizedSignal{};
         fuzzy_quantized[i].tokens.clear();
-        alignment_quantized[i] = signal::AlignmentQuantizedSignal{};
         seeds[i].seeds.clear();
         seed_hits[i].clear();
         anchors[i].clear();
@@ -235,7 +511,6 @@ PipelineComponents BatchMapper::create_components() const {
     comps.event_pipeline = signal::make_event_pipeline(config_.event_pipeline_config);
 
     comps.fuzzy_quantizer = signal::make_fuzzy_quantizer(config_.fuzzy_config);
-    comps.alignment_quantizer = signal::make_alignment_quantizer(config_.alignment_config);
     comps.seed_extractor = signal::make_seed_extractor(config_.seed_config);
     comps.seed_store = config_.seed_store;
     comps.graph_store = config_.graph_store;
@@ -246,7 +521,11 @@ PipelineComponents BatchMapper::create_components() const {
     // Create AnchorExpander based on linearization type
     if (config_.linearization_coords) {
         // Path-walk linearization → PathWalkExpander
-        comps.expander = std::make_unique<PathWalkExpander>(*config_.linearization_coords);
+        if (!config_.path_lengths) {
+            throw std::runtime_error("PathWalkExpander requires path_lengths for bounds checking");
+        }
+        comps.expander = std::make_unique<PathWalkExpander>(
+            *config_.linearization_coords, *config_.path_lengths);
     } else {
         // Superbubble linearization → SuperbubbleExpander
         if (!config_.graph_store) {
@@ -284,19 +563,9 @@ PipelineComponents BatchMapper::create_components() const {
     const auto* adj_store = dynamic_cast<const index::AdjListGraphStore*>(config_.graph_store);
     if (adj_store && config_.result_writer) {
         comps.result_formatter = std::make_unique<ResultFormatter>(
-            adj_store->graph(), config_.signal_store, config_.formatter_config);
+            adj_store->graph(), nullptr, config_.formatter_config);
         LOG_INFO("Result formatter enabled for output (min_secondary_ratio=" +
                  std::to_string(config_.formatter_config.min_secondary_ratio) + ")");
-    }
-
-    // Create chain aligner if alignment is enabled
-    if (config_.enable_alignment) {
-        comps.chain_aligner = std::make_unique<alignment::ChainAligner>(config_.align_config);
-        comps.signal_store = config_.signal_store;
-        std::string backend_name =
-            config_.align_config.backend == alignment::AlignerBackend::kPathGuided ? "path-guided" :
-            config_.align_config.backend == alignment::AlignerBackend::kRadius ? "radius" : "auto";
-        LOG_INFO("Signal-level alignment enabled: backend=" + backend_name);
     }
 
     return comps;
@@ -406,7 +675,6 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
                   static_cast<double>(read.len_raw_signal) / batch.normalized[index].samples.size()));
 
     batch.fuzzy_quantized[index] = components_.fuzzy_quantizer->quantize(batch.normalized[index]);
-    batch.alignment_quantized[index] = components_.alignment_quantizer->quantize(batch.normalized[index]);
     batch.seeds[index] = components_.seed_extractor->extract(batch.fuzzy_quantized[index]);
 
 #ifdef PIRU_DUMP_GRAPHS
@@ -450,6 +718,16 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
     // Lookup seeds in the index and collect hits.
     components_.lookup.lookup(batch.seeds[index], batch.seed_hits[index]);
 
+    // Dump hit stats if --dump-hit-stats is set
+    static std::atomic<std::size_t> hit_stats_dump_counter{0};
+    if (!config_.dump_hit_stats_dir.empty()) {
+        std::size_t dump_num = hit_stats_dump_counter.fetch_add(1);
+        std::string hit_stats_file = config_.dump_hit_stats_dir + "/read_" + std::to_string(dump_num) + "_hits.tsv";
+        std::size_t freq_threshold = config_.seed_store ? config_.seed_store->frequency_threshold() : 0;
+        dumpHitStatsToFile(hit_stats_file.c_str(), read.read_id, batch.seeds[index],
+                           batch.seed_hits[index], freq_threshold);
+    }
+
     // Expand seed hits to anchors (explicit expansion stage)
     auto anchors = components_.expander->expand(batch.seed_hits[index]);
 
@@ -470,7 +748,7 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
     if (!config_.dump_anchors_dir.empty()) {
         std::size_t dump_num = anchor_dump_counter.fetch_add(1);
         std::string anchor_file = config_.dump_anchors_dir + "/read_" + std::to_string(dump_num) + "_anchors.tsv";
-        dumpAnchorsToFile(anchor_file.c_str(), anchors, read.read_id, config_.graph_store, config_.signal_store);
+        dumpAnchorsToFile(anchor_file.c_str(), anchors, read.read_id, config_.graph_store, nullptr);
     }
 
     // Cluster anchors
@@ -485,37 +763,6 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
         Mapping mapping;
         mapping.anchors = cluster.anchors;
         mapping.chain_score = cluster.cluster_score;
-
-        // Run alignment if enabled
-        if (components_.chain_aligner && components_.signal_store && config_.graph_store &&
-            cluster.anchors.size() >= 2) {
-            // Convert SeedAnchors to alignment::Anchors
-            std::vector<alignment::Anchor> align_anchors;
-            align_anchors.reserve(cluster.anchors.size());
-            for (const auto& seed_anchor : cluster.anchors) {
-                alignment::Anchor a;
-                a.graph_pos.node_id = static_cast<std::uint32_t>(seed_anchor.target.node_id);
-                a.graph_pos.offset = static_cast<std::uint32_t>(seed_anchor.target.offset);
-                a.query_pos = static_cast<std::uint32_t>(seed_anchor.read_pos);
-                align_anchors.push_back(a);
-            }
-
-            // Run alignment
-            auto align_result = components_.chain_aligner->align(
-                *config_.graph_store, *components_.signal_store,
-                batch.alignment_quantized[index], align_anchors);
-
-            if (align_result.valid()) {
-                mapping.alignment_cost = align_result.total_cost;
-                std::size_t query_len = cluster.anchors.back().read_pos - cluster.anchors.front().read_pos;
-                if (query_len > 0) {
-                    mapping.normalized_alignment_cost = align_result.normalizedCost(query_len);
-                }
-                mapping.alignment_path = std::move(align_result.path);
-                mapping.segments_aligned = align_result.segments_aligned;
-            }
-        }
-
         result.mappings.push_back(std::move(mapping));
     }
 
@@ -524,7 +771,17 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
     if (!config_.dump_chains_dir.empty()) {
         std::size_t dump_num = chain_dump_counter.fetch_add(1);
         std::string chain_file = config_.dump_chains_dir + "/read_" + std::to_string(dump_num) + "_chain.tsv";
-        dumpChainToFile(chain_file.c_str(), result, read.read_id, config_.graph_store, config_.signal_store);
+        dumpChainToFile(chain_file.c_str(), result, read.read_id, config_.graph_store, nullptr);
+    }
+
+    // Dump best chain per path if --dump-path-chains is set (diagnostic)
+    // Uses raw anchors (before clustering) to compute best chain per path via DP
+    static std::atomic<std::size_t> path_chains_dump_counter{0};
+    if (!config_.dump_path_chains_dir.empty()) {
+        std::size_t dump_num = path_chains_dump_counter.fetch_add(1);
+        std::string path_chains_file = config_.dump_path_chains_dir + "/read_" + std::to_string(dump_num) + "_path_chains.tsv";
+        dumpPathChainsToFile(path_chains_file.c_str(), read.read_id, read.raw_signal.size(),
+                             anchors, config_.graph_store, config_.clusterer_config);
     }
 }
 

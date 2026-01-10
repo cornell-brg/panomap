@@ -1,0 +1,4 @@
+*.gz
+reads/
+*.fai
+eval_reads/

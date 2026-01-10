@@ -11,7 +11,6 @@
 #include "index/graph_store.hpp"
 #include "index/linearizer.hpp"
 #include "index/seed_store.hpp"
-#include "index/signal_store.hpp"
 #include "io/graphs/graph.hpp"
 #include "io/models/model.hpp"
 
@@ -23,28 +22,14 @@ namespace piru::index {
 // This is the single source of truth for indexing parameters.
 struct IndexPipelineConfig {
     // -------------------------------------------------------------------------
-    // Graph Parameters
+    // Indexer Backend
     // -------------------------------------------------------------------------
 
-    // Graph type: "dbg" (de Bruijn graph) or "vg" (variation graph)
-    std::string graph_flavor{"dbg"};
-
-    // DBG k-mer size (bases)
-    // - For DBG: node overlap length + 1
-    // - Set to 0 for auto-detection from edge overlaps
-    // - Unused for VG graphs
-    std::size_t graph_k{0};
-
-    // -------------------------------------------------------------------------
-    // Linearization Parameters
-    // -------------------------------------------------------------------------
-
-    // Linearization backend: "superbubble" or "path-walk"
-    // - superbubble: Uses pseudo-linearization with local chain coordinates
-    //                (supports serialization, works without reference paths)
-    // - path-walk:   Walks reference paths to assign global coordinates
-    //                (requires graph with paths, needed for DP chaining)
-    std::string linearizer{"superbubble"};
+    // Indexer backend: "node-first" or "path-walk"
+    // - node-first: Two-pass approach processing node interiors once (faster for shared nodes)
+    //               Uses global normalization across all nodes
+    // - path-walk: Original per-path processing (per-path normalization)
+    std::string indexer_backend{"path-walk"};
 
     // -------------------------------------------------------------------------
     // Signal Processing Parameters
@@ -58,14 +43,6 @@ struct IndexPipelineConfig {
     float fuzzy_fine_max{2.0f};    // Maximum value for fine quantization region
     float fuzzy_fine_range{0.4f};  // Range per fine quantization bin
     std::uint32_t fuzzy_n_bins{0}; // Number of bins (0 = use 2^qbits = 16)
-
-    // Alignment quantizer: "int16", "int8", or "passthrough"
-    // - Converts normalized signal to integer format for alignment
-    // - int16: 16-bit signed integers with auto-scaling (default)
-    std::string alignment_quantizer{"int16"};
-
-    // Alignment quantizer scale override (0 = auto-detect from signal range)
-    double alignment_scale{0.0};
 
     // -------------------------------------------------------------------------
     // Seed Extraction Parameters
@@ -100,6 +77,14 @@ struct IndexPipelineConfig {
     double seed_filter{0.5};
 
     // -------------------------------------------------------------------------
+    // Debug Options
+    // -------------------------------------------------------------------------
+
+    // Dump per-path normalization stats to file (path-walk backend only)
+    // Format: TSV with columns: path_name, mean, stddev, num_kmers
+    std::string dump_norm_stats_path;
+
+    // -------------------------------------------------------------------------
     // Note on Additional Parameters
     // -------------------------------------------------------------------------
     //
@@ -117,28 +102,25 @@ struct IndexPipelineConfig {
 struct IndexPipelineResult {
     // Core index components
     std::unique_ptr<GraphStore> graph_store;
-    std::unique_ptr<SignalStore> signal_store;
     std::unique_ptr<SeedStore> seed_store;
 
     // Linearization coordinates (needed for DP chaining)
     std::vector<std::vector<LinearCoordinate>> linearization_coords;
 
+    // Path lengths in base space (for anchor bounds checking)
+    std::vector<std::size_t> path_lengths;
+
     // Metadata
-    io::ImportedGraphFlavor graph_flavor{io::ImportedGraphFlavor::kUnknown};
-    std::size_t graph_k{0};
     std::size_t pore_k{0};
     std::string model_name;
     std::string fuzzy_quantizer;
-    std::string alignment_quantizer;
-    double alignment_scale{1.0};
-    double alignment_offset{0.0};
 };
 
 // Run the full indexing pipeline on an imported graph.
 //
 // Pipeline stages:
-// 1. Transform: ImportedGraph → AlnGraph (DBG or VG)
-// 2. Linearize: Assign coordinates to nodes (superbubble or path-walk)
+// 1. Transform: ImportedGraph → AlnGraph (VG path-guided)
+// 2. Linearize: Assign coordinates to nodes (path-walk)
 // 3. Squigglize: Generate reference signals for each node
 // 4. Quantize: Convert signals to fuzzy and alignment quantized forms
 // 5. Build seeds: Extract and index k-mer seeds from fuzzy signals

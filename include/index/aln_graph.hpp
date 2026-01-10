@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -19,6 +20,7 @@ struct AlnPathStep {
 struct AlnPath {
     std::string name;
     std::vector<AlnPathStep> steps;
+    std::size_t length{0};  // Total path length in signal samples (set during indexing)
     // Overlap length in bases for each step, if explicitly tracked (e.g., from ImportedPath).
     // The size would be steps.size() - 1 for overlaps between steps.
     std::vector<std::size_t> overlaps;
@@ -44,6 +46,7 @@ struct AlnEdge {
 
 class AlnGraph {
 public:
+    // Add node with auto-assigned ID (classic pipeline)
     std::size_t addNode(AlnNode node) {
         const std::size_t idx = nodes_.size();
         node.id = idx;
@@ -51,6 +54,22 @@ public:
         out_edges_.emplace_back();
         in_edges_.emplace_back();
         return idx;
+    }
+
+    // Pre-allocate space for n nodes (simple pipeline with explicit IDs)
+    void reserveNodes(std::size_t n) {
+        nodes_.resize(n);
+        out_edges_.resize(n);
+        in_edges_.resize(n);
+        for (std::size_t i = 0; i < n; ++i) {
+            nodes_[i].id = i;
+        }
+    }
+
+    // Set node at specific index (use after reserveNodes)
+    void setNode(std::size_t idx, AlnNode node) {
+        node.id = idx;
+        nodes_[idx] = std::move(node);
     }
 
     void addEdge(AlnEdge edge) {
@@ -76,10 +95,18 @@ public:
     const std::vector<std::size_t>& outgoing(std::size_t idx) const { return out_edges_.at(idx); }
     const std::vector<std::size_t>& incoming(std::size_t idx) const { return in_edges_.at(idx); }
 
+    // O(degree) edge existence check using adjacency list
+    bool hasEdge(std::size_t from, std::size_t to) const {
+        if (from >= out_edges_.size()) return false;
+        const auto& neighbors = out_edges_[from];
+        return std::find(neighbors.begin(), neighbors.end(), to) != neighbors.end();
+    }
+
     const std::vector<AlnEdge>& edges() const { return edges_; }
 
-    void addPath(AlnPath path) { paths_.push_back(std::move(path)); } // Fixed std::std::move
+    void addPath(AlnPath path) { paths_.push_back(std::move(path)); }
     const std::vector<AlnPath>& paths() const { return paths_; }
+    AlnPath& mutablePath(std::size_t idx) { return paths_.at(idx); }
     std::size_t pathCount() const { return paths_.size(); }
 
     // Basic consistency checks: edge bounds, adjacency symmetry, optional metadata presence.

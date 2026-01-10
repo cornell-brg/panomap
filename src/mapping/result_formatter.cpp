@@ -9,6 +9,7 @@
 #include <unordered_map>
 
 #include "alignment/signal_utils.hpp"
+#include "util/logging.hpp"
 
 namespace piru::mapping {
 
@@ -114,11 +115,14 @@ io::AlignmentResult ResultFormatter::formatMapping(
   result.target_length = computePathLength(path_id);
 
   // Find reference span from anchors
-  std::int64_t min_ref = mapping.anchors.front().ref_coord;
+  // Clamp to path bounds (seeds near node boundaries can span past path end)
+  const std::int64_t path_len = static_cast<std::int64_t>(result.target_length);
+  std::int64_t min_ref = std::max(std::int64_t{0}, mapping.anchors.front().ref_coord);
   std::int64_t max_ref = mapping.anchors.front().ref_coord;
   for (const auto& anchor : mapping.anchors) {
-    min_ref = std::min(min_ref, anchor.ref_coord);
-    max_ref = std::max(max_ref, anchor.ref_coord + static_cast<std::int64_t>(anchor.target.length));
+    min_ref = std::min(min_ref, std::max(std::int64_t{0}, anchor.ref_coord));
+    std::int64_t anchor_end = anchor.ref_coord + static_cast<std::int64_t>(anchor.target.length);
+    max_ref = std::max(max_ref, std::min(anchor_end, path_len));
   }
 
   // Strand and coordinate handling
@@ -139,6 +143,7 @@ io::AlignmentResult ResultFormatter::formatMapping(
     std::int64_t path_len = static_cast<std::int64_t>(result.target_length);
     std::int64_t flipped_start = path_len - max_ref;
     std::int64_t flipped_end = path_len - min_ref;
+
     min_ref = flipped_start;
     max_ref = flipped_end;
   }
@@ -222,6 +227,11 @@ const std::string& ResultFormatter::getPathName(std::size_t path_id) const {
 }
 
 std::size_t ResultFormatter::computePathLength(std::size_t path_id) const {
+  // Use precomputed path length if available (simple pipeline)
+  if (path_id < graph_.pathCount() && graph_.paths()[path_id].length > 0) {
+    return graph_.paths()[path_id].length;
+  }
+
   if (!path_lengths_computed_) {
     // Compute all path lengths on first access
     const auto& paths = graph_.paths();
@@ -235,6 +245,13 @@ std::size_t ResultFormatter::computePathLength(std::size_t path_id) const {
 
     for (std::size_t p = 0; p < paths.size(); ++p) {
       const auto& path = paths[p];
+
+      // Skip if already set
+      if (path.length > 0) {
+        path_lengths_[p] = path.length;
+        continue;
+      }
+
       std::size_t cumulative_len = 0;
 
       for (std::size_t step_idx = 0; step_idx < path.steps.size(); ++step_idx) {

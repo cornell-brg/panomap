@@ -77,7 +77,7 @@ add_executable(piru
     src/io/reads/pod5_provider.cpp
     src/io/reads/slow5_provider.cpp
     src/io/models/builtin_models.cpp
-    src/io/index/serialization.cpp
+    src/io/index/simple_serialization.cpp
     src/cli/parse.cpp
     src/signal/event_pipeline_factory.cpp
     src/signal/event_pipelines/scrappie_event_pipeline.cpp
@@ -87,21 +87,12 @@ add_executable(piru
     src/signal/fuzzy_quantizers/passthrough_fuzzy_quantizer.cpp
     src/signal/fuzzy_quantizers/piru_fuzzy_quantizer.cpp
     src/signal/fuzzy_quantizers/rh2_fuzzy_quantizer.cpp
-    src/signal/alignment_quantizers/alignment_quantizer_factory.cpp
-    src/signal/alignment_quantizers/passthrough_alignment_quantizer.cpp
-    src/signal/alignment_quantizers/int_alignment_quantizer.cpp
     src/signal/seed_extractors/seed_extractor_factory.cpp
     src/signal/seed_extractors/kmer_seed_extractor.cpp
     src/index/aln_graph.cpp
-    src/index/transform_dbg.cpp
-    src/index/path_guided_transform.cpp
-    src/index/vg_transform_factory.cpp
-    src/index/pseudo_linearize.cpp
-    src/index/linearizer_factory.cpp
-    src/index/superbubble_linearizer.cpp
-    src/index/path_walk_linearizer.cpp
-    src/index/squigglize.cpp
-    src/index/seed_builder.cpp
+    src/index/simple_expand.cpp
+    src/index/path_walk_indexer.cpp
+    src/index/node_first_indexer.cpp
     src/index/index_pipeline.cpp
     src/mapping/batch_mapper.cpp
     src/mapping/seed_clusterer_factory.cpp
