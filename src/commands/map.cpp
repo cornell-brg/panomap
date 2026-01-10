@@ -104,6 +104,7 @@ int handle_map(const std::vector<std::string>& args) {
         {'\0', "dump-anchors", true, "Dump anchors to directory (one file per read)"},
         {'\0', "dump-chains", true, "Dump chains to directory (one file per read)"},
         {'\0', "dump-hit-stats", true, "Dump seed hit statistics to directory (one file per read)"},
+        {'\0', "dump-path-chains", true, "Dump best chain per path to directory (diagnostic)"},
         {'\0', "no-anchor-merge", false, "Disable anchor merging (for heatmap debugging)"},
         {'\0', "", false, "\nOutput Options:"},
         {'o', "output", true, "Output file path (format auto-detected from extension: .paf, .gaf, .gam, .json)"},
@@ -539,6 +540,11 @@ int handle_map(const std::vector<std::string>& args) {
         map_config.dump_hit_stats_dir = parsed.values.at("dump-hit-stats");
         std::filesystem::create_directories(map_config.dump_hit_stats_dir);
         LOG_INFO("Dumping hit stats to: " + map_config.dump_hit_stats_dir);
+    }
+    if (parsed.values.count("dump-path-chains")) {
+        map_config.dump_path_chains_dir = parsed.values.at("dump-path-chains");
+        std::filesystem::create_directories(map_config.dump_path_chains_dir);
+        LOG_INFO("Dumping path chains to: " + map_config.dump_path_chains_dir);
     }
     if (parsed.values.count("no-anchor-merge")) {
         map_config.enable_anchor_merge = false;

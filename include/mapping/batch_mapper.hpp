@@ -61,9 +61,10 @@ struct BatchMapperConfig {
     io::ResultWriter* result_writer{nullptr};
 
     // Debug dump directories (empty = disabled)
-    std::string dump_anchors_dir{};    // Dump anchors per read
-    std::string dump_chains_dir{};     // Dump chains per read
-    std::string dump_hit_stats_dir{};  // Dump seed hit statistics per read
+    std::string dump_anchors_dir{};      // Dump anchors per read
+    std::string dump_chains_dir{};       // Dump chains per read
+    std::string dump_hit_stats_dir{};    // Dump seed hit statistics per read
+    std::string dump_path_chains_dir{};  // Dump best chain per path (diagnostic)
 
     // Anchor merging (disable for debugging/heatmap comparison)
     bool enable_anchor_merge{true};
