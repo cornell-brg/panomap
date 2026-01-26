@@ -19,6 +19,7 @@
 #include <memory>
 #include <vector>
 
+#include "concurrency/executor.hpp"
 #include "index/aln_graph.hpp"
 #include "index/linearizer.hpp"
 #include "index/seed_store.hpp"
@@ -33,6 +34,11 @@ struct NodeFirstIndexConfig {
     std::size_t seed_k{6};      // Hash window size (fuzzy samples per seed)
     std::size_t seed_stride{1};
     double seed_filter{0.5};    // keep_least_frequent_fraction
+
+    // Parallelization
+    // If non-null, enables parallel indexing using this executor.
+    // Caller owns the executor lifetime.
+    concurrency::Executor* executor{nullptr};
 };
 
 struct NodeFirstIndexResult {

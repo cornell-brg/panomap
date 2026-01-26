@@ -73,6 +73,22 @@ int handle_index(const std::vector<std::string>& args) {
     if (verbose) {
         piru::logger.set_level(piru::LogLevel::DEBUG);
     }
+
+    // Parse thread count and create executor
+    const int num_threads = [&]() {
+        auto it = parsed.values.find("threads");
+        if (it == parsed.values.end()) return -1;
+        try {
+            return std::stoi(it->second);
+        } catch (...) {
+            LOG_WARN("index: invalid --threads value '" + it->second + "', using auto");
+            return -1;
+        }
+    }();
+    auto executor = piru::concurrency::make_executor(num_threads);
+    LOG_DEBUG("Using " + std::to_string(executor->max_concurrency()) + " threads (" +
+              executor->backend_name() + ")");
+
     const std::string model_arg = parsed.values.count("model") ? parsed.values.at("model") : "r10.4";
 
     if (parsed.positionals.empty()) {
@@ -160,6 +176,9 @@ int handle_index(const std::vector<std::string>& args) {
     if (parsed.values.count("dump-norm-stats")) {
         index_config.dump_norm_stats_path = parsed.values.at("dump-norm-stats");
     }
+
+    // Pass executor for parallel indexing
+    index_config.executor = executor.get();
 
     auto result = piru::index::run_index_pipeline(imported, *model, index_config);
 

@@ -91,6 +91,15 @@ public:
     const std::unordered_map<std::uint64_t, std::vector<SeedHit>>& data() const { return store_; }
     std::unordered_map<std::uint64_t, std::vector<SeedHit>>& mutableData() { return store_; }
 
+    // Merge another HashSeedStore into this one.
+    // Used for combining thread-local stores after parallel indexing.
+    void merge(const HashSeedStore& other) {
+        for (const auto& [hash, hits] : other.store_) {
+            auto& target = store_[hash];
+            target.insert(target.end(), hits.begin(), hits.end());
+        }
+    }
+
     // Remove duplicate (node_id, offset) entries from each hit vector.
     // Used after path-guided seeding where shared regions produce duplicates.
     void deduplicate() {

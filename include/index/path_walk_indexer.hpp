@@ -15,6 +15,7 @@
 #include <memory>
 #include <vector>
 
+#include "concurrency/executor.hpp"
 #include "index/aln_graph.hpp"
 #include "index/linearizer.hpp"
 #include "index/seed_store.hpp"
@@ -32,6 +33,11 @@ struct PathWalkIndexConfig {
 
     // Debug: dump per-path normalization stats to file (empty = disabled)
     std::string dump_norm_stats_path;
+
+    // Parallelization
+    // If non-null, enables parallel indexing using this executor.
+    // Caller owns the executor lifetime.
+    concurrency::Executor* executor{nullptr};
 };
 
 struct PathWalkIndexResult {

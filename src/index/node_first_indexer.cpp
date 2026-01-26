@@ -3,10 +3,16 @@
 #include "index/node_first_indexer.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <mutex>
 #include <vector>
+
+#ifdef PIRU_USE_TBB
+#include <tbb/enumerable_thread_specific.h>
+#endif
 
 #include "signal/signal_types.hpp"
 #include "util/logging.hpp"
@@ -179,16 +185,22 @@ NodeFirstIndexResult nodeFirstIndex(
     // Per-node raw k-mer values (temporary storage for pass 1)
     std::vector<std::vector<float>> node_raw_values(graph.nodeCount());
 
-    double global_sum = 0.0;
-    std::size_t global_count = 0;
+    // Single-pass stats: track sum and sum_sq for variance calculation
+    // variance = (sum_sq / count) - (mean * mean)
+    std::atomic<double> atomic_sum{0.0};
+    std::atomic<double> atomic_sum_sq{0.0};
+    std::atomic<std::size_t> atomic_count{0};
 
-    for (std::size_t node_id = 0; node_id < graph.nodeCount(); ++node_id) {
+    const std::size_t num_nodes = graph.nodeCount();
+    const std::size_t grain = 100;  // Process nodes in batches
+
+    auto squigglize_node = [&](std::size_t node_id) {
         const auto& node = graph.node(node_id);
         const std::size_t node_len = node.sequence.size();
 
         // Can only squigglize positions [0, node_len - pore_k]
         if (node_len < static_cast<std::size_t>(pore_k)) {
-            continue;  // Node too short to produce any k-mer values
+            return;  // Node too short to produce any k-mer values
         }
 
         const std::size_t num_kmers = node_len - static_cast<std::size_t>(pore_k) + 1;
@@ -196,6 +208,11 @@ NodeFirstIndexResult nodeFirstIndex(
         raw_values.reserve(num_kmers);
 
         std::string kmer_buf(static_cast<std::size_t>(pore_k), '\0');
+
+        // Accumulate locally, then do single atomic update
+        double local_sum = 0.0;
+        double local_sum_sq = 0.0;
+        std::size_t local_count = 0;
 
         for (std::size_t i = 0; i < num_kmers; ++i) {
             std::copy_n(node.sequence.data() + i, static_cast<std::size_t>(pore_k), kmer_buf.begin());
@@ -211,14 +228,37 @@ NodeFirstIndexResult nodeFirstIndex(
             }
             float val = static_cast<float>(mean);
             raw_values.push_back(val);
-            global_sum += val;
-            ++global_count;
+            local_sum += val;
+            local_sum_sq += static_cast<double>(val) * static_cast<double>(val);
+            ++local_count;
+        }
+
+        // Single atomic update per node (not per k-mer)
+        if (local_count > 0) {
+            atomic_sum.fetch_add(local_sum, std::memory_order_relaxed);
+            atomic_sum_sq.fetch_add(local_sum_sq, std::memory_order_relaxed);
+            atomic_count.fetch_add(local_count, std::memory_order_relaxed);
+        }
+    };
+
+    if (config.executor) {
+        // Parallel execution
+        config.executor->parallel_for(0, num_nodes, grain, squigglize_node);
+    } else {
+        // Sequential fallback
+        for (std::size_t node_id = 0; node_id < num_nodes; ++node_id) {
+            squigglize_node(node_id);
         }
     }
+
+    const double global_sum = atomic_sum.load();
+    const double global_sum_sq = atomic_sum_sq.load();
+    const std::size_t global_count = atomic_count.load();
+
     timing::stop("nodefirst:squigglize");
 
     // =========================================================================
-    // Pass 1b: Compute global mean/std
+    // Pass 1b: Compute global mean/std (single-pass from sum and sum_sq)
     // =========================================================================
     timing::start("nodefirst:norm_quant");
 
@@ -227,18 +267,12 @@ NodeFirstIndexResult nodeFirstIndex(
         return result;
     }
 
-    result.global_mean = static_cast<float>(global_sum / static_cast<double>(global_count));
+    // Single-pass variance: Var(X) = E[X²] - E[X]²
+    const double mean = global_sum / static_cast<double>(global_count);
+    const double mean_sq = global_sum_sq / static_cast<double>(global_count);
+    const double variance = mean_sq - (mean * mean);
 
-    double variance = 0.0;
-    for (std::size_t node_id = 0; node_id < graph.nodeCount(); ++node_id) {
-        for (float val : node_raw_values[node_id]) {
-            if (!std::isnan(val)) {
-                double diff = static_cast<double>(val) - result.global_mean;
-                variance += diff * diff;
-            }
-        }
-    }
-    variance /= static_cast<double>(global_count);
+    result.global_mean = static_cast<float>(mean);
     result.global_std = (variance > 0.0) ? static_cast<float>(std::sqrt(variance)) : 1.0f;
 
     LOG_DEBUG("NodeFirstIndex: global_mean=" + std::to_string(result.global_mean) +
@@ -249,9 +283,11 @@ NodeFirstIndexResult nodeFirstIndex(
     // Pass 1c: Normalize, fuzzy quantize, index node interiors
     // =========================================================================
 
-    for (std::size_t node_id = 0; node_id < graph.nodeCount(); ++node_id) {
+    std::atomic<std::size_t> atomic_seeds_interior{0};
+
+    auto index_node_interior = [&](std::size_t node_id, HashSeedStore& local_store) {
         const auto& raw_values = node_raw_values[node_id];
-        if (raw_values.empty()) continue;
+        if (raw_values.empty()) return;
 
         // Normalize
         signal::NormalizedSignal normalized;
@@ -269,12 +305,11 @@ NodeFirstIndexResult nodeFirstIndex(
 
         // Index positions with complete hash windows: [0, num_fuzzy - seed_k]
         // Position i can be hashed if we have fuzzy samples [i, i + seed_k)
+        std::size_t local_count = 0;
         if (fuzzy.tokens.size() >= seed_k) {
             const std::size_t indexable_end = fuzzy.tokens.size() - seed_k + 1;
 
             for (std::size_t pos = 0; pos < indexable_end; pos += config.seed_stride) {
-                // Check for NaN in window (indicated by token value - need to track this)
-                // For now, extract seed and insert
                 signal::FuzzyQuantizedSignal window_fuzzy;
                 window_fuzzy.tokens.assign(
                     fuzzy.tokens.begin() + static_cast<std::ptrdiff_t>(pos),
@@ -282,12 +317,39 @@ NodeFirstIndexResult nodeFirstIndex(
 
                 auto seeds = extractor.extract(window_fuzzy);
                 for (const auto& seed : seeds.seeds) {
-                    result.seed_store->insert(seed.hash, SeedHit{node_id, pos + seed.position, seed.length});
-                    ++result.seeds_interior;
+                    local_store.insert(seed.hash, SeedHit{node_id, pos + seed.position, seed.length});
+                    ++local_count;
                 }
             }
         }
+        if (local_count > 0) {
+            atomic_seeds_interior.fetch_add(local_count, std::memory_order_relaxed);
+        }
+    };
+
+#ifdef PIRU_USE_TBB
+    if (config.executor) {
+        // Parallel execution with thread-local stores
+        tbb::enumerable_thread_specific<HashSeedStore> interior_stores;
+
+        config.executor->parallel_for(0, num_nodes, grain, [&](std::size_t node_id) {
+            index_node_interior(node_id, interior_stores.local());
+        });
+
+        // Merge thread-local stores into result
+        for (auto& store : interior_stores) {
+            result.seed_store->merge(store);
+        }
+    } else
+#endif
+    {
+        // Sequential fallback
+        for (std::size_t node_id = 0; node_id < num_nodes; ++node_id) {
+            index_node_interior(node_id, *result.seed_store);
+        }
     }
+
+    result.seeds_interior = atomic_seeds_interior.load();
     timing::stop("nodefirst:norm_quant");
 
     // Free raw values - no longer needed
@@ -299,10 +361,17 @@ NodeFirstIndexResult nodeFirstIndex(
     // =========================================================================
     timing::start("nodefirst:hash_boundary");
 
-    for (std::size_t path_idx = 0; path_idx < graph.pathCount(); ++path_idx) {
+    std::atomic<std::size_t> atomic_seeds_boundary{0};
+
+    // Per-node mutexes for linearization_coords updates
+    // (Multiple paths may touch the same node)
+    std::vector<std::mutex> node_mutexes(graph.nodeCount());
+
+    auto process_path = [&](std::size_t path_idx, HashSeedStore& local_store) {
         const auto& path = graph.paths()[path_idx];
 
         std::size_t path_base_pos = 0;  // Running base position in linearized path
+        std::size_t local_seed_count = 0;
 
         for (std::size_t step_idx = 0; step_idx < path.steps.size(); ++step_idx) {
             std::size_t node_id = std::stoull(path.steps[step_idx].node_id);
@@ -312,38 +381,23 @@ NodeFirstIndexResult nodeFirstIndex(
             const std::size_t node_len = node.sequence.size();
 
             // Record linear coordinate for this node on this path (base position)
-            result.linearization_coords[node_id].emplace_back(
-                path_idx, static_cast<std::int64_t>(path_base_pos));
+            // Protected by per-node mutex since multiple paths may touch same node
+            {
+                std::lock_guard<std::mutex> lock(node_mutexes[node_id]);
+                result.linearization_coords[node_id].emplace_back(
+                    path_idx, static_cast<std::int64_t>(path_base_pos));
+            }
 
             // Compute where interior indexing stopped
-            // Interior indexed positions [0, L-k-w+1] where L=node_len, k=pore_k, w=seed_k
-            // First unindexed position is L-k-w+2 (but could be 0 if node too small)
             std::size_t first_boundary_pos = 0;
             if (node_len >= static_cast<std::size_t>(pore_k) + seed_k - 1) {
-                // Node was large enough to index some interior
-                // Last indexed position was (node_len - pore_k + 1) - seed_k = node_len - pore_k - seed_k + 1
-                // Wait, let me recalculate:
-                // num_fuzzy = node_len - pore_k + 1
-                // indexable_end = num_fuzzy - seed_k + 1 = node_len - pore_k + 1 - seed_k + 1 = node_len - pore_k - seed_k + 2
-                // So we indexed [0, node_len - pore_k - seed_k + 1] (inclusive)
-                // First unindexed = node_len - pore_k - seed_k + 2
                 std::size_t num_fuzzy = node_len - static_cast<std::size_t>(pore_k) + 1;
                 if (num_fuzzy >= seed_k) {
                     first_boundary_pos = num_fuzzy - seed_k + 1;
                 }
             }
 
-            // Fill boundary positions [first_boundary_pos, node_len - 1]
-            // Actually, we need to fill until we've hashed the last possible position
-            // The last position we can hash is where the hash window ends at node boundary
-            // For position p, we need fuzzy samples [p, p + seed_k)
-            // Each fuzzy sample at position i needs bases [i, i + pore_k)
-            // So position p needs bases [p, p + seed_k + pore_k - 1)
-            // The last position p where this window starts in this node is... complicated
-            // because the window can extend into next nodes.
-
-            // Simpler: for each position from first_boundary_pos to (node_len - 1),
-            // try to hash using getHashWindow which will gather context from subsequent nodes
+            // Fill boundary positions using getHashWindow
             for (std::size_t pos = first_boundary_pos; pos < node_len; pos += config.seed_stride) {
                 auto window = getHashWindow(
                     graph, model, fuzzy_quantizer,
@@ -352,28 +406,55 @@ NodeFirstIndexResult nodeFirstIndex(
                     result.global_mean, result.global_std);
 
                 if (window.empty()) {
-                    // Couldn't get enough context (end of path or N bases)
                     continue;
                 }
 
-                // Hash the window
                 signal::FuzzyQuantizedSignal fuzzy_window;
                 fuzzy_window.tokens = std::move(window);
 
                 auto seeds = extractor.extract(fuzzy_window);
                 for (const auto& seed : seeds.seeds) {
-                    result.seed_store->insert(seed.hash, SeedHit{node_id, pos + seed.position, seed.length});
-                    ++result.seeds_boundary;
+                    local_store.insert(seed.hash, SeedHit{node_id, pos + seed.position, seed.length});
+                    ++local_seed_count;
                 }
             }
 
-            // Update path base position
             path_base_pos += node_len;
         }
 
-        // Record path length in base space (matches linearization coords)
+        // Record path length (each path writes to its own slot - no sync needed)
         result.path_lengths[path_idx] = path_base_pos;
+
+        if (local_seed_count > 0) {
+            atomic_seeds_boundary.fetch_add(local_seed_count, std::memory_order_relaxed);
+        }
+    };
+
+    const std::size_t num_paths = graph.pathCount();
+
+#ifdef PIRU_USE_TBB
+    if (config.executor) {
+        // Parallel execution with thread-local stores
+        tbb::enumerable_thread_specific<HashSeedStore> boundary_stores;
+
+        config.executor->parallel_for(0, num_paths, 1, [&](std::size_t path_idx) {
+            process_path(path_idx, boundary_stores.local());
+        });
+
+        // Merge thread-local stores into result
+        for (auto& store : boundary_stores) {
+            result.seed_store->merge(store);
+        }
+    } else
+#endif
+    {
+        // Sequential fallback
+        for (std::size_t path_idx = 0; path_idx < num_paths; ++path_idx) {
+            process_path(path_idx, *result.seed_store);
+        }
     }
+
+    result.seeds_boundary = atomic_seeds_boundary.load();
     timing::stop("nodefirst:hash_boundary");
 
     // =========================================================================

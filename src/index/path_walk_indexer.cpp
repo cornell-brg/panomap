@@ -3,9 +3,15 @@
 #include "index/path_walk_indexer.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <fstream>
 #include <limits>
+#include <mutex>
+
+#ifdef PIRU_USE_TBB
+#include <tbb/enumerable_thread_specific.h>
+#endif
 
 #include "util/logging.hpp"
 #include "util/timing.hpp"
@@ -78,18 +84,30 @@ PathWalkIndexResult pathWalkIndex(
     result.seed_store->set_filter_fraction(config.seed_filter);
 
     // Optional: dump per-path normalization stats to file
+    // NOTE: Disabled in parallel mode (would need mutex protection)
     std::ofstream norm_stats_file;
     if (!config.dump_norm_stats_path.empty()) {
-        norm_stats_file.open(config.dump_norm_stats_path);
-        if (norm_stats_file) {
-            norm_stats_file << "path_name\tmean\tstddev\tnum_kmers\n";
+        if (config.executor) {
+            LOG_WARN("--dump-norm-stats disabled in parallel mode");
         } else {
-            LOG_WARN("Could not open norm stats file: " + config.dump_norm_stats_path);
+            norm_stats_file.open(config.dump_norm_stats_path);
+            if (norm_stats_file) {
+                norm_stats_file << "path_name\tmean\tstddev\tnum_kmers\n";
+            } else {
+                LOG_WARN("Could not open norm stats file: " + config.dump_norm_stats_path);
+            }
         }
     }
 
-    // Process each path independently
-    for (std::size_t path_idx = 0; path_idx < graph.pathCount(); ++path_idx) {
+    // Atomic counters for parallel execution
+    std::atomic<std::size_t> atomic_seeds_extracted{0};
+    std::atomic<std::size_t> atomic_total_path_length{0};
+
+    // Per-node mutexes for linearization_coords (multiple paths touch same nodes)
+    std::vector<std::mutex> node_mutexes(graph.nodeCount());
+
+    // Lambda to process a single path
+    auto process_path = [&](std::size_t path_idx, HashSeedStore& thread_store) {
         const auto& path = graph.paths()[path_idx];
 
         // Step 1: Concatenate node sequences, track boundaries
@@ -106,16 +124,15 @@ PathWalkIndexResult pathWalkIndex(
         }
 
         if (path_sequence.size() < static_cast<std::size_t>(pore_k)) {
-            LOG_WARN("Path " + path.name + " too short for k=" + std::to_string(pore_k) + ", skipping...");
-            continue;
+            return;  // Path too short
         }
 
-        // Step 2: Squigglize (slide k-mer window, k-mers can cross node boundaries)
-        timing::start("pathwalk:squigglize");
+        // Step 2: Squigglize with single-pass variance (sum and sum_sq)
         std::vector<float> raw_signal;
         raw_signal.reserve(path_sequence.size() - pore_k + 1);
 
         double sum = 0.0;
+        double sum_sq = 0.0;
         std::size_t count = 0;
         std::string kmer_buf(static_cast<std::size_t>(pore_k), '\0');
 
@@ -134,30 +151,17 @@ PathWalkIndexResult pathWalkIndex(
             float val = static_cast<float>(mean);
             raw_signal.push_back(val);
             sum += val;
+            sum_sq += static_cast<double>(val) * static_cast<double>(val);
             ++count;
         }
-        timing::stop("pathwalk:squigglize");
 
-        if (count == 0) continue;
+        if (count == 0) return;
 
-        // Step 3: Compute per-path normalization stats
-        timing::start("pathwalk:norm_quant");
+        // Step 3: Compute per-path normalization stats (single-pass)
         const double path_mean = sum / static_cast<double>(count);
-
-        double variance = 0.0;
-        for (float val : raw_signal) {
-            if (!std::isnan(val)) {
-                double diff = static_cast<double>(val) - path_mean;
-                variance += diff * diff;
-            }
-        }
-        variance /= static_cast<double>(count);
+        const double mean_sq = sum_sq / static_cast<double>(count);
+        const double variance = mean_sq - (path_mean * path_mean);
         const double path_std = (variance > 0.0) ? std::sqrt(variance) : 0.0;
-
-        // Dump stats if enabled
-        if (norm_stats_file) {
-            norm_stats_file << path.name << "\t" << path_mean << "\t" << path_std << "\t" << count << "\n";
-        }
 
         // Step 4: Normalize and fuzzy quantize
         signal::NormalizedSignal normalized;
@@ -171,79 +175,86 @@ PathWalkIndexResult pathWalkIndex(
         }
 
         auto fuzzy = fuzzy_quantizer.quantize(normalized);
-        timing::stop("pathwalk:norm_quant");
-        // Use base length (not signal length) since linearization coords are in base space
-        result.path_lengths[path_idx] = path_sequence.size();
-        result.total_path_length += fuzzy.tokens.size();
 
-        // Step 5: Record linear coordinates (node_id -> path positions for chaining)
+        // Update path length (each path writes to its own slot)
+        result.path_lengths[path_idx] = path_sequence.size();
+        atomic_total_path_length.fetch_add(fuzzy.tokens.size(), std::memory_order_relaxed);
+
+        // Step 5: Record linear coordinates (protected by per-node mutex)
         for (const auto& boundary : boundaries) {
+            std::lock_guard<std::mutex> lock(node_mutexes[boundary.node_id]);
             result.linearization_coords[boundary.node_id].emplace_back(
                 path_idx, static_cast<std::int64_t>(boundary.base_start));
         }
 
-        // Step 6: Extract seeds into temporary per-path store
-        timing::start("pathwalk:hash");
-        timing::start("pathwalk:hash_extract");
+        // Step 6: Extract seeds into per-path store
         const auto seeds = extractor.extract(fuzzy);
-        timing::stop("pathwalk:hash_extract");
-        result.seeds_extracted += seeds.seeds.size();
+        atomic_seeds_extracted.fetch_add(seeds.seeds.size(), std::memory_order_relaxed);
 
-        // Collect seeds for this path into temporary store
-        timing::start("pathwalk:hash_insert");
         HashSeedStore path_seed_store;
         for (const auto& seed : seeds.seeds) {
             auto [node_id, local_offset] = signalPositionToNodeOffset(seed.position, boundaries);
             path_seed_store.insert(seed.hash, SeedHit{node_id, local_offset, seed.length});
         }
-        timing::stop("pathwalk:hash_insert");
 
         // Step 7: Per-path frequency filtering
-        timing::start("pathwalk:per_path_filter");
-
-        // Compute per-path frequency threshold
         std::size_t path_threshold = std::numeric_limits<std::size_t>::max();
-        std::size_t path_max_freq = 0;
-        if (!path_seed_store.data().empty()) {
+        if (!path_seed_store.data().empty() && config.seed_filter < 1.0) {
             std::vector<std::size_t> path_frequencies;
             path_frequencies.reserve(path_seed_store.data().size());
             for (const auto& [hash, hits] : path_seed_store.data()) {
                 path_frequencies.push_back(hits.size());
             }
             std::sort(path_frequencies.begin(), path_frequencies.end());
-            path_max_freq = path_frequencies.back();
 
-            if (config.seed_filter < 1.0) {
-                double fraction = std::clamp(config.seed_filter, 0.0, 1.0);
-                std::size_t pos = static_cast<std::size_t>(path_frequencies.size() * fraction);
-                pos = std::min(pos, path_frequencies.size() - 1);
-                path_threshold = path_frequencies[pos] + 1;
-            }
+            double fraction = std::clamp(config.seed_filter, 0.0, 1.0);
+            std::size_t pos = static_cast<std::size_t>(path_frequencies.size() * fraction);
+            pos = std::min(pos, path_frequencies.size() - 1);
+            path_threshold = path_frequencies[pos] + 1;
         }
 
-        // Merge passing seeds into global store
-        std::size_t path_seeds_added = 0;
-        std::size_t path_seeds_filtered = 0;
+        // Merge passing seeds into thread-local store
         for (const auto& [hash, hits] : path_seed_store.data()) {
             if (hits.size() < path_threshold) {
-                // Passes per-path filter - add all hits to global store
                 for (const auto& hit : hits) {
-                    result.seed_store->insert(hash, hit);
+                    thread_store.insert(hash, hit);
                 }
-                path_seeds_added += hits.size();
-            } else {
-                path_seeds_filtered += hits.size();
             }
         }
-        timing::stop("pathwalk:per_path_filter");
-        timing::stop("pathwalk:hash");
+    };
 
-        LOG_INFO("Path " + path.name + ": " + std::to_string(path_seed_store.data().size()) +
-                 " unique hashes, max_freq=" + std::to_string(path_max_freq) +
-                 ", threshold=" + std::to_string(path_threshold) +
-                 ", added=" + std::to_string(path_seeds_added) +
-                 ", filtered=" + std::to_string(path_seeds_filtered));
+    const std::size_t num_paths = graph.pathCount();
+
+#ifdef PIRU_USE_TBB
+    if (config.executor) {
+        // Parallel execution with thread-local stores
+        tbb::enumerable_thread_specific<HashSeedStore> thread_stores;
+
+        config.executor->parallel_for(0, num_paths, 1, [&](std::size_t path_idx) {
+            process_path(path_idx, thread_stores.local());
+        });
+
+        // Merge thread-local stores into result
+        for (auto& store : thread_stores) {
+            result.seed_store->merge(store);
+        }
+    } else
+#endif
+    {
+        // Sequential execution
+        for (std::size_t path_idx = 0; path_idx < num_paths; ++path_idx) {
+            process_path(path_idx, *result.seed_store);
+
+            // Log per-path stats in sequential mode
+            if (!config.executor) {
+                const auto& path = graph.paths()[path_idx];
+                LOG_DEBUG("Processed path " + path.name);
+            }
+        }
     }
+
+    result.seeds_extracted = atomic_seeds_extracted.load();
+    result.total_path_length = atomic_total_path_length.load();
 
     // Dedup seeds from shared regions across paths
     result.seed_store->deduplicate();

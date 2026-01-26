@@ -78,6 +78,7 @@ IndexPipelineResult run_index_pipeline(
         nfi_config.seed_k = config.seed_k;
         nfi_config.seed_stride = config.seed_stride;
         nfi_config.seed_filter = config.seed_filter;
+        nfi_config.executor = config.executor;
 
         auto nfi_result = nodeFirstIndex(aln_graph, model, *fuzzy_quantizer, *extractor, nfi_config);
 
@@ -98,6 +99,7 @@ IndexPipelineResult run_index_pipeline(
         pwi_config.seed_stride = config.seed_stride;
         pwi_config.seed_filter = config.seed_filter;
         pwi_config.dump_norm_stats_path = config.dump_norm_stats_path;
+        pwi_config.executor = config.executor;
 
         auto pwi_result = pathWalkIndex(aln_graph, model, *fuzzy_quantizer, *extractor, pwi_config);
 

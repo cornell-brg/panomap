@@ -168,6 +168,11 @@ int handle_map(const std::vector<std::string>& args) {
         }
     }();
 
+    // Create executor for parallel operations (indexing and mapping)
+    auto executor = piru::concurrency::make_executor(num_threads);
+    LOG_DEBUG("Using " + std::to_string(executor->max_concurrency()) + " threads (" +
+              executor->backend_name() + ")");
+
     // Extract output options
     const std::string output_path = parsed.values.count("output")
                                         ? parsed.values.at("output")
@@ -338,6 +343,9 @@ int handle_map(const std::vector<std::string>& args) {
             index_config.fuzzy_n_bins = static_cast<std::uint32_t>(std::stoul(parsed.values.at("fuzzy-bins")));
             LOG_DEBUG("Using fuzzy n_bins=" + std::to_string(index_config.fuzzy_n_bins));
         }
+
+        // Pass executor for parallel indexing
+        index_config.executor = executor.get();
 
         // Step 4: Run full indexing pipeline
         // (simple expand → path-walk index)

@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include "concurrency/executor.hpp"
 #include "index/aln_graph.hpp"
 #include "index/graph_store.hpp"
 #include "index/linearizer.hpp"
@@ -83,6 +84,15 @@ struct IndexPipelineConfig {
     // Dump per-path normalization stats to file (path-walk backend only)
     // Format: TSV with columns: path_name, mean, stddev, num_kmers
     std::string dump_norm_stats_path;
+
+    // -------------------------------------------------------------------------
+    // Parallelization
+    // -------------------------------------------------------------------------
+
+    // Executor for parallel indexing (optional).
+    // If nullptr, indexing runs sequentially.
+    // Caller owns the executor lifetime - must outlive the indexing call.
+    concurrency::Executor* executor{nullptr};
 
     // -------------------------------------------------------------------------
     // Note on Additional Parameters
