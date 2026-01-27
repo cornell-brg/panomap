@@ -261,7 +261,7 @@ void dumpPathChainsToFile(const char* filename,
 
     // Write header
     out << "read_id\tpath_id\tpath_name\tchain_score\tnum_anchors\t"
-        << "query_start\tquery_end\tquery_coverage\tref_start\tref_end\tref_span\n";
+        << "query_start\tquery_end\tquery_span\tref_start\tref_end\tref_span\n";
 
     if (anchors.empty()) {
         // No anchors - output zeros for all paths
@@ -429,9 +429,7 @@ void dumpPathChainsToFile(const char* filename,
             ref_max = std::max(ref_max, a.ref_coord + static_cast<std::int64_t>(a.length));
         }
 
-        double query_coverage = read_length > 0
-            ? 100.0 * (query_max - query_min) / read_length
-            : 0.0;
+        std::size_t query_span = query_max - query_min;
 
         out << read_id << "\t"
             << path_id << "\t"
@@ -440,7 +438,7 @@ void dumpPathChainsToFile(const char* filename,
             << chain_indices.size() << "\t"
             << query_min << "\t"
             << query_max << "\t"
-            << std::setprecision(1) << query_coverage << "\t"
+            << query_span << "\t"
             << ref_min << "\t"
             << ref_max << "\t"
             << (ref_max - ref_min) << "\n";
