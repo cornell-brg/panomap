@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -105,6 +107,8 @@ int handle_map(const std::vector<std::string>& args) {
         {'\0', "dump-chains", true, "Dump chains to directory (one file per read)"},
         {'\0', "dump-hit-stats", true, "Dump seed hit statistics to directory (one file per read)"},
         {'\0', "dump-path-chains", true, "Dump best chain per path to directory (diagnostic)"},
+        {'\0', "dump-seed-store", true, "Dump full seed store hash table to TSV file"},
+        {'\0', "dump-read-seeds", true, "Dump all read seeds (including no-hit) to directory"},
         {'\0', "no-anchor-merge", false, "Disable anchor merging (for heatmap debugging)"},
         {'\0', "", false, "\nOutput Options:"},
         {'o', "output", true, "Output file path (format auto-detected from extension: .paf, .gaf, .gam, .json)"},
@@ -528,6 +532,24 @@ int handle_map(const std::vector<std::string>& args) {
     LOG_INFO("Seed frequency threshold: " + std::to_string(hash_seed_store->frequency_threshold()) +
              " (seeds with freq > " + std::to_string(hash_seed_store->frequency_threshold()) + " will be skipped)");
 
+    // Dump seed store if requested (do this before mapping starts)
+    if (parsed.values.count("dump-seed-store")) {
+        const std::string dump_path = parsed.values.at("dump-seed-store");
+        std::ofstream out(dump_path);
+        if (!out.is_open()) {
+            LOG_ERROR("Failed to open seed store dump file: " + dump_path);
+            return 1;
+        }
+        out << "# Seed store dump: hash -> frequency\n";
+        out << "# freq_threshold=" << hash_seed_store->frequency_threshold() << "\n";
+        out << "hash\tfrequency\n";
+        for (const auto& [hash, hits] : hash_seed_store->data()) {
+            out << std::hex << hash << std::dec << "\t" << hits.size() << "\n";
+        }
+        out.close();
+        LOG_INFO("Dumped seed store (" + std::to_string(hash_seed_store->size()) + " hashes) to: " + dump_path);
+    }
+
     // Configure result writer if specified
     if (result_writer) {
         map_config.result_writer = result_writer.get();
@@ -553,6 +575,11 @@ int handle_map(const std::vector<std::string>& args) {
         map_config.dump_path_chains_dir = parsed.values.at("dump-path-chains");
         std::filesystem::create_directories(map_config.dump_path_chains_dir);
         LOG_INFO("Dumping path chains to: " + map_config.dump_path_chains_dir);
+    }
+    if (parsed.values.count("dump-read-seeds")) {
+        map_config.dump_read_seeds_dir = parsed.values.at("dump-read-seeds");
+        std::filesystem::create_directories(map_config.dump_read_seeds_dir);
+        LOG_INFO("Dumping read seeds to: " + map_config.dump_read_seeds_dir);
     }
     if (parsed.values.count("no-anchor-merge")) {
         map_config.enable_anchor_merge = false;

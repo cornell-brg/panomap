@@ -267,21 +267,10 @@ PathWalkIndexResult pathWalkIndex(
     }
     result.seed_store->set_max_hash_frequency(max_freq);
 
-    // Compute frequency threshold (seeds NOT deleted, threshold used at query time)
-    std::vector<std::size_t> frequencies;
-    frequencies.reserve(result.seed_store->size());
-    for (const auto& [hash, hits] : result.seed_store->data()) {
-        frequencies.push_back(hits.size());
-    }
-
+    // Set frequency threshold to max_freq + 1 (no query-time filtering).
+    // Per-path filtering already removed high-frequency seeds during indexing,
+    // so we don't need a second round of filtering at query time.
     std::size_t threshold = max_freq + 1;
-    if (!frequencies.empty() && config.seed_filter < 1.0) {
-        std::sort(frequencies.begin(), frequencies.end());
-        double fraction = std::clamp(config.seed_filter, 0.0, 1.0);
-        std::size_t pos = static_cast<std::size_t>(frequencies.size() * fraction);
-        pos = std::min(pos, frequencies.size() - 1);
-        threshold = frequencies[pos] + 1;
-    }
     result.seed_store->set_frequency_threshold(threshold);
 
     LOG_INFO("PathWalkIndex: " + std::to_string(result.seeds_extracted) +

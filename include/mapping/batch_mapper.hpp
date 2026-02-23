@@ -65,6 +65,7 @@ struct BatchMapperConfig {
     std::string dump_chains_dir{};       // Dump chains per read
     std::string dump_hit_stats_dir{};    // Dump seed hit statistics per read
     std::string dump_path_chains_dir{};  // Dump best chain per path (diagnostic)
+    std::string dump_read_seeds_dir{};   // Dump all read seeds (including no-hit)
 
     // Anchor merging (disable for debugging/heatmap comparison)
     bool enable_anchor_merge{true};

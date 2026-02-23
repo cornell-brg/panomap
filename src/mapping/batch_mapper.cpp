@@ -173,6 +173,44 @@ void dumpChainToFile(const char* filename,
     LOG_INFO("Dumped chain with " + std::to_string(primary.anchors.size()) + " anchors to " + std::string(filename));
 }
 
+// Dump ALL seeds for a read (including those with no hits in the index).
+// This is critical for debugging: we need to see which hashes the read produces
+// and whether they exist in the index at all.
+void dumpAllReadSeedsToFile(const char* filename,
+                            const std::string& read_id,
+                            const signal::SeedBuffer& seeds,
+                            const index::SeedStore* seed_store,
+                            std::size_t freq_threshold) {
+    std::ofstream out(filename);
+    if (!out.is_open()) {
+        LOG_WARN("Failed to open read seeds file: " + std::string(filename));
+        return;
+    }
+
+    // Write header
+    out << "#READ_SEEDS\tread_id\tnum_seeds\tfreq_threshold\n";
+    out << "#READ_SEEDS\t" << read_id << "\t" << seeds.seeds.size() << "\t" << freq_threshold << "\n";
+
+    // Write per-seed details
+    out << "hash\tread_pos\tlength\tin_index\tfrequency\tfiltered\n";
+
+    for (const auto& seed : seeds.seeds) {
+        const auto* hits = seed_store ? seed_store->lookup(seed.hash) : nullptr;
+        const bool in_index = (hits != nullptr);
+        const std::size_t frequency = in_index ? hits->size() : 0;
+        const bool filtered = in_index && (frequency > freq_threshold);
+
+        out << std::hex << seed.hash << std::dec << "\t"
+            << seed.position << "\t"
+            << seed.length << "\t"
+            << (in_index ? "yes" : "no") << "\t"
+            << frequency << "\t"
+            << (filtered ? "yes" : "no") << "\n";
+    }
+
+    out.close();
+}
+
 // Dump hit statistics for a read to analyze frequency distributions.
 void dumpHitStatsToFile(const char* filename,
                         const std::string& read_id,
@@ -724,6 +762,16 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
         std::size_t freq_threshold = config_.seed_store ? config_.seed_store->frequency_threshold() : 0;
         dumpHitStatsToFile(hit_stats_file.c_str(), read.read_id, batch.seeds[index],
                            batch.seed_hits[index], freq_threshold);
+    }
+
+    // Dump ALL read seeds (including no-hit) if --dump-read-seeds is set
+    static std::atomic<std::size_t> read_seeds_dump_counter{0};
+    if (!config_.dump_read_seeds_dir.empty()) {
+        std::size_t dump_num = read_seeds_dump_counter.fetch_add(1);
+        std::string seeds_file = config_.dump_read_seeds_dir + "/read_" + std::to_string(dump_num) + "_seeds.tsv";
+        std::size_t freq_threshold = config_.seed_store ? config_.seed_store->frequency_threshold() : 0;
+        dumpAllReadSeedsToFile(seeds_file.c_str(), read.read_id, batch.seeds[index],
+                               config_.seed_store, freq_threshold);
     }
 
     // Expand seed hits to anchors (explicit expansion stage)
