@@ -167,6 +167,7 @@ int handle_eval(const std::vector<std::string>& args) {
     config.usage = "Usage: piru eval -t <truth.paf> -c <calls.paf> [options]";
     config.options = {
         {'h', "help", false, "Show help"},
+        {'v', "verbose", false, "Show per-read results (pass/fail with details)"},
         {'t', "truth", true, "Ground truth PAF (from squigulator -c)"},
         {'c', "calls", true, "Mapping results PAF (from piru map)"},
         {'p', "tolerance", true, "Position tolerance in bp (default: 100)"},
@@ -355,25 +356,50 @@ int handle_eval(const std::vector<std::string>& args) {
              << std::setprecision(1) << (100.0 * correct_overlap / total) << "%, >="
              << std::setprecision(0) << (min_overlap * 100) << "% overlap)\n";
 
-        // Per-read breakdown for unmapped or incorrect
-        bool has_issues = false;
-        for (const auto& r : results) {
-            if (!r.mapped || r.best_overlap_frac < min_overlap) {
-                if (!has_issues) {
-                    *out << "\n=== Problem Reads ===\n";
-                    has_issues = true;
-                }
+        // Verbose: per-read results
+        if (parsed.values.count("verbose")) {
+            *out << "\n=== Per-Read Results ===\n";
+            for (const auto& r : results) {
                 int64_t read_len = r.truth.end - r.truth.start;
-                *out << r.read_id << " (len=" << read_len << "bp): ";
+                bool pass = r.mapped && r.best_overlap_frac >= min_overlap;
+                *out << (pass ? "PASS" : "FAIL") << "  " << r.read_id
+                     << " (len=" << read_len << "bp)";
                 if (!r.mapped) {
-                    *out << "UNMAPPED";
+                    *out << "  UNMAPPED";
                 } else {
-                    *out << "overlap=" << std::fixed << std::setprecision(1)
-                         << (r.best_overlap_frac * 100) << "%";
-                    *out << ", pos_err=" << r.position_error << "bp";
-                    if (!r.correct_strand) *out << ", wrong_strand";
+                    *out << "  mapped=" << r.mapping.target_name
+                         << ":" << r.mapping.target_start << "-" << r.mapping.target_end
+                         << "(" << r.mapping.strand << ")"
+                         << "  truth=" << r.truth.reference
+                         << ":" << r.truth.start << "-" << r.truth.end
+                         << "(" << r.truth.strand << ")"
+                         << "  overlap=" << std::fixed << std::setprecision(1)
+                         << (r.best_overlap_frac * 100) << "%"
+                         << "  pos_err=" << r.position_error << "bp";
                 }
                 *out << "\n";
+            }
+        } else {
+            // Default: only show problem reads
+            bool has_issues = false;
+            for (const auto& r : results) {
+                if (!r.mapped || r.best_overlap_frac < min_overlap) {
+                    if (!has_issues) {
+                        *out << "\n=== Problem Reads ===\n";
+                        has_issues = true;
+                    }
+                    int64_t read_len = r.truth.end - r.truth.start;
+                    *out << r.read_id << " (len=" << read_len << "bp): ";
+                    if (!r.mapped) {
+                        *out << "UNMAPPED";
+                    } else {
+                        *out << "overlap=" << std::fixed << std::setprecision(1)
+                             << (r.best_overlap_frac * 100) << "%";
+                        *out << ", pos_err=" << r.position_error << "bp";
+                        if (!r.correct_strand) *out << ", wrong_strand";
+                    }
+                    *out << "\n";
+                }
             }
         }
     } else if (format == "tsv") {

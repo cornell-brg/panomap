@@ -89,6 +89,7 @@ if(DOCTEST_AVAILABLE)
         ${CMAKE_SOURCE_DIR}/src/signal/fuzzy_quantizers/rh2_fuzzy_quantizer.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/seed_extractors/seed_extractor_factory.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/seed_extractors/kmer_seed_extractor.cpp
+        ${CMAKE_SOURCE_DIR}/src/signal/seed_extractors/minimizer_seed_extractor.cpp
         ${CMAKE_SOURCE_DIR}/src/index/aln_graph.cpp
         ${CMAKE_SOURCE_DIR}/src/mapping/batch_mapper.cpp
         ${CMAKE_SOURCE_DIR}/src/mapping/seed_clusterer_factory.cpp

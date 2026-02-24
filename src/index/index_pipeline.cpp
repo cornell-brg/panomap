@@ -59,9 +59,10 @@ IndexPipelineResult run_index_pipeline(
 
     // Create seed extractor
     signal::SeedExtractorConfig extractor_cfg;
-    extractor_cfg.backend = "kmer";
+    extractor_cfg.backend = config.seed_backend;
     extractor_cfg.k = config.seed_k;
     extractor_cfg.stride = config.seed_stride;
+    extractor_cfg.window = config.seed_window;
     extractor_cfg.qbits = 4;
     auto extractor = signal::make_seed_extractor(extractor_cfg);
     if (!extractor) {

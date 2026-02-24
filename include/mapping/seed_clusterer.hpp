@@ -81,7 +81,7 @@ struct SeedClustererConfig {
     std::size_t dp_min_chain_score{12};         // Min score to report a chain
     std::size_t dp_max_chains{10};              // Max number of chains to extract
     std::size_t dp_max_skip{25};                // Stop after N consecutive failed chain attempts
-    bool dp_merge_chains{true};                 // Merge overlapping chains on same path
+    bool dp_merge_chains{false};                // Merge overlapping chains on same path
 };
 
 // Abstract interface for anchor clustering/chaining.

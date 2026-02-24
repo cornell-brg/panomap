@@ -49,6 +49,14 @@ struct IndexPipelineConfig {
     // Seed Extraction Parameters
     // -------------------------------------------------------------------------
 
+    // Seed extractor backend: "kmer" or "minimizer"
+    std::string seed_backend{"kmer"};
+
+    // Minimizer window size (only used when seed_backend="minimizer")
+    // Within each window of w consecutive k-mers, only the minimum hash is kept.
+    // w=1 recovers the rolling k-mer behavior.
+    std::size_t seed_window{5};
+
     // Seed extraction mode: "node" or "path"
     // - node: Extract seeds from each node independently (current behavior)
     //         Seeds cannot cross node boundaries
@@ -75,7 +83,7 @@ struct IndexPipelineConfig {
     // - 1.0 = keep all seeds (no filtering)
     // - Lower values reduce index size and mapping noise
     // - Default: 0.9 (configurable via CLI: --seed-filter)
-    double seed_filter{0.5};
+    double seed_filter{1.0};
 
     // -------------------------------------------------------------------------
     // Debug Options

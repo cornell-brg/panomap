@@ -48,9 +48,11 @@ int handle_index(const std::vector<std::string>& args) {
         {'t', "threads", true, "Worker threads"},
         {'p', "profile", false, "Emit timing profile (tree)"},
         {'\0', "", false, "\nSeed Generation Options:"},
+        {'\0', "seed-backend", true, "Seed extractor backend: kmer (default), minimizer"},
         {'\0', "seed-k", true, "Seed k-mer size (default: 6)"},
+        {'\0', "seed-w", true, "Minimizer window size (default: 5, only with --seed-backend minimizer)"},
         {'\0', "seed-stride", true, "Seed stride (default: 1)"},
-        {'\0', "seed-filter", true, "Keep least frequent seed fraction (default: 0.9)"},
+        {'\0', "seed-filter", true, "Keep least frequent seed fraction (default: 1.0)"},
         {'\0', "seed-mode", true, "Seeding mode: node, path (default)"},
         {'\0', "", false, "\nIndexer Options:"},
         {'\0', "indexer-backend", true, "Indexer backend: node-first, path-walk (default)"},
@@ -137,8 +139,12 @@ int handle_index(const std::vector<std::string>& args) {
 
     // Use defaults from IndexPipelineConfig (single source of truth)
     piru::index::IndexPipelineConfig defaults;
+    const std::string seed_backend =
+        parsed.values.count("seed-backend") ? parsed.values.at("seed-backend") : defaults.seed_backend;
     const std::size_t seed_k =
         parsed.values.count("seed-k") ? std::stoul(parsed.values.at("seed-k")) : defaults.seed_k;
+    const std::size_t seed_w =
+        parsed.values.count("seed-w") ? std::stoul(parsed.values.at("seed-w")) : defaults.seed_window;
     const std::size_t seed_stride =
         parsed.values.count("seed-stride") ? std::stoul(parsed.values.at("seed-stride")) : defaults.seed_stride;
     const double seed_filter = parsed.values.count("seed-filter")
@@ -156,7 +162,8 @@ int handle_index(const std::vector<std::string>& args) {
 
     LOG_INFO("input: " + graph_path);
     LOG_INFO("model: " + model->name() + " (k=" + std::to_string(pore_k) + ")");
-    LOG_INFO("seeds: k=" + std::to_string(seed_k) + ", stride=" + std::to_string(seed_stride) +
+    LOG_INFO("seeds: backend=" + seed_backend + ", k=" + std::to_string(seed_k) +
+             ", w=" + std::to_string(seed_w) + ", stride=" + std::to_string(seed_stride) +
              ", filter=" + std::to_string(seed_filter) + ", mode=" + seed_mode);
     LOG_INFO("output: " + output_base);
 
@@ -165,7 +172,9 @@ int handle_index(const std::vector<std::string>& args) {
     // -------------------------------------------------------------------------
 
     piru::index::IndexPipelineConfig index_config;
+    index_config.seed_backend = seed_backend;
     index_config.seed_k = seed_k;
+    index_config.seed_window = seed_w;
     index_config.seed_stride = seed_stride;
     index_config.seed_filter = seed_filter;
     index_config.seed_mode = seed_mode;

@@ -99,7 +99,9 @@ int handle_map(const std::vector<std::string>& args) {
         {'\0', "fuzzy-fine-max", true, "Fuzzy quantizer fine region max (default: 2.0)"},
         {'\0', "fuzzy-fine-range", true, "Fuzzy quantizer fine range (default: 0.9 R9, 0.8 R10)"},
         {'\0', "fuzzy-bins", true, "Fuzzy quantizer bin count (default: 10)"},
+        {'\0', "seed-backend", true, "Seed extractor backend: kmer (default), minimizer"},
         {'\0', "seed-k", true, "Seed extractor k-mer size (default: 6)"},
+        {'\0', "seed-w", true, "Minimizer window size (default: 5, only with --seed-backend minimizer)"},
         {'\0', "seed-stride", true, "Seed extractor stride (default: 1)"},
         {'\0', "seed-mode", true, "Seeding mode: node, path (default)"},
         {'\0', "", false, "\nDebug Options:"},
@@ -323,6 +325,14 @@ int handle_map(const std::vector<std::string>& args) {
             index_config.seed_stride = std::stoull(parsed.values.at("seed-stride"));
             LOG_DEBUG("Using seed stride=" + std::to_string(index_config.seed_stride) + " for indexing");
         }
+        if (parsed.values.count("seed-backend")) {
+            index_config.seed_backend = parsed.values.at("seed-backend");
+            LOG_DEBUG("Using seed backend=" + index_config.seed_backend + " for indexing");
+        }
+        if (parsed.values.count("seed-w")) {
+            index_config.seed_window = std::stoull(parsed.values.at("seed-w"));
+            LOG_DEBUG("Using seed window=" + std::to_string(index_config.seed_window) + " for indexing");
+        }
         if (parsed.values.count("seed-mode")) {
             index_config.seed_mode = parsed.values.at("seed-mode");
             LOG_DEBUG("Using seed mode=" + index_config.seed_mode + " for indexing");
@@ -446,6 +456,7 @@ int handle_map(const std::vector<std::string>& args) {
     LOG_DEBUG("Using seed extractor settings: backend=" + index_seed_cfg.backend +
               ", k=" + std::to_string(index_seed_cfg.k) +
               ", stride=" + std::to_string(index_seed_cfg.stride) +
+              ", window=" + std::to_string(index_seed_cfg.window) +
               ", qbits=" + std::to_string(index_seed_cfg.qbits));
     map_config.seed_config = index_seed_cfg;
 

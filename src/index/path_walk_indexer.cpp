@@ -80,6 +80,7 @@ PathWalkIndexResult pathWalkIndex(
     params["k"] = std::to_string(cfg.k);
     params["stride"] = std::to_string(cfg.stride);
     params["qbits"] = std::to_string(cfg.qbits);
+    params["window"] = std::to_string(cfg.window);
     result.seed_store->set_params(std::move(params));
     result.seed_store->set_filter_fraction(config.seed_filter);
 
