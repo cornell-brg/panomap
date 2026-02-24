@@ -73,8 +73,7 @@ int handle_map(const std::vector<std::string>& args) {
         {'p', "profile", false, "Emit timing profile (tree)"},
         {'v', "verbose", false, "Enable verbose logging (DEBUG level)"},
         {'\0', "", false, "\nMapping Options:"},
-        {'\0', "max-seed-freq", true, "Maximum seed frequency for lookup (absolute cap)"},
-        {'\0', "seed-filter", true, "Recompute threshold at percentile (0.0-1.0, e.g., 0.5 = 50th)"},
+        {'\0', "seed-freq-cap", true, "Skip seeds above this frequency percentile at lookup (0.0-1.0, default: none)"},
         {'\0', "clusterer", true, "Clusterer backend: dp-chain (default), fse, probe"},
         {'\0', "chain-max-dist", true, "DP chain: max query/ref distance between anchors (default: 500)"},
         {'\0', "chain-max-diag-dev", true, "DP chain: max diagonal deviation (default: 500)"},
@@ -103,6 +102,7 @@ int handle_map(const std::vector<std::string>& args) {
         {'\0', "seed-k", true, "Seed extractor k-mer size (default: 6)"},
         {'\0', "seed-w", true, "Minimizer window size (default: 5, only with --seed-backend minimizer)"},
         {'\0', "seed-stride", true, "Seed extractor stride (default: 1)"},
+        {'\0', "seed-filter", true, "Index-time seed frequency filter percentile (0.0-1.0, default: 1.0)"},
         {'\0', "seed-mode", true, "Seeding mode: node, path (default)"},
         {'\0', "", false, "\nDebug Options:"},
         {'\0', "dump-anchors", true, "Dump anchors to directory (one file per read)"},
@@ -160,7 +160,7 @@ int handle_map(const std::vector<std::string>& args) {
     // Warn about flags that are ignored with --index (index-time-only params)
     if (has_index) {
         std::vector<std::string> graph_only_flags = {
-            "seed-backend", "seed-k", "seed-w", "seed-stride", "seed-mode",
+            "seed-backend", "seed-k", "seed-w", "seed-stride", "seed-filter", "seed-mode",
             "indexer-backend",
             "event-pipeline", "event-w1", "event-w2", "event-t1", "event-t2", "event-peak",
             "fuzzy-backend", "fuzzy-fine-min", "fuzzy-fine-max", "fuzzy-fine-range", "fuzzy-bins",
@@ -358,6 +358,10 @@ int handle_map(const std::vector<std::string>& args) {
             index_config.seed_window = std::stoull(parsed.values.at("seed-w"));
             LOG_DEBUG("Using seed window=" + std::to_string(index_config.seed_window) + " for indexing");
         }
+        if (parsed.values.count("seed-filter")) {
+            index_config.seed_filter = std::stod(parsed.values.at("seed-filter"));
+            LOG_DEBUG("Using seed filter=" + std::to_string(index_config.seed_filter) + " for indexing");
+        }
         if (parsed.values.count("seed-mode")) {
             index_config.seed_mode = parsed.values.at("seed-mode");
             LOG_DEBUG("Using seed mode=" + index_config.seed_mode + " for indexing");
@@ -551,17 +555,12 @@ int handle_map(const std::vector<std::string>& args) {
         map_config.event_pipeline_config.override_peak_height = std::stof(parsed.values.at("event-peak"));
     }
 
-    // Recompute threshold from percentile if specified (takes precedence)
-    if (parsed.values.count("seed-filter")) {
-        const double percentile = std::stod(parsed.values.at("seed-filter"));
+    // Map-time frequency cap: recompute threshold from percentile
+    if (parsed.values.count("seed-freq-cap")) {
+        const double percentile = std::stod(parsed.values.at("seed-freq-cap"));
         const_cast<piru::index::HashSeedStore*>(hash_seed_store)->recompute_threshold_from_percentile(percentile);
-        LOG_INFO("Recomputed seed frequency threshold at " + std::to_string(percentile * 100) + "th percentile");
-    }
-    // Override seed frequency threshold to absolute value if specified
-    else if (parsed.values.count("max-seed-freq")) {
-        const std::size_t override_threshold = std::stoull(parsed.values.at("max-seed-freq"));
-        const_cast<piru::index::HashSeedStore*>(hash_seed_store)->set_frequency_threshold(override_threshold);
-        LOG_INFO("Overriding seed frequency threshold to " + std::to_string(override_threshold));
+        LOG_INFO("Map-time seed freq cap at " + std::to_string(percentile * 100) + "th percentile → threshold=" +
+                 std::to_string(hash_seed_store->frequency_threshold()));
     }
 
     // Log the seed frequency threshold being used
