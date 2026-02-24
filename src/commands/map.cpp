@@ -157,6 +157,39 @@ int handle_map(const std::vector<std::string>& args) {
         return 1;
     }
 
+    // Warn about flags that are ignored with --index (index-time-only params)
+    if (has_index) {
+        std::vector<std::string> graph_only_flags = {
+            "seed-backend", "seed-k", "seed-w", "seed-stride", "seed-mode",
+            "indexer-backend",
+            "event-pipeline", "event-w1", "event-w2", "event-t1", "event-t2", "event-peak",
+            "fuzzy-backend", "fuzzy-fine-min", "fuzzy-fine-max", "fuzzy-fine-range", "fuzzy-bins",
+            "model",
+        };
+        std::vector<std::string> found;
+        for (const auto& flag : graph_only_flags) {
+            if (parsed.values.count(flag)) found.push_back("--" + flag);
+        }
+        if (!found.empty()) {
+            std::string list;
+            for (std::size_t i = 0; i < found.size(); ++i) {
+                if (i > 0) list += ", ";
+                list += found[i];
+            }
+            LOG_WARN("Ignoring index-time flags with --index (these only apply with --graph): " + list);
+        }
+    }
+
+    // Warn about --seed-w without --seed-backend minimizer
+    if (parsed.values.count("seed-w") && has_graph) {
+        const std::string backend = parsed.values.count("seed-backend")
+                                        ? parsed.values.at("seed-backend")
+                                        : "kmer";
+        if (backend != "minimizer") {
+            LOG_WARN("--seed-w is ignored without --seed-backend minimizer");
+        }
+    }
+
     // Extract common options
     const bool profile = parsed.values.count("profile") > 0;
     const bool verbose = parsed.values.count("verbose") > 0;
@@ -263,14 +296,6 @@ int handle_map(const std::vector<std::string>& args) {
         linearization_coords = std::move(loaded.linearization_coords);
         fuzzy_quantizer_name = loaded.metadata.fuzzy_quantizer;
         pore_model_name = loaded.metadata.model_name;
-
-        // Warn if user tries to override seed/fuzzy/indexer params with pre-built index
-        if (parsed.values.count("seed-k") || parsed.values.count("seed-stride") ||
-            parsed.values.count("seed-mode") || parsed.values.count("indexer-backend") ||
-            parsed.values.count("fuzzy-backend") || parsed.values.count("fuzzy-fine-min") ||
-            parsed.values.count("fuzzy-fine-max") || parsed.values.count("fuzzy-fine-range")) {
-            LOG_WARN("--seed-*, --fuzzy-*, and --indexer-backend flags are ignored with --index (use --graph for experimentation)");
-        }
 
     } else {
         // ---------------------------------------------------------------------
