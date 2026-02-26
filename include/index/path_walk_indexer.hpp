@@ -29,7 +29,8 @@ struct PathWalkIndexConfig {
     // Seed extraction parameters
     std::size_t seed_k{6};
     std::size_t seed_stride{1};
-    double seed_filter{0.5};  // keep_least_frequent_fraction
+    double seed_filter{0.5};       // threshold percentile (above this → subsample)
+    double seed_subsample{0.55};   // subsample cap percentile (target for subsampled seeds)
 
     // Debug: dump per-path normalization stats to file (empty = disabled)
     std::string dump_norm_stats_path;

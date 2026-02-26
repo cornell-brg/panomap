@@ -8,6 +8,7 @@
 #include <fstream>
 #include <limits>
 #include <mutex>
+#include <random>
 
 #ifdef PIRU_USE_TBB
 #include <tbb/enumerable_thread_specific.h>
@@ -198,8 +199,11 @@ PathWalkIndexResult pathWalkIndex(
             path_seed_store.insert(seed.hash, SeedHit{node_id, local_offset, seed.length});
         }
 
-        // Step 7: Per-path frequency filtering
-        std::size_t path_threshold = std::numeric_limits<std::size_t>::max();
+        // Step 7: Per-path frequency subsampling
+        // - Below threshold (seed_filter percentile): pass through
+        // - Above threshold: subsample down to subsample_cap (70th percentile freq)
+        std::size_t threshold = std::numeric_limits<std::size_t>::max();
+        std::size_t subsample_cap = std::numeric_limits<std::size_t>::max();
         if (!path_seed_store.data().empty() && config.seed_filter < 1.0) {
             std::vector<std::size_t> path_frequencies;
             path_frequencies.reserve(path_seed_store.data().size());
@@ -208,19 +212,40 @@ PathWalkIndexResult pathWalkIndex(
             }
             std::sort(path_frequencies.begin(), path_frequencies.end());
 
-            double fraction = std::clamp(config.seed_filter, 0.0, 1.0);
-            std::size_t pos = static_cast<std::size_t>(path_frequencies.size() * fraction);
-            pos = std::min(pos, path_frequencies.size() - 1);
-            path_threshold = path_frequencies[pos] + 1;
+            auto freq_at = [&](double p) -> std::size_t {
+                std::size_t pos = static_cast<std::size_t>(path_frequencies.size() * p);
+                pos = std::min(pos, path_frequencies.size() - 1);
+                return path_frequencies[pos];
+            };
+            threshold = freq_at(std::clamp(config.seed_filter, 0.0, 1.0));
+            if (config.seed_subsample > 0.0) {
+                subsample_cap = std::max<std::size_t>(1, freq_at(std::clamp(config.seed_subsample, 0.0, 1.0)));
+            } else {
+                subsample_cap = 0;  // harddrop mode
+            }
         }
 
-        // Merge passing seeds into thread-local store
-        for (const auto& [hash, hits] : path_seed_store.data()) {
-            if (hits.size() < path_threshold) {
+        // Merge seeds into thread-local store
+        std::mt19937 rng(static_cast<unsigned>(path_idx));
+        for (auto& [hash, hits] : path_seed_store.mutableData()) {
+            if (hits.size() <= threshold) {
+                // Below threshold — merge all
                 for (const auto& hit : hits) {
                     thread_store.insert(hash, hit);
                 }
+            } else if (subsample_cap > 0) {
+                // Above threshold — subsample to subsample_cap
+                std::size_t target = std::min(subsample_cap, hits.size());
+                std::size_t n = hits.size();
+                for (std::size_t i = 0; i < target; ++i) {
+                    std::size_t j = i + (rng() % (n - i));
+                    std::swap(hits[i], hits[j]);
+                }
+                for (std::size_t i = 0; i < target; ++i) {
+                    thread_store.insert(hash, hits[i]);
+                }
             }
+            // else: subsample_cap == 0 → harddrop (discard entirely)
         }
     };
 

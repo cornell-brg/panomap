@@ -237,7 +237,17 @@ ClusterSummary DPChainClusterer::cluster(const std::vector<Anchor>& anchors) con
 
             // Compute score if we extend chain ending at j with anchor i
             const double cost = gap_cost(anchor_j, anchor_i);
-            const double score = dp[j] + anchor_score(anchor_i) - cost;
+            // minimap2-style matching bonus: min(Δq, Δr, anchor_length)
+            // Penalizes drift — only get credit for the shorter advance
+            const std::int64_t dq = static_cast<std::int64_t>(anchor_i.query_pos) -
+                                    static_cast<std::int64_t>(anchor_j.query_pos);
+            const std::int64_t dr = anchor_i.ref_coord - anchor_j.ref_coord;
+            const double match_bonus = std::min({
+                anchor_score(anchor_i),
+                static_cast<double>(std::max<std::int64_t>(0, dq)),
+                static_cast<double>(std::max<std::int64_t>(0, dr))
+            });
+            const double score = dp[j] + match_bonus - cost;
 
             if (score > best_score) {
                 best_score = score;

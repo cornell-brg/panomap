@@ -5,6 +5,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -103,6 +104,7 @@ int handle_map(const std::vector<std::string>& args) {
         {'\0', "seed-w", true, "Minimizer window size (default: 5, only with --seed-backend minimizer)"},
         {'\0', "seed-stride", true, "Seed extractor stride (default: 1)"},
         {'\0', "seed-filter", true, "Index-time seed frequency filter percentile (0.0-1.0, default: 1.0)"},
+        {'\0', "seed-subsample", true, "Subsample cap percentile for filtered seeds (0.0-1.0, default: 0.55)"},
         {'\0', "seed-mode", true, "Seeding mode: node, path (default)"},
         {'\0', "", false, "\nDebug Options:"},
         {'\0', "dump-anchors", true, "Dump anchors to directory (one file per read)"},
@@ -111,6 +113,8 @@ int handle_map(const std::vector<std::string>& args) {
         {'\0', "dump-path-chains", true, "Dump best chain per path to directory (diagnostic)"},
         {'\0', "dump-seed-store", true, "Dump full seed store hash table to TSV file"},
         {'\0', "dump-read-seeds", true, "Dump all read seeds (including no-hit) to directory"},
+        {'\0', "dump-anchor-detail", true, "Dump per-anchor detail to directory (use with --dump-anchor-reads)"},
+        {'\0', "dump-anchor-reads", true, "Comma-separated read ID substrings to dump anchors for"},
         {'\0', "no-anchor-merge", false, "Disable anchor merging (for heatmap debugging)"},
         {'\0', "", false, "\nOutput Options:"},
         {'o', "output", true, "Output file path (format auto-detected from extension: .paf, .gaf, .gam, .json)"},
@@ -160,7 +164,7 @@ int handle_map(const std::vector<std::string>& args) {
     // Warn about flags that are ignored with --index (index-time-only params)
     if (has_index) {
         std::vector<std::string> graph_only_flags = {
-            "seed-backend", "seed-k", "seed-w", "seed-stride", "seed-filter", "seed-mode",
+            "seed-backend", "seed-k", "seed-w", "seed-stride", "seed-filter", "seed-subsample", "seed-mode",
             "indexer-backend",
             "event-pipeline", "event-w1", "event-w2", "event-t1", "event-t2", "event-peak",
             "fuzzy-backend", "fuzzy-fine-min", "fuzzy-fine-max", "fuzzy-fine-range", "fuzzy-bins",
@@ -361,6 +365,10 @@ int handle_map(const std::vector<std::string>& args) {
         if (parsed.values.count("seed-filter")) {
             index_config.seed_filter = std::stod(parsed.values.at("seed-filter"));
             LOG_DEBUG("Using seed filter=" + std::to_string(index_config.seed_filter) + " for indexing");
+        }
+        if (parsed.values.count("seed-subsample")) {
+            index_config.seed_subsample = std::stod(parsed.values.at("seed-subsample"));
+            LOG_DEBUG("Using seed subsample=" + std::to_string(index_config.seed_subsample) + " for indexing");
         }
         if (parsed.values.count("seed-mode")) {
             index_config.seed_mode = parsed.values.at("seed-mode");
@@ -615,6 +623,22 @@ int handle_map(const std::vector<std::string>& args) {
         map_config.dump_read_seeds_dir = parsed.values.at("dump-read-seeds");
         std::filesystem::create_directories(map_config.dump_read_seeds_dir);
         LOG_INFO("Dumping read seeds to: " + map_config.dump_read_seeds_dir);
+    }
+    if (parsed.values.count("dump-anchor-detail")) {
+        map_config.dump_anchor_detail_dir = parsed.values.at("dump-anchor-detail");
+        std::filesystem::create_directories(map_config.dump_anchor_detail_dir);
+        LOG_INFO("Dumping anchor detail to: " + map_config.dump_anchor_detail_dir);
+    }
+    if (parsed.values.count("dump-anchor-reads")) {
+        std::string reads_str = parsed.values.at("dump-anchor-reads");
+        std::istringstream iss(reads_str);
+        std::string token;
+        while (std::getline(iss, token, ',')) {
+            if (!token.empty()) {
+                map_config.dump_anchor_reads.insert(token);
+            }
+        }
+        LOG_INFO("Dumping anchor detail for " + std::to_string(map_config.dump_anchor_reads.size()) + " read filters");
     }
     if (parsed.values.count("no-anchor-merge")) {
         map_config.enable_anchor_merge = false;

@@ -393,7 +393,17 @@ void dumpPathChainsToFile(const char* filename,
             }
             num_skipped = 0;
             double cost = gap_cost(anchor_j, anchor_i);
-            double score = dp[j] + anchor_score(anchor_i) - cost;
+            // minimap2-style matching bonus: min(Δq, Δr, anchor_length)
+            // Penalizes drift — only get credit for the shorter advance
+            std::int64_t dq = static_cast<std::int64_t>(anchor_i.query_pos) -
+                              static_cast<std::int64_t>(anchor_j.query_pos);
+            std::int64_t dr = anchor_i.ref_coord - anchor_j.ref_coord;
+            double match_bonus = std::min({
+                static_cast<double>(anchor_i.length) * anchor_weight,
+                static_cast<double>(std::max<std::int64_t>(0, dq)),
+                static_cast<double>(std::max<std::int64_t>(0, dr))
+            });
+            double score = dp[j] + match_bonus - cost;
             if (score > best_score) {
                 best_score = score;
                 best_pred = static_cast<int>(j);
@@ -480,6 +490,183 @@ void dumpPathChainsToFile(const char* filename,
             << ref_min << "\t"
             << ref_max << "\t"
             << (ref_max - ref_min) << "\n";
+    }
+
+    out.close();
+}
+
+// Dump per-anchor detail for selected reads.
+// Writes ALL anchors grouped by path, with chain membership indicated.
+void dumpAnchorDetailToFile(const char* filename,
+                            const std::string& read_id,
+                            std::size_t read_length,
+                            const std::vector<Anchor>& anchors,
+                            const index::GraphStore* graph_store,
+                            const SeedClustererConfig& clusterer_config) {
+    std::ofstream out(filename);
+    if (!out.is_open()) {
+        LOG_WARN("Failed to open anchor detail file: " + std::string(filename));
+        return;
+    }
+
+    const auto* adj_store = dynamic_cast<const index::AdjListGraphStore*>(graph_store);
+    const std::vector<index::AlnPath>* paths = nullptr;
+    if (adj_store) {
+        paths = &adj_store->graph().paths();
+    }
+
+    // Sort anchors same as DP chainer
+    std::vector<Anchor> sorted_anchors = anchors;
+    std::sort(sorted_anchors.begin(), sorted_anchors.end(),
+              [](const Anchor& a, const Anchor& b) {
+                  if (a.path_id != b.path_id) return a.path_id < b.path_id;
+                  if (a.ref_coord != b.ref_coord) return a.ref_coord < b.ref_coord;
+                  return a.query_pos < b.query_pos;
+              });
+
+    const std::size_t n = sorted_anchors.size();
+    if (n == 0) {
+        out << "read_id\tread_length\tpath_name\tanchor_idx\tquery_pos\tref_coord\tlength\t"
+            << "in_best_chain\tchain_rank\tdp_score\n";
+        out.close();
+        return;
+    }
+
+    // DP (same as dumpPathChainsToFile)
+    const double anchor_weight = clusterer_config.dp_anchor_weight;
+    const double gap_penalty = clusterer_config.dp_gap_penalty;
+    const double diag_penalty = clusterer_config.dp_diag_penalty;
+    const double overlap_penalty = clusterer_config.dp_overlap_penalty;
+    const std::size_t max_dist = clusterer_config.dp_max_dist;
+    const std::size_t max_diag_dev = clusterer_config.dp_max_diag_dev;
+    const std::size_t max_skip = clusterer_config.dp_max_skip;
+
+    auto anchor_score = [anchor_weight](const Anchor& a) {
+        return static_cast<double>(a.length) * anchor_weight;
+    };
+    auto can_chain = [max_dist, max_diag_dev](const Anchor& j, const Anchor& i) {
+        if (i.path_id != j.path_id) return false;
+        if (i.query_pos <= j.query_pos) return false;
+        std::int64_t delta_ref = i.ref_coord - j.ref_coord;
+        std::int64_t delta_query = static_cast<std::int64_t>(i.query_pos) -
+                                   static_cast<std::int64_t>(j.query_pos);
+        if (delta_ref < 0 || delta_query < 0) return false;
+        if (static_cast<std::size_t>(delta_ref) > max_dist ||
+            static_cast<std::size_t>(delta_query) > max_dist) return false;
+        std::int64_t diag_dev = std::abs(delta_ref - delta_query);
+        if (static_cast<std::size_t>(diag_dev) > max_diag_dev) return false;
+        return true;
+    };
+    auto gap_cost = [gap_penalty, diag_penalty, overlap_penalty](const Anchor& j, const Anchor& i) {
+        std::int64_t j_ref_end = j.ref_coord + static_cast<std::int64_t>(j.length);
+        std::int64_t j_query_end = static_cast<std::int64_t>(j.query_pos + j.length);
+        std::int64_t ref_gap = i.ref_coord - j_ref_end;
+        std::int64_t query_gap = static_cast<std::int64_t>(i.query_pos) - j_query_end;
+        double avg_gap = (std::max<std::int64_t>(0, ref_gap) + std::max<std::int64_t>(0, query_gap)) / 2.0;
+        double cost = avg_gap * gap_penalty;
+        std::int64_t delta_ref = i.ref_coord - j.ref_coord;
+        std::int64_t delta_query = static_cast<std::int64_t>(i.query_pos) - static_cast<std::int64_t>(j.query_pos);
+        cost += std::abs(delta_ref - delta_query) * diag_penalty;
+        if (ref_gap < 0 || query_gap < 0) {
+            double avg_overlap = (std::abs(std::min<std::int64_t>(0, ref_gap)) +
+                                  std::abs(std::min<std::int64_t>(0, query_gap))) / 2.0;
+            cost += avg_overlap * overlap_penalty;
+        }
+        return cost;
+    };
+
+    std::vector<double> dp(n, 0.0);
+    std::vector<int> pred(n, -1);
+
+    for (std::size_t i = 0; i < n; ++i) {
+        const auto& anchor_i = sorted_anchors[i];
+        double best_score = anchor_score(anchor_i);
+        int best_pred = -1;
+        std::size_t num_skipped = 0;
+        for (std::size_t j = i; j > 0 && num_skipped < max_skip;) {
+            --j;
+            const auto& anchor_j = sorted_anchors[j];
+            if (anchor_j.path_id != anchor_i.path_id) break;
+            if (anchor_i.ref_coord - anchor_j.ref_coord > static_cast<std::int64_t>(max_dist)) break;
+            if (!can_chain(anchor_j, anchor_i)) { ++num_skipped; continue; }
+            num_skipped = 0;
+            double cost = gap_cost(anchor_j, anchor_i);
+            std::int64_t dq = static_cast<std::int64_t>(anchor_i.query_pos) -
+                              static_cast<std::int64_t>(anchor_j.query_pos);
+            std::int64_t dr = anchor_i.ref_coord - anchor_j.ref_coord;
+            double match_bonus = std::min({
+                static_cast<double>(anchor_i.length) * anchor_weight,
+                static_cast<double>(std::max<std::int64_t>(0, dq)),
+                static_cast<double>(std::max<std::int64_t>(0, dr))
+            });
+            double score = dp[j] + match_bonus - cost;
+            if (score > best_score) { best_score = score; best_pred = static_cast<int>(j); }
+        }
+        dp[i] = best_score;
+        pred[i] = best_pred;
+    }
+
+    // Find best chain per path and mark chain membership
+    std::unordered_map<std::size_t, std::unordered_set<std::size_t>> best_chain_members;
+    std::unordered_map<std::size_t, double> best_path_score;
+
+    // Find max dp per path
+    std::unordered_map<std::size_t, std::size_t> best_end_per_path;
+    for (std::size_t i = 0; i < n; ++i) {
+        std::size_t pid = sorted_anchors[i].path_id;
+        if (dp[i] > best_path_score[pid]) {
+            best_path_score[pid] = dp[i];
+            best_end_per_path[pid] = i;
+        }
+    }
+    // Backtrack and record chain members
+    for (auto& [pid, end_idx] : best_end_per_path) {
+        int cur = static_cast<int>(end_idx);
+        while (cur != -1) {
+            best_chain_members[pid].insert(static_cast<std::size_t>(cur));
+            cur = pred[cur];
+        }
+    }
+
+    // Rank paths by score
+    std::vector<std::pair<double, std::size_t>> scored_paths;
+    for (auto& [pid, score] : best_path_score) {
+        scored_paths.emplace_back(score, pid);
+    }
+    std::sort(scored_paths.begin(), scored_paths.end(), std::greater<>());
+    std::unordered_map<std::size_t, std::size_t> path_rank;
+    for (std::size_t r = 0; r < scored_paths.size(); ++r) {
+        path_rank[scored_paths[r].second] = r + 1;
+    }
+
+    // Write header
+    out << "read_id\tread_length\tpath_name\tpath_rank\tanchor_idx\tquery_pos\tref_coord\t"
+        << "length\tin_best_chain\tdp_score\tnode_id\tnode_offset\n";
+
+    // Write all anchors, grouped by path
+    std::size_t current_path = sorted_anchors[0].path_id;
+    std::size_t anchor_in_path = 0;
+    for (std::size_t i = 0; i < n; ++i) {
+        const auto& a = sorted_anchors[i];
+        if (a.path_id != current_path) {
+            current_path = a.path_id;
+            anchor_in_path = 0;
+        }
+        std::string path_name = "path" + std::to_string(a.path_id);
+        if (paths && a.path_id < paths->size()) {
+            path_name = (*paths)[a.path_id].name;
+        }
+        bool in_chain = best_chain_members.count(a.path_id) &&
+                        best_chain_members[a.path_id].count(i);
+        std::size_t rank = path_rank.count(a.path_id) ? path_rank[a.path_id] : 0;
+
+        out << read_id << "\t" << read_length << "\t" << path_name << "\t"
+            << rank << "\t" << anchor_in_path << "\t"
+            << a.query_pos << "\t" << a.ref_coord << "\t" << a.length << "\t"
+            << (in_chain ? 1 : 0) << "\t"
+            << std::fixed << std::setprecision(2) << dp[i] << "\t"
+            << a.node_id << "\t" << a.node_offset << "\n";
+        ++anchor_in_path;
     }
 
     out.close();
@@ -828,6 +1015,28 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
         std::string path_chains_file = config_.dump_path_chains_dir + "/read_" + std::to_string(dump_num) + "_path_chains.tsv";
         dumpPathChainsToFile(path_chains_file.c_str(), read.read_id, read.raw_signal.size(),
                              anchors, config_.graph_store, config_.clusterer_config);
+    }
+
+    // Dump per-anchor detail for selected reads
+    if (!config_.dump_anchor_detail_dir.empty() && !config_.dump_anchor_reads.empty()) {
+        // Check if this read matches any of the filter prefixes
+        bool should_dump = false;
+        for (const auto& prefix : config_.dump_anchor_reads) {
+            if (read.read_id.find(prefix) != std::string::npos) {
+                should_dump = true;
+                break;
+            }
+        }
+        if (should_dump) {
+            // Use a sanitized filename from read_id
+            std::string safe_id = read.read_id;
+            for (auto& c : safe_id) {
+                if (c == '!' || c == '/' || c == '#' || c == ' ') c = '_';
+            }
+            std::string anchor_file = config_.dump_anchor_detail_dir + "/" + safe_id + "_anchors.tsv";
+            dumpAnchorDetailToFile(anchor_file.c_str(), read.read_id, read.raw_signal.size(),
+                                   anchors, config_.graph_store, config_.clusterer_config);
+        }
     }
 }
 

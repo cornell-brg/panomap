@@ -5,6 +5,8 @@
 #include <cstddef>
 #include <iosfwd>
 #include <memory>
+#include <string>
+#include <unordered_set>
 #include <vector>
 
 #include "concurrency/executor.hpp"
@@ -66,6 +68,8 @@ struct BatchMapperConfig {
     std::string dump_hit_stats_dir{};    // Dump seed hit statistics per read
     std::string dump_path_chains_dir{};  // Dump best chain per path (diagnostic)
     std::string dump_read_seeds_dir{};   // Dump all read seeds (including no-hit)
+    std::string dump_anchor_detail_dir{};  // Per-anchor detail dump for selected reads
+    std::unordered_set<std::string> dump_anchor_reads{};  // Read ID prefixes to dump anchors for
 
     // Anchor merging (disable for debugging/heatmap comparison)
     bool enable_anchor_merge{true};

@@ -52,7 +52,8 @@ int handle_index(const std::vector<std::string>& args) {
         {'\0', "seed-k", true, "Seed k-mer size (default: 6)"},
         {'\0', "seed-w", true, "Minimizer window size (default: 5, only with --seed-backend minimizer)"},
         {'\0', "seed-stride", true, "Seed stride (default: 1)"},
-        {'\0', "seed-filter", true, "Keep least frequent seed fraction (default: 1.0)"},
+        {'\0', "seed-filter", true, "Seed frequency filter percentile (0.0-1.0, default: 1.0)"},
+        {'\0', "seed-subsample", true, "Subsample cap percentile for filtered seeds (0.0-1.0, default: 0.55)"},
         {'\0', "seed-mode", true, "Seeding mode: node, path (default)"},
         {'\0', "", false, "\nIndexer Options:"},
         {'\0', "indexer-backend", true, "Indexer backend: node-first, path-walk (default)"},
@@ -150,6 +151,9 @@ int handle_index(const std::vector<std::string>& args) {
     const double seed_filter = parsed.values.count("seed-filter")
                                    ? std::stod(parsed.values.at("seed-filter"))
                                    : defaults.seed_filter;
+    const double seed_subsample = parsed.values.count("seed-subsample")
+                                      ? std::stod(parsed.values.at("seed-subsample"))
+                                      : defaults.seed_subsample;
     const std::string seed_mode = parsed.values.count("seed-mode")
                                       ? parsed.values.at("seed-mode")
                                       : defaults.seed_mode;
@@ -164,7 +168,8 @@ int handle_index(const std::vector<std::string>& args) {
     LOG_INFO("model: " + model->name() + " (k=" + std::to_string(pore_k) + ")");
     LOG_INFO("seeds: backend=" + seed_backend + ", k=" + std::to_string(seed_k) +
              ", w=" + std::to_string(seed_w) + ", stride=" + std::to_string(seed_stride) +
-             ", filter=" + std::to_string(seed_filter) + ", mode=" + seed_mode);
+             ", filter=" + std::to_string(seed_filter) +
+             ", subsample=" + std::to_string(seed_subsample) + ", mode=" + seed_mode);
     LOG_INFO("output: " + output_base);
 
     // -------------------------------------------------------------------------
@@ -177,6 +182,7 @@ int handle_index(const std::vector<std::string>& args) {
     index_config.seed_window = seed_w;
     index_config.seed_stride = seed_stride;
     index_config.seed_filter = seed_filter;
+    index_config.seed_subsample = seed_subsample;
     index_config.seed_mode = seed_mode;
     index_config.fuzzy_quantizer = "rh2";
     if (parsed.values.count("indexer-backend")) {

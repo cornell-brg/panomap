@@ -99,6 +99,7 @@ IndexPipelineResult run_index_pipeline(
         pwi_config.seed_k = config.seed_k;
         pwi_config.seed_stride = config.seed_stride;
         pwi_config.seed_filter = config.seed_filter;
+        pwi_config.seed_subsample = config.seed_subsample;
         pwi_config.dump_norm_stats_path = config.dump_norm_stats_path;
         pwi_config.executor = config.executor;
 

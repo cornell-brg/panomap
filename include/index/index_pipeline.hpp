@@ -85,6 +85,13 @@ struct IndexPipelineConfig {
     // - Default: 0.9 (configurable via CLI: --seed-filter)
     double seed_filter{1.0};
 
+    // Subsample cap percentile for seeds above the filter threshold.
+    // - When seed_filter < 1.0, seeds above the threshold are subsampled
+    //   down to the frequency at this percentile (instead of hard-dropped).
+    // - Range: 0.0 to 1.0
+    // - Default: 0.55 (configurable via CLI: --seed-subsample)
+    double seed_subsample{0.55};
+
     // -------------------------------------------------------------------------
     // Debug Options
     // -------------------------------------------------------------------------
