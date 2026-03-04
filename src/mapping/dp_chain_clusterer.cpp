@@ -10,6 +10,8 @@
 #include <unordered_set>
 #include <vector>
 
+#include "util/timing.hpp"
+
 namespace piru::mapping {
 
 namespace {
@@ -259,6 +261,8 @@ ClusterSummary DPChainClusterer::cluster(const std::vector<Anchor>& anchors) con
         pred[i] = best_pred;
     }
 
+    PIRU_PROFILE_START(true, "dp-chain-extraction");
+
     // Step 5: Multi-chain extraction
     // Extract up to max_chains chains, each with a unique endpoint.
     // Chains can share predecessors (common prefixes).
@@ -345,6 +349,8 @@ ClusterSummary DPChainClusterer::cluster(const std::vector<Anchor>& anchors) con
         summary.clusters.push_back(std::move(group));
         ++chain_id;
     }
+
+    PIRU_PROFILE_STOP(true, "dp-chain-extraction");
 
     // Post-processing: merge overlapping chains on same path
     if (config_.merge_chains && summary.clusters.size() > 1) {

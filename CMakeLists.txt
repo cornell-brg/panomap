@@ -61,6 +61,7 @@ add_executable(piru
     src/commands/index.cpp
     src/commands/map.cpp
     src/commands/eval.cpp
+    src/commands/annotate.cpp
     src/commands/mt_test.cpp
     src/concurrency/executor.cpp
     src/io/graphs/graph_loader_factory.cpp
@@ -76,6 +77,7 @@ add_executable(piru
     src/io/reads/read_provider_factory.cpp
     src/io/reads/pod5_provider.cpp
     src/io/reads/slow5_provider.cpp
+    src/io/regions/bed_parser.cpp
     src/io/models/builtin_models.cpp
     src/io/index/simple_serialization.cpp
     src/cli/parse.cpp
