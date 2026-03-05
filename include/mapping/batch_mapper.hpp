@@ -115,7 +115,7 @@ struct PipelineComponents {
     const index::GraphStore* graph_store{nullptr};  // non-owning; loaded index
     SeedLookup lookup{nullptr, nullptr, 0};
     AnchorExpanderPtr expander;  // Expands SeedHits to Anchors
-    SeedClustererPtr clusterer;
+    AnchorClustererPtr clusterer;
     std::unique_ptr<ResultFormatter> result_formatter;  // Formats map results to PAF/GAF
 };
 

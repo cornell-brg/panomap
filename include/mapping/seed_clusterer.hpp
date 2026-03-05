@@ -11,11 +11,6 @@
 
 #include "index/seed_store.hpp"
 
-namespace piru::index {
-struct LinearCoordinate;
-class GraphStore;
-}  // namespace piru::index
-
 namespace piru::mapping {
 
 struct Anchor;  // Forward declaration (defined in anchor.hpp)
@@ -44,39 +39,29 @@ struct SeedAnchor {
     std::int64_t ref_coord{0};  // linear position on reference path
 };
 
-// Group of anchors from a single cluster (for probe-based alignment)
+// Group of anchors from a single cluster.
 struct ClusterGroup {
-    double cluster_score{0.0};        // score of this cluster
-    std::vector<SeedAnchor> anchors;  // anchors/probes from this cluster
+    double cluster_score{0.0};
+    std::vector<SeedAnchor> anchors;
 };
 
 struct ClusterSummary {
-    double score{0.0};                     // overall best score
-    std::vector<SeedAnchor> anchors;       // flat list (for FSE) - selected/chained anchors
-    std::vector<ClusterGroup> clusters;    // grouped by cluster (for Probe)
-    std::size_t expanded_anchor_count{0};  // total anchors after expansion (before clustering)
+    double score{0.0};
+    std::vector<SeedAnchor> anchors;       // flat list of selected/chained anchors
+    std::vector<ClusterGroup> clusters;    // grouped by cluster
+    std::size_t expanded_anchor_count{0};  // total anchors before clustering
 };
 
 struct SeedClustererConfig {
-    std::string backend{"fse"};         // "fse", "probe", "dp-chain"
+    std::string backend{"dp-chain"};
     std::size_t max_hash_frequency{0};  // from SeedStore metadata
 
-    // Clustering parameters (FSE/legacy)
-    int diagonal_cutoff{50};          // Max diagonal gap to stay in same cluster
-    std::size_t min_cluster_size{2};  // Minimum seeds per cluster
-    int max_clusters{-1};             // Max clusters to return (-1 = unlimited)
-
-    // Probe parameters (legacy)
-    std::size_t max_probes_per_cluster{10};  // Max probe seeds per cluster
-    std::size_t probe_stride{0};             // Override stride (0 = auto-compute from query length)
-
-    // DP chain parameters (used when backend="dp-chain")
-    // Tuned for noisy signals (DEV027), original defaults in comments
+    // DP chain parameters (tuned for noisy signals, DEV027)
     std::size_t dp_max_dist{500};        // Max query/ref distance for chaining (banding)
-    std::size_t dp_max_diag_dev{500};    // Max diagonal deviation |Δr - Δq|
-    double dp_gap_penalty{0.02};         // Penalty per unit gap distance (was: 0.1)
-    double dp_diag_penalty{0.05};        // Penalty per unit diagonal deviation (was: 0.5)
-    double dp_overlap_penalty{0.90};     // Penalty per unit overlap (was: 2.0)
+    std::size_t dp_max_diag_dev{500};    // Max diagonal deviation |dr - dq|
+    double dp_gap_penalty{0.02};         // Penalty per unit gap distance
+    double dp_diag_penalty{0.05};        // Penalty per unit diagonal deviation
+    double dp_overlap_penalty{0.90};     // Penalty per unit overlap
     double dp_anchor_weight{1.0};        // Weight per anchor length
     std::size_t dp_min_chain_score{12};  // Min score to report a chain
     std::size_t dp_max_chains{10};       // Max number of chains to extract
@@ -85,25 +70,8 @@ struct SeedClustererConfig {
 };
 
 // Abstract interface for anchor clustering/chaining.
-//
 // Clusterers operate on anchors (linear reference space) and select
-// an optimal subset for alignment extension. All clusterers take the same input
-// (std::vector<Anchor>) enabling uniform pipeline architecture.
-//
-// Different implementations:
-// - FSE/Probe: Diagonal clustering (group by path_id, cluster by ref_coord - query_pos)
-// - DPChain: Colinear chaining via dynamic programming
-// - Noop: Pass-through for debugging
-//
-// When to use:
-// - FSE/Probe: Superbubble pipeline, fast O(n log n) clustering, simple variation graphs
-// - DPChain: Path-walk pipeline, complex graphs with cycles, haplotype-aware chaining
-//
-// Recommended pairings (validated by BatchMapper):
-// - Superbubble linearization + FSE/Probe clustering
-// - Path-walk linearization + DPChain clustering
-//
-// Mixing pipelines is allowed but issues a warning (e.g., path-walk + FSE).
+// an optimal subset for alignment extension.
 class AnchorClusterer {
 public:
     virtual ~AnchorClusterer() = default;
@@ -119,23 +87,6 @@ public:
 using AnchorClustererPtr = std::unique_ptr<AnchorClusterer>;
 
 // Factory function for creating anchor clusterers.
-// Note: Expansion is now separate, so linearization_coords is NOT needed here.
-// - DiagonalClusterer (FSE/Probe): Operates on anchors directly
-// - DPChainClusterer: Operates on anchors directly
-// - graph_store parameter kept for potential future use
-AnchorClustererPtr make_anchor_clusterer(const SeedClustererConfig& config,
-                                         const index::GraphStore* graph_store = nullptr);
-
-// Legacy alias for backward compatibility (deprecated, will be removed in future)
-using SeedClusterer = AnchorClusterer;
-using SeedClustererPtr = AnchorClustererPtr;
-inline AnchorClustererPtr make_seed_clusterer(
-    const SeedClustererConfig& config,
-    const std::vector<std::vector<index::LinearCoordinate>>* linearization_coords = nullptr,
-    const index::GraphStore* graph_store = nullptr) {
-    // Ignore linearization_coords - expansion is now separate
-    (void)linearization_coords;
-    return make_anchor_clusterer(config, graph_store);
-}
+AnchorClustererPtr make_anchor_clusterer(const SeedClustererConfig& config);
 
 }  // namespace piru::mapping

@@ -706,27 +706,13 @@ PipelineComponents BatchMapper::create_components() const {
         comps.expander = std::make_unique<SuperbubbleExpander>(config_.graph_store);
     }
 
-    comps.clusterer = make_anchor_clusterer(config_.clusterer_config, config_.graph_store);
+    comps.clusterer = make_anchor_clusterer(config_.clusterer_config);
     const std::size_t freq_threshold = comps.seed_store->frequency_threshold();
     // Limit the lookup helper to what the SeedStore exposes.
     comps.lookup = SeedLookup(comps.seed_store, comps.graph_store, freq_threshold);
 
-    // Pipeline validation warnings
-    const bool is_path_walk = (config_.linearization_coords != nullptr);
-    const std::string clusterer_name = comps.clusterer->name();
-    const bool is_dp_chain = (clusterer_name == "dp-chain");
-
-    if (is_path_walk && !is_dp_chain) {
-        LOG_WARN("Using path-walk linearization with '" + clusterer_name +
-                 "' clusterer. Consider --clusterer dp-chain for optimal path-walk support.");
-    }
-    if (!is_path_walk && is_dp_chain) {
-        LOG_WARN("Using DP chaining with superbubble linearization. " +
-                 std::string("DP chaining works best with path-walk linearization."));
-    }
-
     // Log pipeline configuration
-    LOG_DEBUG("Pipeline: " + comps.expander->name() + " expansion + " + clusterer_name +
+    LOG_DEBUG("Pipeline: " + comps.expander->name() + " expansion + " + comps.clusterer->name() +
               " clustering");
 
     // Create result formatter if we have a graph store (needed for result output)

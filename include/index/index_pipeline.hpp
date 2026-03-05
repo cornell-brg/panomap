@@ -58,7 +58,7 @@ struct IndexPipelineConfig {
     std::size_t minimizer_window{5};      // minimizer window (w=1 -> rolling k-mer)
     std::size_t seed_k{6};                // tokens per seed hash
     std::size_t seed_stride{1};           // spacing between seeds (1 = dense)
-    double seed_freq_cutoff{0.9};         // keep bottom N% by frequency (0.9 = drop top 10%)
+    double seed_freq_cutoff{0.9};         // keep bottom N% by frequency (0.9 = drop top 10% to cap)
     double seed_freq_cap{0.25};           // subsample cap for seeds above cutoff
 
     /* Debug */

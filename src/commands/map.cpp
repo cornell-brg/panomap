@@ -75,7 +75,7 @@ int handle_map(const std::vector<std::string>& args) {
         {'\0', "", false, "\nMapping Options:"},
         {'\0', "seed-freq-cap", true,
          "Skip seeds above this frequency percentile at lookup (0.0-1.0, default: none)"},
-        {'\0', "clusterer", true, "Clusterer backend: dp-chain (default), fse, probe"},
+        {'\0', "clusterer", true, "Clusterer backend (default: dp-chain)"},
         {'\0', "chain-max-dist", true,
          "DP chain: max query/ref distance between anchors (default: 500)"},
         {'\0', "chain-max-diag-dev", true, "DP chain: max diagonal deviation (default: 500)"},
