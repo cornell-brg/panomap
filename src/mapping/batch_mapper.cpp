@@ -6,7 +6,6 @@
 #include <atomic>
 #include <cstdlib>
 #include <fstream>
-#include <iomanip>
 #include <iostream>
 #include <ostream>
 #include <string>
@@ -223,401 +222,6 @@ void dumpHitStatsToFile(const char* filename, const std::string& read_id,
     out.close();
 }
 
-// Dump best chain per path for diagnostic analysis.
-// Runs DP chaining on anchors and extracts best chain per path by finding
-// max dp[i] for each path_id and backtracking.
-void dumpPathChainsToFile(const char* filename, const std::string& read_id, std::size_t read_length,
-                          const std::vector<Anchor>& anchors, const index::GraphStore* graph_store,
-                          const SeedClustererConfig& clusterer_config) {
-    std::ofstream out(filename);
-    if (!out.is_open()) {
-        LOG_WARN("Failed to open path chains file: " + std::string(filename));
-        return;
-    }
-
-    // Get path names if available
-    const auto* adj_store = dynamic_cast<const index::AdjListGraphStore*>(graph_store);
-    const std::vector<index::AlnPath>* paths = nullptr;
-    std::size_t total_paths = 0;
-    if (adj_store) {
-        paths = &adj_store->graph().paths();
-        total_paths = paths->size();
-    }
-
-    // Write header
-    out << "read_id\tpath_id\tpath_name\tchain_score\tnum_anchors\t"
-        << "query_start\tquery_end\tquery_span\tref_start\tref_end\tref_span\n";
-
-    if (anchors.empty()) {
-        // No anchors - output zeros for all paths
-        for (std::size_t pid = 0; pid < total_paths; ++pid) {
-            std::string path_name = paths ? (*paths)[pid].name : "path" + std::to_string(pid);
-            out << read_id << "\t" << pid << "\t" << path_name << "\t"
-                << "0\t0\t0\t0\t0.0\t0\t0\t0\n";
-        }
-        out.close();
-        return;
-    }
-
-    // Sort anchors by (path_id, ref_coord, query_pos) - same as DPChainClusterer
-    std::vector<Anchor> sorted_anchors = anchors;
-    std::sort(sorted_anchors.begin(), sorted_anchors.end(), [](const Anchor& a, const Anchor& b) {
-        if (a.path_id != b.path_id) return a.path_id < b.path_id;
-        if (a.ref_coord != b.ref_coord) return a.ref_coord < b.ref_coord;
-        return a.query_pos < b.query_pos;
-    });
-
-    const std::size_t n = sorted_anchors.size();
-
-    // DP arrays
-    std::vector<double> dp(n, 0.0);
-    std::vector<int> pred(n, -1);
-
-    // DP parameters from config
-    const double anchor_weight = clusterer_config.dp_anchor_weight;
-    const double gap_penalty = clusterer_config.dp_gap_penalty;
-    const double diag_penalty = clusterer_config.dp_diag_penalty;
-    const double overlap_penalty = clusterer_config.dp_overlap_penalty;
-    const std::size_t max_dist = clusterer_config.dp_max_dist;
-    const std::size_t max_diag_dev = clusterer_config.dp_max_diag_dev;
-    const std::size_t max_skip = clusterer_config.dp_max_skip;
-
-    // Lambda: anchor score
-    auto anchor_score = [anchor_weight](const Anchor& a) {
-        return static_cast<double>(a.length) * anchor_weight;
-    };
-
-    // Lambda: can chain j -> i (query must strictly advance)
-    auto can_chain = [max_dist, max_diag_dev](const Anchor& j, const Anchor& i) {
-        if (i.path_id != j.path_id) return false;
-        if (i.query_pos <= j.query_pos) return false;
-        std::int64_t delta_ref = i.ref_coord - j.ref_coord;
-        std::int64_t delta_query =
-            static_cast<std::int64_t>(i.query_pos) - static_cast<std::int64_t>(j.query_pos);
-        if (delta_ref < 0 || delta_query < 0) return false;
-        if (static_cast<std::size_t>(delta_ref) > max_dist ||
-            static_cast<std::size_t>(delta_query) > max_dist)
-            return false;
-        std::int64_t diag_dev = std::abs(delta_ref - delta_query);
-        if (static_cast<std::size_t>(diag_dev) > max_diag_dev) return false;
-        return true;
-    };
-
-    // Lambda: gap cost
-    auto gap_cost = [gap_penalty, diag_penalty, overlap_penalty](const Anchor& j, const Anchor& i) {
-        std::int64_t j_ref_end = j.ref_coord + static_cast<std::int64_t>(j.length);
-        std::int64_t j_query_end = static_cast<std::int64_t>(j.query_pos + j.length);
-        std::int64_t ref_gap = i.ref_coord - j_ref_end;
-        std::int64_t query_gap = static_cast<std::int64_t>(i.query_pos) - j_query_end;
-        double avg_gap =
-            (std::max<std::int64_t>(0, ref_gap) + std::max<std::int64_t>(0, query_gap)) / 2.0;
-        double cost = avg_gap * gap_penalty;
-        std::int64_t delta_ref = i.ref_coord - j.ref_coord;
-        std::int64_t delta_query =
-            static_cast<std::int64_t>(i.query_pos) - static_cast<std::int64_t>(j.query_pos);
-        cost += std::abs(delta_ref - delta_query) * diag_penalty;
-        if (ref_gap < 0 || query_gap < 0) {
-            double avg_overlap = (std::abs(std::min<std::int64_t>(0, ref_gap)) +
-                                  std::abs(std::min<std::int64_t>(0, query_gap))) /
-                                 2.0;
-            cost += avg_overlap * overlap_penalty;
-        }
-        return cost;
-    };
-
-    // DP loop - compute best score for each anchor
-    for (std::size_t i = 0; i < n; ++i) {
-        const auto& anchor_i = sorted_anchors[i];
-        double best_score = anchor_score(anchor_i);
-        int best_pred = -1;
-
-        std::size_t num_skipped = 0;
-        for (std::size_t j = i; j > 0 && num_skipped < max_skip;) {
-            --j;
-            const auto& anchor_j = sorted_anchors[j];
-            if (anchor_j.path_id != anchor_i.path_id) break;
-            if (anchor_i.ref_coord - anchor_j.ref_coord > static_cast<std::int64_t>(max_dist))
-                break;
-            if (!can_chain(anchor_j, anchor_i)) {
-                ++num_skipped;
-                continue;
-            }
-            num_skipped = 0;
-            double cost = gap_cost(anchor_j, anchor_i);
-            // minimap2-style matching bonus: min(Δq, Δr, anchor_length)
-            // Penalizes drift -- only get credit for the shorter advance
-            std::int64_t dq = static_cast<std::int64_t>(anchor_i.query_pos) -
-                              static_cast<std::int64_t>(anchor_j.query_pos);
-            std::int64_t dr = anchor_i.ref_coord - anchor_j.ref_coord;
-            double match_bonus = std::min({static_cast<double>(anchor_i.length) * anchor_weight,
-                                           static_cast<double>(std::max<std::int64_t>(0, dq)),
-                                           static_cast<double>(std::max<std::int64_t>(0, dr))});
-            double score = dp[j] + match_bonus - cost;
-            if (score > best_score) {
-                best_score = score;
-                best_pred = static_cast<int>(j);
-            }
-        }
-        dp[i] = best_score;
-        pred[i] = best_pred;
-    }
-
-    // For each path, find anchor with max dp score and backtrack
-    struct PathChainInfo {
-        double score{0.0};
-        std::vector<std::size_t> chain_indices;
-    };
-    std::unordered_map<std::size_t, PathChainInfo> best_per_path;
-
-    // Find max dp score per path
-    for (std::size_t i = 0; i < n; ++i) {
-        std::size_t pid = sorted_anchors[i].path_id;
-        auto& info = best_per_path[pid];
-        if (dp[i] > info.score) {
-            info.score = dp[i];
-            // Backtrack to get chain
-            info.chain_indices.clear();
-            int cur = static_cast<int>(i);
-            while (cur != -1) {
-                info.chain_indices.push_back(static_cast<std::size_t>(cur));
-                cur = pred[cur];
-            }
-            std::reverse(info.chain_indices.begin(), info.chain_indices.end());
-        }
-    }
-
-    // Collect all paths with their scores
-    std::vector<std::pair<double, std::size_t>> scored_paths;
-    for (std::size_t pid = 0; pid < total_paths; ++pid) {
-        auto it = best_per_path.find(pid);
-        double path_score = (it != best_per_path.end()) ? it->second.score : 0.0;
-        scored_paths.emplace_back(path_score, pid);
-    }
-    // Sort by score descending
-    std::sort(scored_paths.begin(), scored_paths.end(), std::greater<>());
-
-    // Write one row per path
-    for (const auto& [score, path_id] : scored_paths) {
-        std::string path_name = "path" + std::to_string(path_id);
-        if (paths && path_id < paths->size()) {
-            path_name = (*paths)[path_id].name;
-        }
-
-        auto it = best_per_path.find(path_id);
-        if (it == best_per_path.end() || it->second.chain_indices.empty()) {
-            out << read_id << "\t" << path_id << "\t" << path_name << "\t"
-                << "0\t0\t0\t0\t0.0\t0\t0\t0\n";
-            continue;
-        }
-
-        const auto& chain_indices = it->second.chain_indices;
-
-        // Compute query/ref spans from chain anchors
-        std::size_t query_min = sorted_anchors[chain_indices.front()].query_pos;
-        std::size_t query_max = query_min;
-        std::int64_t ref_min = sorted_anchors[chain_indices.front()].ref_coord;
-        std::int64_t ref_max = ref_min;
-
-        for (std::size_t idx : chain_indices) {
-            const auto& a = sorted_anchors[idx];
-            query_min = std::min(query_min, a.query_pos);
-            query_max = std::max(query_max, a.query_pos + a.length);
-            ref_min = std::min(ref_min, a.ref_coord);
-            ref_max = std::max(ref_max, a.ref_coord + static_cast<std::int64_t>(a.length));
-        }
-
-        std::size_t query_span = query_max - query_min;
-
-        out << read_id << "\t" << path_id << "\t" << path_name << "\t" << std::fixed
-            << std::setprecision(2) << it->second.score << "\t" << chain_indices.size() << "\t"
-            << query_min << "\t" << query_max << "\t" << query_span << "\t" << ref_min << "\t"
-            << ref_max << "\t" << (ref_max - ref_min) << "\n";
-    }
-
-    out.close();
-}
-
-// Dump per-anchor detail for selected reads.
-// Writes ALL anchors grouped by path, with chain membership indicated.
-void dumpAnchorDetailToFile(const char* filename, const std::string& read_id,
-                            std::size_t read_length, const std::vector<Anchor>& anchors,
-                            const index::GraphStore* graph_store,
-                            const SeedClustererConfig& clusterer_config) {
-    std::ofstream out(filename);
-    if (!out.is_open()) {
-        LOG_WARN("Failed to open anchor detail file: " + std::string(filename));
-        return;
-    }
-
-    const auto* adj_store = dynamic_cast<const index::AdjListGraphStore*>(graph_store);
-    const std::vector<index::AlnPath>* paths = nullptr;
-    if (adj_store) {
-        paths = &adj_store->graph().paths();
-    }
-
-    // Sort anchors same as DP chainer
-    std::vector<Anchor> sorted_anchors = anchors;
-    std::sort(sorted_anchors.begin(), sorted_anchors.end(), [](const Anchor& a, const Anchor& b) {
-        if (a.path_id != b.path_id) return a.path_id < b.path_id;
-        if (a.ref_coord != b.ref_coord) return a.ref_coord < b.ref_coord;
-        return a.query_pos < b.query_pos;
-    });
-
-    const std::size_t n = sorted_anchors.size();
-    if (n == 0) {
-        out << "read_id\tread_length\tpath_name\tanchor_idx\tquery_pos\tref_coord\tlength\t"
-            << "in_best_chain\tchain_rank\tdp_score\n";
-        out.close();
-        return;
-    }
-
-    // DP (same as dumpPathChainsToFile)
-    const double anchor_weight = clusterer_config.dp_anchor_weight;
-    const double gap_penalty = clusterer_config.dp_gap_penalty;
-    const double diag_penalty = clusterer_config.dp_diag_penalty;
-    const double overlap_penalty = clusterer_config.dp_overlap_penalty;
-    const std::size_t max_dist = clusterer_config.dp_max_dist;
-    const std::size_t max_diag_dev = clusterer_config.dp_max_diag_dev;
-    const std::size_t max_skip = clusterer_config.dp_max_skip;
-
-    auto anchor_score = [anchor_weight](const Anchor& a) {
-        return static_cast<double>(a.length) * anchor_weight;
-    };
-    auto can_chain = [max_dist, max_diag_dev](const Anchor& j, const Anchor& i) {
-        if (i.path_id != j.path_id) return false;
-        if (i.query_pos <= j.query_pos) return false;
-        std::int64_t delta_ref = i.ref_coord - j.ref_coord;
-        std::int64_t delta_query =
-            static_cast<std::int64_t>(i.query_pos) - static_cast<std::int64_t>(j.query_pos);
-        if (delta_ref < 0 || delta_query < 0) return false;
-        if (static_cast<std::size_t>(delta_ref) > max_dist ||
-            static_cast<std::size_t>(delta_query) > max_dist)
-            return false;
-        std::int64_t diag_dev = std::abs(delta_ref - delta_query);
-        if (static_cast<std::size_t>(diag_dev) > max_diag_dev) return false;
-        return true;
-    };
-    auto gap_cost = [gap_penalty, diag_penalty, overlap_penalty](const Anchor& j, const Anchor& i) {
-        std::int64_t j_ref_end = j.ref_coord + static_cast<std::int64_t>(j.length);
-        std::int64_t j_query_end = static_cast<std::int64_t>(j.query_pos + j.length);
-        std::int64_t ref_gap = i.ref_coord - j_ref_end;
-        std::int64_t query_gap = static_cast<std::int64_t>(i.query_pos) - j_query_end;
-        double avg_gap =
-            (std::max<std::int64_t>(0, ref_gap) + std::max<std::int64_t>(0, query_gap)) / 2.0;
-        double cost = avg_gap * gap_penalty;
-        std::int64_t delta_ref = i.ref_coord - j.ref_coord;
-        std::int64_t delta_query =
-            static_cast<std::int64_t>(i.query_pos) - static_cast<std::int64_t>(j.query_pos);
-        cost += std::abs(delta_ref - delta_query) * diag_penalty;
-        if (ref_gap < 0 || query_gap < 0) {
-            double avg_overlap = (std::abs(std::min<std::int64_t>(0, ref_gap)) +
-                                  std::abs(std::min<std::int64_t>(0, query_gap))) /
-                                 2.0;
-            cost += avg_overlap * overlap_penalty;
-        }
-        return cost;
-    };
-
-    std::vector<double> dp(n, 0.0);
-    std::vector<int> pred(n, -1);
-
-    for (std::size_t i = 0; i < n; ++i) {
-        const auto& anchor_i = sorted_anchors[i];
-        double best_score = anchor_score(anchor_i);
-        int best_pred = -1;
-        std::size_t num_skipped = 0;
-        for (std::size_t j = i; j > 0 && num_skipped < max_skip;) {
-            --j;
-            const auto& anchor_j = sorted_anchors[j];
-            if (anchor_j.path_id != anchor_i.path_id) break;
-            if (anchor_i.ref_coord - anchor_j.ref_coord > static_cast<std::int64_t>(max_dist))
-                break;
-            if (!can_chain(anchor_j, anchor_i)) {
-                ++num_skipped;
-                continue;
-            }
-            num_skipped = 0;
-            double cost = gap_cost(anchor_j, anchor_i);
-            std::int64_t dq = static_cast<std::int64_t>(anchor_i.query_pos) -
-                              static_cast<std::int64_t>(anchor_j.query_pos);
-            std::int64_t dr = anchor_i.ref_coord - anchor_j.ref_coord;
-            double match_bonus = std::min({static_cast<double>(anchor_i.length) * anchor_weight,
-                                           static_cast<double>(std::max<std::int64_t>(0, dq)),
-                                           static_cast<double>(std::max<std::int64_t>(0, dr))});
-            double score = dp[j] + match_bonus - cost;
-            if (score > best_score) {
-                best_score = score;
-                best_pred = static_cast<int>(j);
-            }
-        }
-        dp[i] = best_score;
-        pred[i] = best_pred;
-    }
-
-    // Find best chain per path and mark chain membership
-    std::unordered_map<std::size_t, std::unordered_set<std::size_t>> best_chain_members;
-    std::unordered_map<std::size_t, double> best_path_score;
-
-    // Find max dp per path
-    std::unordered_map<std::size_t, std::size_t> best_end_per_path;
-    for (std::size_t i = 0; i < n; ++i) {
-        std::size_t pid = sorted_anchors[i].path_id;
-        if (dp[i] > best_path_score[pid]) {
-            best_path_score[pid] = dp[i];
-            best_end_per_path[pid] = i;
-        }
-    }
-    // Backtrack and record chain members
-    for (auto& [pid, end_idx] : best_end_per_path) {
-        int cur = static_cast<int>(end_idx);
-        while (cur != -1) {
-            best_chain_members[pid].insert(static_cast<std::size_t>(cur));
-            cur = pred[cur];
-        }
-    }
-
-    // Rank paths by score
-    std::vector<std::pair<double, std::size_t>> scored_paths;
-    for (auto& [pid, score] : best_path_score) {
-        scored_paths.emplace_back(score, pid);
-    }
-    std::sort(scored_paths.begin(), scored_paths.end(), std::greater<>());
-    std::unordered_map<std::size_t, std::size_t> path_rank;
-    for (std::size_t r = 0; r < scored_paths.size(); ++r) {
-        path_rank[scored_paths[r].second] = r + 1;
-    }
-
-    // Write header
-    out << "read_id\tread_length\tpath_name\tpath_rank\tanchor_idx\tquery_pos\tref_coord\t"
-        << "length\tin_best_chain\tdp_score\tnode_id\tnode_offset\n";
-
-    // Write all anchors, grouped by path
-    std::size_t current_path = sorted_anchors[0].path_id;
-    std::size_t anchor_in_path = 0;
-    for (std::size_t i = 0; i < n; ++i) {
-        const auto& a = sorted_anchors[i];
-        if (a.path_id != current_path) {
-            current_path = a.path_id;
-            anchor_in_path = 0;
-        }
-        std::string path_name = "path" + std::to_string(a.path_id);
-        if (paths && a.path_id < paths->size()) {
-            path_name = (*paths)[a.path_id].name;
-        }
-        bool in_chain =
-            best_chain_members.count(a.path_id) && best_chain_members[a.path_id].count(i);
-        std::size_t rank = path_rank.count(a.path_id) ? path_rank[a.path_id] : 0;
-
-        out << read_id << "\t" << read_length << "\t" << path_name << "\t" << rank << "\t"
-            << anchor_in_path << "\t" << a.query_pos << "\t" << a.ref_coord << "\t" << a.length
-            << "\t" << (in_chain ? 1 : 0) << "\t" << std::fixed << std::setprecision(2) << dp[i]
-            << "\t" << a.node_id << "\t" << a.node_offset << "\n";
-        ++anchor_in_path;
-    }
-
-    out.close();
-}
-
 }  // namespace
 
 void SeedLookup::lookup(const signal::SeedBuffer& seeds,
@@ -706,14 +310,14 @@ PipelineComponents BatchMapper::create_components() const {
         comps.expander = std::make_unique<SuperbubbleExpander>(config_.graph_store);
     }
 
-    comps.clusterer = make_anchor_clusterer(config_.clusterer_config);
+    comps.chainer = make_chainer(config_.chainer_backend, config_.chainer_parsed);
     const std::size_t freq_threshold = comps.seed_store->frequency_threshold();
     // Limit the lookup helper to what the SeedStore exposes.
     comps.lookup = SeedLookup(comps.seed_store, comps.graph_store, freq_threshold);
 
     // Log pipeline configuration
-    LOG_DEBUG("Pipeline: " + comps.expander->name() + " expansion + " + comps.clusterer->name() +
-              " clustering");
+    LOG_DEBUG("Pipeline: " + comps.expander->name() + " expansion + " + comps.chainer->name() +
+              " chaining");
 
     // Create result formatter if we have a graph store (needed for result output)
     const auto* adj_store = dynamic_cast<const index::AdjListGraphStore*>(config_.graph_store);
@@ -870,18 +474,18 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
         dumpAnchorsToFile(anchor_file.c_str(), anchors, read.read_id, config_.graph_store);
     }
 
-    // Cluster anchors
-    ClusterSummary summary = components_.clusterer->cluster(anchors);
+    // Chain anchors
+    ChainResult chain_result = components_.chainer->chain(anchors);
 
-    // Build unified map result from cluster summary
+    // Build unified map result from chain result
     ReadMapResult& result = batch.map_results[index];
     result.mappings.clear();
-    result.expanded_anchor_count = summary.expanded_anchor_count;
+    result.expanded_anchor_count = chain_result.expanded_anchor_count;
 
-    for (const auto& cluster : summary.clusters) {
+    for (const auto& chain : chain_result.chains) {
         Mapping mapping;
-        mapping.anchors = cluster.anchors;
-        mapping.chain_score = cluster.cluster_score;
+        mapping.anchors = chain.anchors;
+        mapping.chain_score = chain.score;
         result.mappings.push_back(std::move(mapping));
     }
 
@@ -923,39 +527,6 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
         dumpChainToFile(chain_file.c_str(), result, read.read_id, config_.graph_store);
     }
 
-    // Dump best chain per path if --dump-path-chains is set (diagnostic)
-    // Uses raw anchors (before clustering) to compute best chain per path via DP
-    static std::atomic<std::size_t> path_chains_dump_counter{0};
-    if (!config_.dump_path_chains_dir.empty()) {
-        std::size_t dump_num = path_chains_dump_counter.fetch_add(1);
-        std::string path_chains_file =
-            config_.dump_path_chains_dir + "/read_" + std::to_string(dump_num) + "_path_chains.tsv";
-        dumpPathChainsToFile(path_chains_file.c_str(), read.read_id, read.raw_signal.size(),
-                             anchors, config_.graph_store, config_.clusterer_config);
-    }
-
-    // Dump per-anchor detail for selected reads
-    if (!config_.dump_anchor_detail_dir.empty() && !config_.dump_anchor_reads.empty()) {
-        // Check if this read matches any of the filter prefixes
-        bool should_dump = false;
-        for (const auto& prefix : config_.dump_anchor_reads) {
-            if (read.read_id.find(prefix) != std::string::npos) {
-                should_dump = true;
-                break;
-            }
-        }
-        if (should_dump) {
-            // Use a sanitized filename from read_id
-            std::string safe_id = read.read_id;
-            for (auto& c : safe_id) {
-                if (c == '!' || c == '/' || c == '#' || c == ' ') c = '_';
-            }
-            std::string anchor_file =
-                config_.dump_anchor_detail_dir + "/" + safe_id + "_anchors.tsv";
-            dumpAnchorDetailToFile(anchor_file.c_str(), read.read_id, read.raw_signal.size(),
-                                   anchors, config_.graph_store, config_.clusterer_config);
-        }
-    }
 }
 
 BatchMapperStats BatchMapper::output_batch(const BatchBuffer& batch) const {
@@ -991,49 +562,6 @@ BatchMapperStats BatchMapper::output_batch(const BatchBuffer& batch) const {
                 }
             }
         }
-
-        // Debug output to stdout (disabled - use -o for PAF/GAF output)
-        // output_ << read.read_id
-        //         << "\tseeds=" << seeds_for_read.size()
-        //         << "\thits=" << hits_for_read.size()
-        //         << "\tanchors=" << clusters_for_read.expanded_anchor_count
-        //         << "\tchains=" << clusters_for_read.clusters.size()
-        //         << "\tlen=" << read.len_raw_signal
-        //         << "\n";
-        //
-        // // Output all chains (one per line)
-        // for (std::size_t chain_idx = 0; chain_idx < clusters_for_read.clusters.size();
-        // ++chain_idx) {
-        //     const auto& chain = clusters_for_read.clusters[chain_idx];
-        //     if (chain.anchors.empty()) continue;
-        //
-        //     const auto& first_anchor = chain.anchors.front();
-        //     const auto& last_anchor = chain.anchors.back();
-        //
-        //     // Get path name
-        //     std::string path_name;
-        //     if (adj_store && first_anchor.path_id < adj_store->graph().pathCount()) {
-        //         path_name = adj_store->graph().paths()[first_anchor.path_id].name;
-        //     } else {
-        //         path_name = "path" + std::to_string(first_anchor.path_id);
-        //     }
-        //
-        //     // Compute intervals (start of first anchor to end of last anchor)
-        //     const auto q_start = first_anchor.read_pos;
-        //     const auto q_end = last_anchor.read_pos + last_anchor.target.length;
-        //     const auto r_start = first_anchor.ref_coord;
-        //     const auto r_end = last_anchor.ref_coord + last_anchor.target.length;
-        //
-        //     output_ << "  chain" << chain_idx << "\t"
-        //             << path_name << "\t"
-        //             << "score=" << static_cast<int>(chain.cluster_score) << "\t"
-        //             << "n=" << chain.anchors.size() << "\t"
-        //             << "q[" << q_start << "-" << q_end << "]\t"
-        //             << "r[" << r_start << "-" << r_end << "]\n";
-        // }
-        //
-        // // Blank line between reads
-        // output_ << "\n";
 
         // Suppress unused variable warnings
         (void)adj_store;

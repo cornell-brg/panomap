@@ -7,7 +7,7 @@
 #include <optional>
 #include <vector>
 
-#include "mapping/seed_clusterer.hpp"  // SeedAnchor
+#include "mapping/chainer.hpp"  // SeedAnchor
 
 namespace piru::mapping {
 

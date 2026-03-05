@@ -19,7 +19,7 @@
 #include "mapping/anchor_expander.hpp"
 #include "mapping/map_result.hpp"
 #include "mapping/result_formatter.hpp"
-#include "mapping/seed_clusterer.hpp"
+#include "mapping/chainer.hpp"
 #include "signal/event_pipelines/event_pipeline_factory.hpp"
 #include "signal/fuzzy_quantizers/fuzzy_quantizer_factory.hpp"
 #include "signal/seed_extractors/seed_extractor_factory.hpp"
@@ -49,7 +49,8 @@ struct BatchMapperConfig {
     signal::EventPipelineConfig event_pipeline_config{};  // Unified event detection + normalization
     signal::FuzzyQuantizerConfig fuzzy_config{};
     signal::SeedExtractorConfig seed_config{};
-    SeedClustererConfig clusterer_config{};
+    std::string chainer_backend{"dp-chain"};
+    cli::Parsed chainer_parsed{};  // CLI args forwarded to chainer factory
     const index::SeedStore* seed_store{nullptr};    // non-owning pointer to loaded SeedStore
     const index::GraphStore* graph_store{nullptr};  // non-owning pointer to loaded GraphStore
     // Linearization coordinates (needed for DP chaining)
@@ -66,10 +67,7 @@ struct BatchMapperConfig {
     std::string dump_anchors_dir{};        // Dump anchors per read
     std::string dump_chains_dir{};         // Dump chains per read
     std::string dump_hit_stats_dir{};      // Dump seed hit statistics per read
-    std::string dump_path_chains_dir{};    // Dump best chain per path (diagnostic)
-    std::string dump_read_seeds_dir{};     // Dump all read seeds (including no-hit)
-    std::string dump_anchor_detail_dir{};  // Per-anchor detail dump for selected reads
-    std::unordered_set<std::string> dump_anchor_reads{};  // Read ID prefixes to dump anchors for
+    std::string dump_read_seeds_dir{};  // Dump all read seeds (including no-hit)
 
     // Anchor merging (disable for debugging/heatmap comparison)
     bool enable_anchor_merge{true};
@@ -115,7 +113,7 @@ struct PipelineComponents {
     const index::GraphStore* graph_store{nullptr};  // non-owning; loaded index
     SeedLookup lookup{nullptr, nullptr, 0};
     AnchorExpanderPtr expander;  // Expands SeedHits to Anchors
-    AnchorClustererPtr clusterer;
+    ChainerPtr chainer;
     std::unique_ptr<ResultFormatter> result_formatter;  // Formats map results to PAF/GAF
 };
 

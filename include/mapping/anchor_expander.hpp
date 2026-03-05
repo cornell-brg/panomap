@@ -10,7 +10,7 @@
 #include "index/graph_store.hpp"
 #include "index/linearizer.hpp"
 #include "mapping/anchor.hpp"
-#include "mapping/seed_clusterer.hpp"
+#include "mapping/chainer.hpp"
 
 namespace piru::mapping {
 

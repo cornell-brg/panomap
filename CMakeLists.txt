@@ -98,11 +98,11 @@ add_executable(piru
     src/index/node_first_indexer.cpp
     src/index/index_pipeline.cpp
     src/mapping/batch_mapper.cpp
-    src/mapping/seed_clusterer_factory.cpp
+    src/mapping/chainer_factory.cpp
     src/mapping/seed_merger.cpp
     src/mapping/anchor_expander.cpp
     src/mapping/anchor_merger.cpp
-    src/mapping/dp_chain_clusterer.cpp
+    src/mapping/dp_chainer.cpp
     src/mapping/result_formatter.cpp
     src/util/signal_handlers.cpp
     src/util/timing.cpp

@@ -52,7 +52,7 @@ if(DOCTEST_AVAILABLE)
         test_gfa_exporter.cpp
         test_seed_merger.cpp
         test_anchor_expander.cpp
-        test_dp_chain_clusterer.cpp
+        test_dp_chainer.cpp
     )
 
     target_include_directories(piru_tests PRIVATE
@@ -91,11 +91,11 @@ if(DOCTEST_AVAILABLE)
         ${CMAKE_SOURCE_DIR}/src/signal/seed_extractors/minimizer_seed_extractor.cpp
         ${CMAKE_SOURCE_DIR}/src/index/aln_graph.cpp
         ${CMAKE_SOURCE_DIR}/src/mapping/batch_mapper.cpp
-        ${CMAKE_SOURCE_DIR}/src/mapping/seed_clusterer_factory.cpp
+        ${CMAKE_SOURCE_DIR}/src/mapping/chainer_factory.cpp
         ${CMAKE_SOURCE_DIR}/src/mapping/seed_merger.cpp
         ${CMAKE_SOURCE_DIR}/src/mapping/anchor_expander.cpp
         ${CMAKE_SOURCE_DIR}/src/mapping/anchor_merger.cpp
-        ${CMAKE_SOURCE_DIR}/src/mapping/dp_chain_clusterer.cpp
+        ${CMAKE_SOURCE_DIR}/src/mapping/dp_chainer.cpp
         ${CMAKE_SOURCE_DIR}/src/mapping/result_formatter.cpp
         ${CMAKE_SOURCE_DIR}/src/util/timing.cpp
     )

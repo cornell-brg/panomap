@@ -17,9 +17,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
-#include <iomanip>
 #include <iostream>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -30,6 +28,7 @@
 #include "io/regions/pira_parser.hpp"
 #include "io/results/result_writer_factory.hpp"
 #include "mapping/batch_mapper.hpp"
+#include "mapping/dp_chainer_config.hpp"
 #include "util/logging.hpp"
 #include "util/timing.hpp"
 #include "version.hpp"
@@ -75,19 +74,7 @@ int handle_map(const std::vector<std::string>& args) {
         {'\0', "", false, "\nMapping Options:"},
         {'\0', "seed-freq-cap", true,
          "Skip seeds above this frequency percentile at lookup (0.0-1.0, default: none)"},
-        {'\0', "clusterer", true, "Clusterer backend (default: dp-chain)"},
-        {'\0', "chain-max-dist", true,
-         "DP chain: max query/ref distance between anchors (default: 500)"},
-        {'\0', "chain-max-diag-dev", true, "DP chain: max diagonal deviation (default: 500)"},
-        {'\0', "chain-gap-penalty", true, "DP chain: gap penalty factor (default: 0.02)"},
-        {'\0', "chain-diag-penalty", true, "DP chain: diagonal penalty factor (default: 0.05)"},
-        {'\0', "chain-overlap-penalty", true, "DP chain: overlap penalty factor (default: 0.4)"},
-        {'\0', "chain-anchor-weight", true, "DP chain: anchor weight (default: 1.5)"},
-        {'\0', "chain-min-score", true, "DP chain: minimum chain score (default: 12)"},
-        {'\0', "chain-max-chains", true, "DP chain: max chains to extract (default: 10)"},
-        {'\0', "chain-max-skip", true,
-         "DP chain: stop after N consecutive failed attempts (default: 25)"},
-        {'\0', "chain-merge", true, "DP chain: merge overlapping chains (default: true)"},
+        {'\0', "chainer", true, "Chainer backend (default: dp-chain)"},
         {'\0', "", false, "\nSignal Processing Options:"},
         {'\0', "event-pipeline", true,
          "Event pipeline backend: rawhash (default), scrappie, passthrough"},
@@ -100,12 +87,8 @@ int handle_map(const std::vector<std::string>& args) {
         {'\0', "dump-anchors", true, "Dump anchors to directory (one file per read)"},
         {'\0', "dump-chains", true, "Dump chains to directory (one file per read)"},
         {'\0', "dump-hit-stats", true, "Dump seed hit statistics to directory (one file per read)"},
-        {'\0', "dump-path-chains", true, "Dump best chain per path to directory (diagnostic)"},
         {'\0', "dump-seed-store", true, "Dump full seed store hash table to TSV file"},
         {'\0', "dump-read-seeds", true, "Dump all read seeds (including no-hit) to directory"},
-        {'\0', "dump-anchor-detail", true,
-         "Dump per-anchor detail to directory (use with --dump-anchor-reads)"},
-        {'\0', "dump-anchor-reads", true, "Comma-separated read ID substrings to dump anchors for"},
         {'\0', "no-anchor-merge", false, "Disable anchor merging (for heatmap debugging)"},
         {'\0', "", false, "\nClassification Options:"},
         {'\0', "roi", true, "ROI annotation file (.pira from piru annotate)"},
@@ -119,6 +102,10 @@ int handle_map(const std::vector<std::string>& args) {
         {'\0', "min-secondary-ratio", true,
          "Min chain score ratio vs primary for secondaries (default: 0.4)"},
     };
+    // Append backend-specific CLI options
+    auto chain_opts = piru::mapping::DPChainerConfig::cli_options();
+    config.options.insert(config.options.end(), chain_opts.begin(), chain_opts.end());
+
     config.on_error = [](const std::string&) { std::cerr << "map: invalid option\n"; };
 
     if (!piru::cli::parse_args(args, config, parsed)) {
@@ -330,55 +317,11 @@ int handle_map(const std::vector<std::string>& args) {
               ", qbits=" + std::to_string(index_seed_cfg.qbits));
     map_config.seed_config = index_seed_cfg;
 
-    // Configure clusterer from seed store statistics
-    map_config.clusterer_config.max_hash_frequency = hash_seed_store->max_hash_frequency();
-    LOG_DEBUG("Using clustering config from index: max_hash_frequency=" +
-              std::to_string(map_config.clusterer_config.max_hash_frequency));
-
-    // Configure clusterer backend (default: dp-chain for path-walk pipeline)
-    const std::string clusterer =
-        parsed.values.count("clusterer") ? parsed.values.at("clusterer") : "dp-chain";
-    map_config.clusterer_config.backend = clusterer;
-
-    // DP chain parameter overrides (only relevant when clusterer=dp-chain)
-    if (parsed.values.count("chain-max-dist")) {
-        map_config.clusterer_config.dp_max_dist = std::stoull(parsed.values.at("chain-max-dist"));
+    // Configure chainer: forward CLI args to factory
+    if (parsed.values.count("chainer")) {
+        map_config.chainer_backend = parsed.values.at("chainer");
     }
-    if (parsed.values.count("chain-max-diag-dev")) {
-        map_config.clusterer_config.dp_max_diag_dev =
-            std::stoull(parsed.values.at("chain-max-diag-dev"));
-    }
-    if (parsed.values.count("chain-gap-penalty")) {
-        map_config.clusterer_config.dp_gap_penalty =
-            std::stod(parsed.values.at("chain-gap-penalty"));
-    }
-    if (parsed.values.count("chain-diag-penalty")) {
-        map_config.clusterer_config.dp_diag_penalty =
-            std::stod(parsed.values.at("chain-diag-penalty"));
-    }
-    if (parsed.values.count("chain-overlap-penalty")) {
-        map_config.clusterer_config.dp_overlap_penalty =
-            std::stod(parsed.values.at("chain-overlap-penalty"));
-    }
-    if (parsed.values.count("chain-anchor-weight")) {
-        map_config.clusterer_config.dp_anchor_weight =
-            std::stod(parsed.values.at("chain-anchor-weight"));
-    }
-    if (parsed.values.count("chain-min-score")) {
-        map_config.clusterer_config.dp_min_chain_score =
-            std::stoull(parsed.values.at("chain-min-score"));
-    }
-    if (parsed.values.count("chain-max-chains")) {
-        map_config.clusterer_config.dp_max_chains =
-            std::stoull(parsed.values.at("chain-max-chains"));
-    }
-    if (parsed.values.count("chain-max-skip")) {
-        map_config.clusterer_config.dp_max_skip = std::stoull(parsed.values.at("chain-max-skip"));
-    }
-    if (parsed.values.count("chain-merge")) {
-        const std::string val = parsed.values.at("chain-merge");
-        map_config.clusterer_config.dp_merge_chains = (val == "true" || val == "1" || val == "yes");
-    }
+    map_config.chainer_parsed = parsed;
 
     // ROI classification config
     if (!roi_nodes.empty()) {
@@ -386,7 +329,7 @@ int handle_map(const std::vector<std::string>& args) {
         map_config.roi_threshold = roi_threshold;
         map_config.classify_mode = classify_mode;
         // Force top-1 chain only -- we only need the best for classification
-        map_config.clusterer_config.dp_max_chains = 1;
+        map_config.chainer_parsed.values["chain-max-chains"] = "1";
         LOG_INFO("ROI classification: mode=" + classify_mode +
                  ", threshold=" + std::to_string(roi_threshold) + ", " +
                  std::to_string(roi_nodes.size()) + " ROI nodes");
@@ -474,32 +417,10 @@ int handle_map(const std::vector<std::string>& args) {
         std::filesystem::create_directories(map_config.dump_hit_stats_dir);
         LOG_INFO("Dumping hit stats to: " + map_config.dump_hit_stats_dir);
     }
-    if (parsed.values.count("dump-path-chains")) {
-        map_config.dump_path_chains_dir = parsed.values.at("dump-path-chains");
-        std::filesystem::create_directories(map_config.dump_path_chains_dir);
-        LOG_INFO("Dumping path chains to: " + map_config.dump_path_chains_dir);
-    }
     if (parsed.values.count("dump-read-seeds")) {
         map_config.dump_read_seeds_dir = parsed.values.at("dump-read-seeds");
         std::filesystem::create_directories(map_config.dump_read_seeds_dir);
         LOG_INFO("Dumping read seeds to: " + map_config.dump_read_seeds_dir);
-    }
-    if (parsed.values.count("dump-anchor-detail")) {
-        map_config.dump_anchor_detail_dir = parsed.values.at("dump-anchor-detail");
-        std::filesystem::create_directories(map_config.dump_anchor_detail_dir);
-        LOG_INFO("Dumping anchor detail to: " + map_config.dump_anchor_detail_dir);
-    }
-    if (parsed.values.count("dump-anchor-reads")) {
-        std::string reads_str = parsed.values.at("dump-anchor-reads");
-        std::istringstream iss(reads_str);
-        std::string token;
-        while (std::getline(iss, token, ',')) {
-            if (!token.empty()) {
-                map_config.dump_anchor_reads.insert(token);
-            }
-        }
-        LOG_INFO("Dumping anchor detail for " +
-                 std::to_string(map_config.dump_anchor_reads.size()) + " read filters");
     }
     if (parsed.values.count("no-anchor-merge")) {
         map_config.enable_anchor_merge = false;
