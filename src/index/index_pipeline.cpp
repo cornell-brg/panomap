@@ -52,10 +52,10 @@ IndexPipelineResult run_index_pipeline(
 
     // Create seed extractor
     signal::SeedExtractorConfig extractor_cfg;
-    extractor_cfg.backend = config.seed_backend;
+    extractor_cfg.backend = config.seed_type;
     extractor_cfg.k = config.seed_k;
     extractor_cfg.stride = config.seed_stride;
-    extractor_cfg.window = config.seed_window;
+    extractor_cfg.window = config.minimizer_window;
     extractor_cfg.qbits = 4;
     auto extractor = signal::make_seed_extractor(extractor_cfg);
     if (!extractor) {
@@ -71,7 +71,7 @@ IndexPipelineResult run_index_pipeline(
         NodeFirstIndexConfig nfi_config;
         nfi_config.seed_k = config.seed_k;
         nfi_config.seed_stride = config.seed_stride;
-        nfi_config.seed_filter = config.seed_filter;
+        nfi_config.seed_freq_cutoff = config.seed_freq_cutoff;
         nfi_config.executor = config.executor;
 
         auto nfi_result = nodeFirstIndex(aln_graph, model, *fuzzy_quantizer, *extractor, nfi_config);
@@ -91,8 +91,8 @@ IndexPipelineResult run_index_pipeline(
         PathWalkIndexConfig pwi_config;
         pwi_config.seed_k = config.seed_k;
         pwi_config.seed_stride = config.seed_stride;
-        pwi_config.seed_filter = config.seed_filter;
-        pwi_config.seed_subsample = config.seed_subsample;
+        pwi_config.seed_freq_cutoff = config.seed_freq_cutoff;
+        pwi_config.seed_freq_cap = config.seed_freq_cap;
         pwi_config.dump_norm_stats_path = config.dump_norm_stats_path;
         pwi_config.executor = config.executor;
 

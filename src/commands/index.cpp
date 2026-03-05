@@ -45,13 +45,12 @@ int handle_index(const std::vector<std::string>& args) {
         {'t', "threads", true, "Worker threads"},
         {'p', "profile", false, "Emit timing profile (tree)"},
         {'\0', "", false, "\nSeed Generation Options:"},
-        {'\0', "seed-backend", true, "Seed extractor backend: kmer, minimizer (default)"},
+        {'\0', "seed-type", true, "Seed extractor type: kmer, minimizer (default)"},
         {'\0', "seed-k", true, "Seed k-mer size (default: 6)"},
-        {'\0', "seed-w", true, "Minimizer window size (default: 5, only with --seed-backend minimizer)"},
+        {'\0', "minimizer-window", true, "Minimizer window size (default: 5, only with --seed-type minimizer)"},
         {'\0', "seed-stride", true, "Seed stride (default: 1)"},
-        {'\0', "seed-filter", true, "Seed frequency filter percentile (0.0-1.0, default: 0.9)"},
-        {'\0', "seed-subsample", true, "Subsample cap percentile for filtered seeds (0.0-1.0, default: 0.25)"},
-        {'\0', "seed-mode", true, "Seeding mode: node, path (default)"},
+        {'\0', "seed-freq-cutoff", true, "Seed frequency filter percentile (0.0-1.0, default: 0.9)"},
+        {'\0', "seed-freq-cap", true, "Subsample cap percentile for filtered seeds (0.0-1.0, default: 0.25)"},
         {'\0', "", false, "\nIndexer Options:"},
         {'\0', "indexer-backend", true, "Indexer backend: node-first, path-walk (default)"},
         {'\0', "", false, "\nDebug Options:"},
@@ -133,23 +132,20 @@ int handle_index(const std::vector<std::string>& args) {
 
     // Use defaults from IndexPipelineConfig (single source of truth)
     piru::index::IndexPipelineConfig defaults;
-    const std::string seed_backend =
-        parsed.values.count("seed-backend") ? parsed.values.at("seed-backend") : defaults.seed_backend;
+    const std::string seed_type =
+        parsed.values.count("seed-type") ? parsed.values.at("seed-type") : defaults.seed_type;
     const std::size_t seed_k =
         parsed.values.count("seed-k") ? std::stoul(parsed.values.at("seed-k")) : defaults.seed_k;
-    const std::size_t seed_w =
-        parsed.values.count("seed-w") ? std::stoul(parsed.values.at("seed-w")) : defaults.seed_window;
+    const std::size_t minimizer_window =
+        parsed.values.count("minimizer-window") ? std::stoul(parsed.values.at("minimizer-window")) : defaults.minimizer_window;
     const std::size_t seed_stride =
         parsed.values.count("seed-stride") ? std::stoul(parsed.values.at("seed-stride")) : defaults.seed_stride;
-    const double seed_filter = parsed.values.count("seed-filter")
-                                   ? std::stod(parsed.values.at("seed-filter"))
-                                   : defaults.seed_filter;
-    const double seed_subsample = parsed.values.count("seed-subsample")
-                                      ? std::stod(parsed.values.at("seed-subsample"))
-                                      : defaults.seed_subsample;
-    const std::string seed_mode = parsed.values.count("seed-mode")
-                                      ? parsed.values.at("seed-mode")
-                                      : defaults.seed_mode;
+    const double seed_freq_cutoff = parsed.values.count("seed-freq-cutoff")
+                                   ? std::stod(parsed.values.at("seed-freq-cutoff"))
+                                   : defaults.seed_freq_cutoff;
+    const double seed_freq_cap = parsed.values.count("seed-freq-cap")
+                                      ? std::stod(parsed.values.at("seed-freq-cap"))
+                                      : defaults.seed_freq_cap;
 
     // Default output in current directory (stem without extension)
     std::string output_base = std::filesystem::path(graph_path).stem().string();
@@ -159,10 +155,10 @@ int handle_index(const std::vector<std::string>& args) {
 
     LOG_INFO("input: " + graph_path);
     LOG_INFO("model: " + model->name() + " (k=" + std::to_string(pore_k) + ")");
-    LOG_INFO("seeds: backend=" + seed_backend + ", k=" + std::to_string(seed_k) +
-             ", w=" + std::to_string(seed_w) + ", stride=" + std::to_string(seed_stride) +
-             ", filter=" + std::to_string(seed_filter) +
-             ", subsample=" + std::to_string(seed_subsample) + ", mode=" + seed_mode);
+    LOG_INFO("seeds: type=" + seed_type + ", k=" + std::to_string(seed_k) +
+             ", window=" + std::to_string(minimizer_window) + ", stride=" + std::to_string(seed_stride) +
+             ", freq_cutoff=" + std::to_string(seed_freq_cutoff) +
+             ", freq_cap=" + std::to_string(seed_freq_cap));
     LOG_INFO("output: " + output_base);
 
     // -------------------------------------------------------------------------
@@ -170,13 +166,12 @@ int handle_index(const std::vector<std::string>& args) {
     // -------------------------------------------------------------------------
 
     piru::index::IndexPipelineConfig index_config;
-    index_config.seed_backend = seed_backend;
+    index_config.seed_type = seed_type;
     index_config.seed_k = seed_k;
-    index_config.seed_window = seed_w;
+    index_config.minimizer_window = minimizer_window;
     index_config.seed_stride = seed_stride;
-    index_config.seed_filter = seed_filter;
-    index_config.seed_subsample = seed_subsample;
-    index_config.seed_mode = seed_mode;
+    index_config.seed_freq_cutoff = seed_freq_cutoff;
+    index_config.seed_freq_cap = seed_freq_cap;
     index_config.fuzzy_quantizer = "rh2";
     if (parsed.values.count("indexer-backend")) {
         index_config.indexer_backend = parsed.values.at("indexer-backend");

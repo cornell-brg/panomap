@@ -100,13 +100,12 @@ int handle_map(const std::vector<std::string>& args) {
         {'\0', "fuzzy-fine-max", true, "Fuzzy quantizer fine region max (default: 2.0)"},
         {'\0', "fuzzy-fine-range", true, "Fuzzy quantizer fine range (default: 0.9 R9, 0.8 R10)"},
         {'\0', "fuzzy-bins", true, "Fuzzy quantizer bin count (default: 10)"},
-        {'\0', "seed-backend", true, "Seed extractor backend: kmer (default), minimizer"},
+        {'\0', "seed-type", true, "Seed extractor type: kmer, minimizer (default)"},
         {'\0', "seed-k", true, "Seed extractor k-mer size (default: 6)"},
-        {'\0', "seed-w", true, "Minimizer window size (default: 5, only with --seed-backend minimizer)"},
+        {'\0', "minimizer-window", true, "Minimizer window size (default: 5, only with --seed-type minimizer)"},
         {'\0', "seed-stride", true, "Seed extractor stride (default: 1)"},
-        {'\0', "seed-filter", true, "Index-time seed frequency filter percentile (0.0-1.0, default: 1.0)"},
-        {'\0', "seed-subsample", true, "Subsample cap percentile for filtered seeds (0.0-1.0, default: 0.55)"},
-        {'\0', "seed-mode", true, "Seeding mode: node, path (default)"},
+        {'\0', "seed-freq-cutoff", true, "Seed frequency filter percentile (0.0-1.0, default: 0.9)"},
+        {'\0', "seed-freq-cap", true, "Subsample cap percentile for filtered seeds (0.0-1.0, default: 0.25)"},
         {'\0', "", false, "\nDebug Options:"},
         {'\0', "dump-anchors", true, "Dump anchors to directory (one file per read)"},
         {'\0', "dump-chains", true, "Dump chains to directory (one file per read)"},
@@ -169,7 +168,7 @@ int handle_map(const std::vector<std::string>& args) {
     // Warn about flags that are ignored with --index (index-time-only params)
     if (has_index) {
         std::vector<std::string> graph_only_flags = {
-            "seed-backend", "seed-k", "seed-w", "seed-stride", "seed-filter", "seed-subsample", "seed-mode",
+            "seed-type", "seed-k", "minimizer-window", "seed-stride", "seed-freq-cutoff", "seed-freq-cap",
             "indexer-backend",
             "event-pipeline", "event-w1", "event-w2", "event-t1", "event-t2", "event-peak",
             "fuzzy-backend", "fuzzy-fine-min", "fuzzy-fine-max", "fuzzy-fine-range", "fuzzy-bins",
@@ -189,13 +188,13 @@ int handle_map(const std::vector<std::string>& args) {
         }
     }
 
-    // Warn about --seed-w without --seed-backend minimizer
-    if (parsed.values.count("seed-w") && has_graph) {
-        const std::string backend = parsed.values.count("seed-backend")
-                                        ? parsed.values.at("seed-backend")
-                                        : "kmer";
-        if (backend != "minimizer") {
-            LOG_WARN("--seed-w is ignored without --seed-backend minimizer");
+    // Warn about --minimizer-window without --seed-type minimizer
+    if (parsed.values.count("minimizer-window") && has_graph) {
+        const std::string stype = parsed.values.count("seed-type")
+                                        ? parsed.values.at("seed-type")
+                                        : "minimizer";
+        if (stype != "minimizer") {
+            LOG_WARN("--minimizer-window is ignored without --seed-type minimizer");
         }
     }
 
@@ -391,25 +390,21 @@ int handle_map(const std::vector<std::string>& args) {
             index_config.seed_stride = std::stoull(parsed.values.at("seed-stride"));
             LOG_DEBUG("Using seed stride=" + std::to_string(index_config.seed_stride) + " for indexing");
         }
-        if (parsed.values.count("seed-backend")) {
-            index_config.seed_backend = parsed.values.at("seed-backend");
-            LOG_DEBUG("Using seed backend=" + index_config.seed_backend + " for indexing");
+        if (parsed.values.count("seed-type")) {
+            index_config.seed_type = parsed.values.at("seed-type");
+            LOG_DEBUG("Using seed type=" + index_config.seed_type + " for indexing");
         }
-        if (parsed.values.count("seed-w")) {
-            index_config.seed_window = std::stoull(parsed.values.at("seed-w"));
-            LOG_DEBUG("Using seed window=" + std::to_string(index_config.seed_window) + " for indexing");
+        if (parsed.values.count("minimizer-window")) {
+            index_config.minimizer_window = std::stoull(parsed.values.at("minimizer-window"));
+            LOG_DEBUG("Using minimizer window=" + std::to_string(index_config.minimizer_window) + " for indexing");
         }
-        if (parsed.values.count("seed-filter")) {
-            index_config.seed_filter = std::stod(parsed.values.at("seed-filter"));
-            LOG_DEBUG("Using seed filter=" + std::to_string(index_config.seed_filter) + " for indexing");
+        if (parsed.values.count("seed-freq-cutoff")) {
+            index_config.seed_freq_cutoff = std::stod(parsed.values.at("seed-freq-cutoff"));
+            LOG_DEBUG("Using seed freq cutoff=" + std::to_string(index_config.seed_freq_cutoff) + " for indexing");
         }
-        if (parsed.values.count("seed-subsample")) {
-            index_config.seed_subsample = std::stod(parsed.values.at("seed-subsample"));
-            LOG_DEBUG("Using seed subsample=" + std::to_string(index_config.seed_subsample) + " for indexing");
-        }
-        if (parsed.values.count("seed-mode")) {
-            index_config.seed_mode = parsed.values.at("seed-mode");
-            LOG_DEBUG("Using seed mode=" + index_config.seed_mode + " for indexing");
+        if (parsed.values.count("seed-freq-cap")) {
+            index_config.seed_freq_cap = std::stod(parsed.values.at("seed-freq-cap"));
+            LOG_DEBUG("Using seed freq cap=" + std::to_string(index_config.seed_freq_cap) + " for indexing");
         }
         if (parsed.values.count("fuzzy-backend")) {
             index_config.fuzzy_quantizer = parsed.values.at("fuzzy-backend");

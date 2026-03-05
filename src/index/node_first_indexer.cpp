@@ -176,7 +176,7 @@ NodeFirstIndexResult nodeFirstIndex(
     params["qbits"] = std::to_string(cfg.qbits);
     params["window"] = std::to_string(cfg.window);
     result.seed_store->set_params(std::move(params));
-    result.seed_store->set_filter_fraction(config.seed_filter);
+    result.seed_store->set_filter_fraction(config.seed_freq_cutoff);
 
     // =========================================================================
     // Pass 1a: Squigglize node interiors, accumulate global stats
@@ -480,9 +480,9 @@ NodeFirstIndexResult nodeFirstIndex(
     }
 
     std::size_t threshold = max_freq + 1;
-    if (!frequencies.empty() && config.seed_filter < 1.0) {
+    if (!frequencies.empty() && config.seed_freq_cutoff < 1.0) {
         std::sort(frequencies.begin(), frequencies.end());
-        double fraction = std::clamp(config.seed_filter, 0.0, 1.0);
+        double fraction = std::clamp(config.seed_freq_cutoff, 0.0, 1.0);
         std::size_t freq_pos = static_cast<std::size_t>(frequencies.size() * fraction);
         freq_pos = std::min(freq_pos, frequencies.size() - 1);
         threshold = frequencies[freq_pos] + 1;

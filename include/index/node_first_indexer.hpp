@@ -33,7 +33,7 @@ struct NodeFirstIndexConfig {
     // Seed extraction parameters
     std::size_t seed_k{6};      // Hash window size (fuzzy samples per seed)
     std::size_t seed_stride{1};
-    double seed_filter{0.5};    // keep_least_frequent_fraction
+    double seed_freq_cutoff{0.5};    // keep_least_frequent_fraction
 
     // Parallelization
     // If non-null, enables parallel indexing using this executor.

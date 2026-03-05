@@ -49,21 +49,14 @@ struct IndexPipelineConfig {
     // Seed Extraction Parameters
     // -------------------------------------------------------------------------
 
-    // Seed extractor backend: "kmer" or "minimizer"
-    std::string seed_backend{"minimizer"};
+    // Seed extractor type: "kmer" or "minimizer"
+    std::string seed_type{"minimizer"};
 
-    // Minimizer window size (only used when seed_backend="minimizer")
+    // Minimizer window size (only used when seed_type="minimizer")
     // Within each window of w consecutive k-mers, only the minimum hash is kept.
     // w=1 recovers the rolling k-mer behavior.
-    std::size_t seed_window{5};
+    std::size_t minimizer_window{5};
 
-    // Seed extraction mode: "node" or "path"
-    // - node: Extract seeds from each node independently (current behavior)
-    //         Seeds cannot cross node boundaries
-    // - path: Walk paths and extract seeds that can cross node boundaries
-    //         Better coverage for graphs with short nodes (e.g., VG-built)
-    //         Deduplicates seeds from shared regions across paths
-    std::string seed_mode{"path"};
 
     // Seed k-mer size (number of fuzzy tokens hashed together)
     // - Larger k = more specific seeds, fewer false matches
@@ -82,15 +75,15 @@ struct IndexPipelineConfig {
     // - 0.9 = keep bottom 90% least frequent seeds (filter top 10% repetitive)
     // - 1.0 = keep all seeds (no filtering)
     // - Lower values reduce index size and mapping noise
-    // - Default: 0.9 (configurable via CLI: --seed-filter)
-    double seed_filter{0.9};
+    // - Default: 0.9 (configurable via CLI: --seed-freq-cutoff)
+    double seed_freq_cutoff{0.9};
 
-    // Subsample cap percentile for seeds above the filter threshold.
-    // - When seed_filter < 1.0, seeds above the threshold are subsampled
+    // Subsample cap percentile for seeds above the frequency cutoff.
+    // - When seed_freq_cutoff < 1.0, seeds above the threshold are subsampled
     //   down to the frequency at this percentile (instead of hard-dropped).
     // - Range: 0.0 to 1.0
-    // - Default: 0.25 (configurable via CLI: --seed-subsample)
-    double seed_subsample{0.25};
+    // - Default: 0.25 (configurable via CLI: --seed-freq-cap)
+    double seed_freq_cap{0.25};
 
     // -------------------------------------------------------------------------
     // Debug Options

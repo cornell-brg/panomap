@@ -83,7 +83,7 @@ PathWalkIndexResult pathWalkIndex(
     params["qbits"] = std::to_string(cfg.qbits);
     params["window"] = std::to_string(cfg.window);
     result.seed_store->set_params(std::move(params));
-    result.seed_store->set_filter_fraction(config.seed_filter);
+    result.seed_store->set_filter_fraction(config.seed_freq_cutoff);
 
     // Optional: dump per-path normalization stats to file
     // NOTE: Disabled in parallel mode (would need mutex protection)
@@ -200,11 +200,11 @@ PathWalkIndexResult pathWalkIndex(
         }
 
         // Step 7: Per-path frequency subsampling
-        // - Below threshold (seed_filter percentile): pass through
-        // - Above threshold: subsample down to subsample_cap (70th percentile freq)
+        // - Below threshold (seed_freq_cutoff percentile): pass through
+        // - Above threshold: subsample down to seed_freq_cap percentile freq
         std::size_t threshold = std::numeric_limits<std::size_t>::max();
         std::size_t subsample_cap = std::numeric_limits<std::size_t>::max();
-        if (!path_seed_store.data().empty() && config.seed_filter < 1.0) {
+        if (!path_seed_store.data().empty() && config.seed_freq_cutoff < 1.0) {
             std::vector<std::size_t> path_frequencies;
             path_frequencies.reserve(path_seed_store.data().size());
             for (const auto& [hash, hits] : path_seed_store.data()) {
@@ -217,9 +217,9 @@ PathWalkIndexResult pathWalkIndex(
                 pos = std::min(pos, path_frequencies.size() - 1);
                 return path_frequencies[pos];
             };
-            threshold = freq_at(std::clamp(config.seed_filter, 0.0, 1.0));
-            if (config.seed_subsample > 0.0) {
-                subsample_cap = std::max<std::size_t>(1, freq_at(std::clamp(config.seed_subsample, 0.0, 1.0)));
+            threshold = freq_at(std::clamp(config.seed_freq_cutoff, 0.0, 1.0));
+            if (config.seed_freq_cap > 0.0) {
+                subsample_cap = std::max<std::size_t>(1, freq_at(std::clamp(config.seed_freq_cap, 0.0, 1.0)));
             } else {
                 subsample_cap = 0;  // harddrop mode
             }
