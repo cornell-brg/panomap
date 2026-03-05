@@ -14,8 +14,6 @@
 #include <unordered_set>
 #include <utility>
 
-#include "alignment/signal_utils.hpp"
-#include "index/signal_store.hpp"
 #include "mapping/anchor_expander.hpp"
 #include "mapping/anchor_merger.hpp"
 #include "util/logging.hpp"
@@ -24,40 +22,11 @@ namespace piru::mapping {
 
 namespace {
 
-// Compute path length by summing signal sizes for each node on the path.
-std::int64_t computePathLength(const index::AlnGraph& graph,
-                               const index::AlnPath& path,
-                               const index::SignalStore* signal_store) {
-    // Build label → node index mapping
-    std::unordered_map<std::string, std::size_t> label_to_idx;
-    for (std::size_t i = 0; i < graph.nodeCount(); ++i) {
-        label_to_idx[graph.node(i).label] = i;
-    }
-
-    std::int64_t cumulative = 0;
-    for (const auto& step : path.steps) {
-        auto it = label_to_idx.find(step.node_id);
-        if (it == label_to_idx.end()) continue;
-
-        const std::size_t node_idx = it->second;
-
-        // Use signal size directly (no overlap math needed)
-        if (signal_store) {
-            const auto* sig = signal_store->get(node_idx);
-            if (sig) {
-                cumulative += static_cast<std::int64_t>(alignment::signalLength(*sig));
-            }
-        }
-    }
-    return cumulative;
-}
-
 // Dump anchors to file for visualization (first read only).
 void dumpAnchorsToFile(const char* filename,
                        const std::vector<Anchor>& anchors,
                        const std::string& read_id,
-                       const index::GraphStore* graph_store,
-                       const index::SignalStore* signal_store) {
+                       const index::GraphStore* graph_store) {
     std::ofstream out(filename);
     if (!out.is_open()) {
         LOG_WARN("Failed to open anchor dump file: " + std::string(filename));
@@ -77,8 +46,7 @@ void dumpAnchorsToFile(const char* filename,
     // Write path metadata header
     for (std::size_t path_id = 0; path_id < paths.size(); ++path_id) {
         const auto& path = paths[path_id];
-        std::int64_t length = computePathLength(graph, path, signal_store);
-        out << "#PATH\t" << path_id << "\t" << path.name << "\t" << length << "\n";
+        out << "#PATH\t" << path_id << "\t" << path.name << "\n";
     }
 
     // Write anchors header
@@ -110,8 +78,7 @@ void dumpAnchorsToFile(const char* filename,
 void dumpChainToFile(const char* filename,
                      const ReadMapResult& result,
                      const std::string& read_id,
-                     const index::GraphStore* graph_store,
-                     const index::SignalStore* signal_store) {
+                     const index::GraphStore* graph_store) {
     if (result.mappings.empty()) {
         LOG_WARN("Cannot dump chain: no mappings for read " + read_id);
         return;
@@ -143,8 +110,7 @@ void dumpChainToFile(const char* filename,
     // Write path metadata header
     for (std::size_t path_id = 0; path_id < paths.size(); ++path_id) {
         const auto& path = paths[path_id];
-        std::int64_t length = computePathLength(graph, path, signal_store);
-        out << "#PATH\t" << path_id << "\t" << path.name << "\t" << length << "\n";
+        out << "#PATH\t" << path_id << "\t" << path.name << "\n";
     }
 
     // Write chained anchors header
@@ -786,7 +752,7 @@ PipelineComponents BatchMapper::create_components() const {
     const auto* adj_store = dynamic_cast<const index::AdjListGraphStore*>(config_.graph_store);
     if (adj_store && config_.result_writer) {
         comps.result_formatter = std::make_unique<ResultFormatter>(
-            adj_store->graph(), nullptr, config_.formatter_config);
+            adj_store->graph(), config_.formatter_config);
         LOG_INFO("Result formatter enabled for output (min_secondary_ratio=" +
                  std::to_string(config_.formatter_config.min_secondary_ratio) + ")");
     }
@@ -929,7 +895,7 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
     if (!config_.dump_anchors_dir.empty()) {
         std::size_t dump_num = anchor_dump_counter.fetch_add(1);
         std::string anchor_file = config_.dump_anchors_dir + "/read_" + std::to_string(dump_num) + "_anchors.tsv";
-        dumpAnchorsToFile(anchor_file.c_str(), anchors, read.read_id, config_.graph_store, nullptr);
+        dumpAnchorsToFile(anchor_file.c_str(), anchors, read.read_id, config_.graph_store);
     }
 
     // Cluster anchors
@@ -982,7 +948,7 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
     if (!config_.dump_chains_dir.empty()) {
         std::size_t dump_num = chain_dump_counter.fetch_add(1);
         std::string chain_file = config_.dump_chains_dir + "/read_" + std::to_string(dump_num) + "_chain.tsv";
-        dumpChainToFile(chain_file.c_str(), result, read.read_id, config_.graph_store, nullptr);
+        dumpChainToFile(chain_file.c_str(), result, read.read_id, config_.graph_store);
     }
 
     // Dump best chain per path if --dump-path-chains is set (diagnostic)

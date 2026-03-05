@@ -314,7 +314,7 @@ TEST_CASE("ResultFormatter respects primary_only config") {
     auto graph = makeTestGraph();
     piru::mapping::ResultFormatterConfig config;
     config.primary_only = true;
-    piru::mapping::ResultFormatter formatter(graph, nullptr, config);
+    piru::mapping::ResultFormatter formatter(graph, config);
 
     piru::mapping::ReadMapResult map_result;
 
@@ -361,7 +361,7 @@ TEST_CASE("ResultFormatter filters low-scoring secondaries") {
     auto graph = makeTestGraph();
     piru::mapping::ResultFormatterConfig config;
     config.min_secondary_ratio = 0.7;  // Filter secondaries below 70% of primary
-    piru::mapping::ResultFormatter formatter(graph, nullptr, config);
+    piru::mapping::ResultFormatter formatter(graph, config);
 
     piru::mapping::ReadMapResult map_result;
 

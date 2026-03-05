@@ -53,7 +53,6 @@ if(DOCTEST_AVAILABLE)
         test_seed_merger.cpp
         test_anchor_expander.cpp
         test_dp_chain_clusterer.cpp
-        test_alignment.cpp
     )
 
     target_include_directories(piru_tests PRIVATE
@@ -98,9 +97,6 @@ if(DOCTEST_AVAILABLE)
         ${CMAKE_SOURCE_DIR}/src/mapping/anchor_merger.cpp
         ${CMAKE_SOURCE_DIR}/src/mapping/dp_chain_clusterer.cpp
         ${CMAKE_SOURCE_DIR}/src/mapping/result_formatter.cpp
-        ${CMAKE_SOURCE_DIR}/src/alignment/path_guided_dtw_aligner.cpp
-        ${CMAKE_SOURCE_DIR}/src/alignment/radius_gdtw_aligner.cpp
-        ${CMAKE_SOURCE_DIR}/src/alignment/chain_aligner.cpp
         ${CMAKE_SOURCE_DIR}/src/util/timing.cpp
     )
 

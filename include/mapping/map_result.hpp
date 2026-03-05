@@ -7,7 +7,6 @@
 #include <optional>
 #include <vector>
 
-#include "alignment/segment_aligner.hpp"  // GraphPosition
 #include "mapping/seed_clusterer.hpp"     // SeedAnchor
 
 namespace piru::mapping {
@@ -21,14 +20,9 @@ struct Mapping {
   std::vector<SeedAnchor> anchors;
   double chain_score{0.0};
 
-  // Optional (present if --align enabled)
+  // Optional alignment scores (reserved for future use)
   std::optional<float> alignment_cost;
   std::optional<float> normalized_alignment_cost;
-  std::optional<std::vector<alignment::GraphPosition>> alignment_path;
-  std::size_t segments_aligned{0};
-
-  /// Check if alignment was performed.
-  bool hasAlignment() const { return alignment_cost.has_value(); }
 };
 
 /// All mappings for a single read.

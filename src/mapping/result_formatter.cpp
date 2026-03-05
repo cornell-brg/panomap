@@ -8,15 +8,13 @@
 #include <string_view>
 #include <unordered_map>
 
-#include "alignment/signal_utils.hpp"
 #include "util/logging.hpp"
 
 namespace piru::mapping {
 
 ResultFormatter::ResultFormatter(const index::AlnGraph& graph,
-                                 const index::SignalStore* signal_store,
                                  ResultFormatterConfig config)
-    : graph_(graph), signal_store_(signal_store), config_(std::move(config)) {}
+    : graph_(graph), config_(std::move(config)) {}
 
 std::vector<io::AlignmentResult> ResultFormatter::format(
     const ReadMapResult& map_result,
@@ -272,16 +270,7 @@ std::size_t ResultFormatter::computePathLength(std::size_t path_id) const {
 
         const std::size_t node_idx = it->second;
 
-        // Use signal length if signal_store is available (matches linearizer)
-        if (signal_store_) {
-          const auto* sig = signal_store_->get(node_idx);
-          if (sig) {
-            cumulative_len += alignment::signalLength(*sig);
-            continue;
-          }
-        }
-
-        // Fallback to sequence-based computation
+        // Sequence-based path length computation
         const auto& node = graph_.node(node_idx);
         std::size_t node_len = node.sequence.size();
         std::size_t overlap = 0;
