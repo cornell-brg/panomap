@@ -79,7 +79,7 @@ add_executable(piru
     src/io/regions/bed_parser.cpp
     src/io/regions/pira_parser.cpp
     src/io/models/builtin_models.cpp
-    src/io/index/simple_serialization.cpp
+    src/io/index/serialization.cpp
     src/cli/parse.cpp
     src/signal/event_pipeline_factory.cpp
     src/signal/event_pipelines/scrappie_event_pipeline.cpp

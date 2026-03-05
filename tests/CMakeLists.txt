@@ -101,6 +101,7 @@ if(DOCTEST_AVAILABLE)
         ${CMAKE_SOURCE_DIR}/src/alignment/path_guided_dtw_aligner.cpp
         ${CMAKE_SOURCE_DIR}/src/alignment/radius_gdtw_aligner.cpp
         ${CMAKE_SOURCE_DIR}/src/alignment/chain_aligner.cpp
+        ${CMAKE_SOURCE_DIR}/src/util/timing.cpp
     )
 
     target_link_libraries(piru_tests PRIVATE doctest::doctest)

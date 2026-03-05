@@ -23,7 +23,7 @@ IndexPipelineResult run_index_pipeline(
 
     auto stage_start = std::chrono::high_resolution_clock::now();
 
-    // Stage 1: Simple ±expand (2x nodes)
+    // Stage 1: Simple +-expand (2x nodes)
     AlnGraph aln_graph = simpleExpand(imported);
 
     auto stage_elapsed = std::chrono::duration<double>(

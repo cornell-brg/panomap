@@ -11,10 +11,7 @@
 #include <vector>
 
 #include "cli/parse.hpp"
-#include "index/index_pipeline.hpp"
-#include "io/graphs/graph_loader_factory.hpp"
-#include "io/index/simple_serialization.hpp"
-#include "io/models/model_factory.hpp"
+#include "io/index/serialization.hpp"
 #include "io/reads/read_provider_factory.hpp"
 #include "io/regions/pira_parser.hpp"
 #include "io/results/result_writer_factory.hpp"
@@ -24,17 +21,6 @@
 #include "version.hpp"
 
 namespace {
-
-piru::io::ModelPtr load_model_or_file(const std::string& model_arg) {
-    if (auto built = piru::io::load_builtin_model(model_arg)) {
-        return built;
-    }
-    if (std::filesystem::exists(model_arg)) {
-        return piru::io::load_model_from_file(model_arg);
-    }
-    LOG_ERROR("Unknown pore model: " + model_arg + " (not a built-in name or file)");
-    return nullptr;
-}
 
 piru::signal::SeedExtractorConfig seed_config_from_store(const piru::index::HashSeedStore& store) {
     piru::signal::SeedExtractorConfig cfg;
@@ -64,13 +50,11 @@ int handle_map(const std::vector<std::string>& args) {
 
     piru::cli::Parsed parsed;
     piru::cli::ParseConfig config;
-    config.usage = "Usage: piru map [options] (--index <dir> | --graph <file> --model <model>) <reads-path>";
+    config.usage = "Usage: piru map [options] --index <file> <reads-path>";
     config.positional_help = {"<reads-path>       Input slow5/blow5 file or directory containing reads"};
     config.options = {
         {'h', "help", false, "Show help"},
-        {'i', "index", true, "Path to pre-built index directory (XOR with --graph)"},
-        {'g', "graph", true, "Graph file for in-memory indexing (XOR with --index)"},
-        {'m', "model", true, "Pore model (required with --graph; r9.4/r10.4 or file path)"},
+        {'i', "index", true, "Path to pre-built index file (.pirx)"},
         {'t', "threads", true, "Worker threads (-1 = auto)"},
         {'p', "profile", false, "Emit timing profile (tree)"},
         {'v', "verbose", false, "Enable verbose logging (DEBUG level)"},
@@ -87,25 +71,13 @@ int handle_map(const std::vector<std::string>& args) {
         {'\0', "chain-max-chains", true, "DP chain: max chains to extract (default: 10)"},
         {'\0', "chain-max-skip", true, "DP chain: stop after N consecutive failed attempts (default: 25)"},
         {'\0', "chain-merge", true, "DP chain: merge overlapping chains (default: true)"},
-        {'\0', "", false, "\nSignal Processing Options (only with --graph):"},
-        {'\0', "indexer-backend", true, "Indexer backend: node-first, path-walk (default)"},
+        {'\0', "", false, "\nSignal Processing Options:"},
         {'\0', "event-pipeline", true, "Event pipeline backend: rawhash (default), scrappie, passthrough"},
         {'\0', "event-w1", true, "Event detection short window length (default: 3)"},
         {'\0', "event-w2", true, "Event detection long window length (default: backend-specific)"},
         {'\0', "event-t1", true, "Event detection threshold1 (default: backend-specific)"},
         {'\0', "event-t2", true, "Event detection threshold2 (default: backend-specific)"},
         {'\0', "event-peak", true, "Event detection peak height (default: backend-specific)"},
-        {'\0', "fuzzy-backend", true, "Fuzzy quantizer backend: piru (default), rh2"},
-        {'\0', "fuzzy-fine-min", true, "Fuzzy quantizer fine region min (default: -2.0)"},
-        {'\0', "fuzzy-fine-max", true, "Fuzzy quantizer fine region max (default: 2.0)"},
-        {'\0', "fuzzy-fine-range", true, "Fuzzy quantizer fine range (default: 0.9 R9, 0.8 R10)"},
-        {'\0', "fuzzy-bins", true, "Fuzzy quantizer bin count (default: 10)"},
-        {'\0', "seed-type", true, "Seed extractor type: kmer, minimizer (default)"},
-        {'\0', "seed-k", true, "Seed extractor k-mer size (default: 6)"},
-        {'\0', "minimizer-window", true, "Minimizer window size (default: 5, only with --seed-type minimizer)"},
-        {'\0', "seed-stride", true, "Seed extractor stride (default: 1)"},
-        {'\0', "seed-freq-cutoff", true, "Seed frequency filter percentile (0.0-1.0, default: 0.9)"},
-        {'\0', "seed-freq-cap", true, "Subsample cap percentile for filtered seeds (0.0-1.0, default: 0.25)"},
         {'\0', "", false, "\nDebug Options:"},
         {'\0', "dump-anchors", true, "Dump anchors to directory (one file per read)"},
         {'\0', "dump-chains", true, "Dump chains to directory (one file per read)"},
@@ -140,22 +112,9 @@ int handle_map(const std::vector<std::string>& args) {
     // ARGUMENT VALIDATION
     // =========================================================================
 
-    // Validate mutually exclusive options: --index XOR --graph
-    const bool has_index = parsed.values.count("index") > 0;
-    const bool has_graph = parsed.values.count("graph") > 0;
-
-    if (!has_index && !has_graph) {
-        LOG_ERROR("map: must specify either --index <dir> or --graph <file>");
-        piru::cli::print_help(config, std::cerr);
-        return 1;
-    }
-    if (has_index && has_graph) {
-        LOG_ERROR("map: cannot specify both --index and --graph (choose one)");
-        piru::cli::print_help(config, std::cerr);
-        return 1;
-    }
-    if (has_graph && !parsed.values.count("model")) {
-        LOG_ERROR("map: --graph requires --model <model>");
+    // Validate required --index
+    if (!parsed.values.count("index")) {
+        LOG_ERROR("map: must specify --index <file>");
         piru::cli::print_help(config, std::cerr);
         return 1;
     }
@@ -163,39 +122,6 @@ int handle_map(const std::vector<std::string>& args) {
         LOG_ERROR("map: missing required <reads-path>");
         piru::cli::print_help(config, std::cerr);
         return 1;
-    }
-
-    // Warn about flags that are ignored with --index (index-time-only params)
-    if (has_index) {
-        std::vector<std::string> graph_only_flags = {
-            "seed-type", "seed-k", "minimizer-window", "seed-stride", "seed-freq-cutoff", "seed-freq-cap",
-            "indexer-backend",
-            "event-pipeline", "event-w1", "event-w2", "event-t1", "event-t2", "event-peak",
-            "fuzzy-backend", "fuzzy-fine-min", "fuzzy-fine-max", "fuzzy-fine-range", "fuzzy-bins",
-            "model",
-        };
-        std::vector<std::string> found;
-        for (const auto& flag : graph_only_flags) {
-            if (parsed.values.count(flag)) found.push_back("--" + flag);
-        }
-        if (!found.empty()) {
-            std::string list;
-            for (std::size_t i = 0; i < found.size(); ++i) {
-                if (i > 0) list += ", ";
-                list += found[i];
-            }
-            LOG_WARN("Ignoring index-time flags with --index (these only apply with --graph): " + list);
-        }
-    }
-
-    // Warn about --minimizer-window without --seed-type minimizer
-    if (parsed.values.count("minimizer-window") && has_graph) {
-        const std::string stype = parsed.values.count("seed-type")
-                                        ? parsed.values.at("seed-type")
-                                        : "minimizer";
-        if (stype != "minimizer") {
-            LOG_WARN("--minimizer-window is ignored without --seed-type minimizer");
-        }
     }
 
     // Extract common options
@@ -281,174 +207,42 @@ int handle_map(const std::vector<std::string>& args) {
     PIRU_PROFILE_START(profile, "map");
 
     // =========================================================================
-    // INDEX LOADING: Pre-built index OR in-memory indexing
+    // INDEX LOADING
     // =========================================================================
-    //
-    // Two mutually exclusive workflows:
-    //   1. --index: Load pre-serialized index from disk (faster startup)
-    //   2. --graph: Run full indexing pipeline in-memory (enables path-walk linearization)
-    //
-    // Note: Linearization coordinates are only available from in-memory indexing
-    //       because path-walk coordinates are not yet serialized to disk.
-
-    std::unique_ptr<piru::index::GraphStore> graph_store;
-    std::unique_ptr<piru::index::SeedStore> seed_store;
-    std::vector<std::vector<piru::index::LinearCoordinate>> linearization_coords;
-    std::vector<std::size_t> path_lengths;  // For anchor bounds checking
-    std::string fuzzy_quantizer_name;
-    std::string pore_model_name;  // Track pore model for event pipeline parameter selection
-    float fuzzy_fine_min{-2.0f};
-    float fuzzy_fine_max{2.0f};
-    float fuzzy_fine_range{0.4f};
-    std::uint32_t fuzzy_n_bins{0};
 
     PIRU_PROFILE_START(profile, "index");
 
-    if (has_index) {
-        // ---------------------------------------------------------------------
-        // WORKFLOW 1: Load pre-built index from disk
-        // ---------------------------------------------------------------------
-        const std::string index_path = parsed.values.at("index");
-        LOG_INFO("loading index from " + index_path);
+    const std::string index_path = parsed.values.at("index");
+    LOG_INFO("loading index from " + index_path);
 
-        // Load simple index (.pirx format)
-        if (!piru::io::index::is_simple_index(index_path)) {
-            LOG_ERROR("map: unsupported index format '" + index_path + "' (expected .pirx file)");
-            return 1;
-        }
+    if (!piru::io::index::is_pirx_index(index_path)) {
+        LOG_ERROR("map: unsupported index format '" + index_path + "' (expected .pirx file)");
+        return 1;
+    }
 
-        auto loaded = piru::io::index::load_simple_index(index_path);
+    auto loaded = piru::io::index::load_index(index_path);
 
-        LOG_INFO("simple index loaded: " + std::to_string(loaded.graph->nodeCount()) + " nodes");
-        LOG_INFO("index metadata: model=" + loaded.metadata.model_name +
-                 ", fuzzy=" + loaded.metadata.fuzzy_quantizer +
-                 ", seeds=" + loaded.seeds->extractor_name());
+    LOG_INFO("index loaded: " + std::to_string(loaded.graph->nodeCount()) + " nodes");
+    LOG_INFO("index metadata: model=" + loaded.metadata.model_name +
+             ", fuzzy=" + loaded.metadata.fuzzy_quantizer +
+             ", seeds=" + loaded.seeds->extractor_name());
 
-        // Extract path lengths from loaded graph BEFORE moving (AdjListGraphStore has path access)
+    // Extract path lengths from loaded graph BEFORE moving (AdjListGraphStore has path access)
+    std::vector<std::size_t> path_lengths;
+    {
         const auto& aln_graph = loaded.graph->graph();
         const auto& paths = aln_graph.paths();
         path_lengths.resize(paths.size());
         for (std::size_t i = 0; i < paths.size(); ++i) {
             path_lengths[i] = paths[i].length;
         }
-
-        graph_store = std::move(loaded.graph);
-        seed_store = std::move(loaded.seeds);
-        linearization_coords = std::move(loaded.linearization_coords);
-        fuzzy_quantizer_name = loaded.metadata.fuzzy_quantizer;
-        pore_model_name = loaded.metadata.model_name;
-
-    } else {
-        // ---------------------------------------------------------------------
-        // WORKFLOW 2: Run in-memory indexing
-        // ---------------------------------------------------------------------
-        const std::string graph_path = parsed.values.at("graph");
-        const std::string model_arg = parsed.values.at("model");
-
-        LOG_INFO("Running in-memory indexing: graph=" + graph_path);
-
-        // Step 1: Load pore model (built-in or file)
-        auto model = load_model_or_file(model_arg);
-        if (!model) {
-            return 1;
-        }
-
-        // Step 2: Load graph from file
-        auto loader = piru::io::make_graph_loader(graph_path);
-        if (!loader) {
-            LOG_ERROR("map: unsupported graph format for '" + graph_path + "'");
-            return 1;
-        }
-
-        piru::io::ImportedGraph imported;
-
-        if (!loader->load(imported)) {
-            LOG_ERROR("map: failed to read graph file '" + graph_path + "'");
-            return 1;
-        }
-
-        LOG_INFO("loaded graph: " + std::to_string(imported.nodes.size()) + " nodes, " +
-                 std::to_string(imported.edges.size()) + " edges, " +
-                 std::to_string(imported.paths.size()) + " paths (" +
-                 loader->get_format_name() + ")");
-
-        // Step 3: Configure indexing pipeline
-        piru::index::IndexPipelineConfig index_config;
-
-        // Apply CLI overrides for indexer backend
-        if (parsed.values.count("indexer-backend")) {
-            index_config.indexer_backend = parsed.values.at("indexer-backend");
-            LOG_DEBUG("Using indexer backend=" + index_config.indexer_backend);
-        }
-
-        // Apply CLI overrides for seed extraction (affects in-memory indexing)
-        if (parsed.values.count("seed-k")) {
-            index_config.seed_k = std::stoull(parsed.values.at("seed-k"));
-            LOG_DEBUG("Using seed k=" + std::to_string(index_config.seed_k) + " for indexing");
-        }
-        if (parsed.values.count("seed-stride")) {
-            index_config.seed_stride = std::stoull(parsed.values.at("seed-stride"));
-            LOG_DEBUG("Using seed stride=" + std::to_string(index_config.seed_stride) + " for indexing");
-        }
-        if (parsed.values.count("seed-type")) {
-            index_config.seed_type = parsed.values.at("seed-type");
-            LOG_DEBUG("Using seed type=" + index_config.seed_type + " for indexing");
-        }
-        if (parsed.values.count("minimizer-window")) {
-            index_config.minimizer_window = std::stoull(parsed.values.at("minimizer-window"));
-            LOG_DEBUG("Using minimizer window=" + std::to_string(index_config.minimizer_window) + " for indexing");
-        }
-        if (parsed.values.count("seed-freq-cutoff")) {
-            index_config.seed_freq_cutoff = std::stod(parsed.values.at("seed-freq-cutoff"));
-            LOG_DEBUG("Using seed freq cutoff=" + std::to_string(index_config.seed_freq_cutoff) + " for indexing");
-        }
-        if (parsed.values.count("seed-freq-cap")) {
-            index_config.seed_freq_cap = std::stod(parsed.values.at("seed-freq-cap"));
-            LOG_DEBUG("Using seed freq cap=" + std::to_string(index_config.seed_freq_cap) + " for indexing");
-        }
-        if (parsed.values.count("fuzzy-backend")) {
-            index_config.fuzzy_quantizer = parsed.values.at("fuzzy-backend");
-            LOG_DEBUG("Using fuzzy quantizer=" + index_config.fuzzy_quantizer + " for indexing");
-        }
-        if (parsed.values.count("fuzzy-fine-min")) {
-            index_config.fuzzy_fine_min = std::stof(parsed.values.at("fuzzy-fine-min"));
-            LOG_DEBUG("Using fuzzy fine_min=" + std::to_string(index_config.fuzzy_fine_min));
-        }
-        if (parsed.values.count("fuzzy-fine-max")) {
-            index_config.fuzzy_fine_max = std::stof(parsed.values.at("fuzzy-fine-max"));
-            LOG_DEBUG("Using fuzzy fine_max=" + std::to_string(index_config.fuzzy_fine_max));
-        }
-        if (parsed.values.count("fuzzy-fine-range")) {
-            index_config.fuzzy_fine_range = std::stof(parsed.values.at("fuzzy-fine-range"));
-            LOG_DEBUG("Using fuzzy fine_range=" + std::to_string(index_config.fuzzy_fine_range));
-        }
-        if (parsed.values.count("fuzzy-bins")) {
-            index_config.fuzzy_n_bins = static_cast<std::uint32_t>(std::stoul(parsed.values.at("fuzzy-bins")));
-            LOG_DEBUG("Using fuzzy n_bins=" + std::to_string(index_config.fuzzy_n_bins));
-        }
-
-        // Pass executor for parallel indexing
-        index_config.executor = executor.get();
-
-        // Step 4: Run full indexing pipeline
-        // (simple expand → path-walk index)
-        auto index_result = piru::index::run_index_pipeline(imported, *model, index_config);
-
-        graph_store = std::move(index_result.graph_store);
-        seed_store = std::move(index_result.seed_store);
-        linearization_coords = std::move(index_result.linearization_coords);
-        path_lengths = std::move(index_result.path_lengths);
-        fuzzy_quantizer_name = index_result.fuzzy_quantizer;
-        pore_model_name = model_arg;
-
-        // Preserve fuzzy fine params for query-side processing
-        fuzzy_fine_min = index_config.fuzzy_fine_min;
-        fuzzy_fine_max = index_config.fuzzy_fine_max;
-        fuzzy_fine_range = index_config.fuzzy_fine_range;
-        fuzzy_n_bins = index_config.fuzzy_n_bins;
-
-        LOG_INFO("In-memory indexing complete");
     }
+
+    auto graph_store = std::move(loaded.graph);
+    auto seed_store = std::move(loaded.seeds);
+    auto linearization_coords = std::move(loaded.linearization_coords);
+    const std::string fuzzy_quantizer_name = loaded.metadata.fuzzy_quantizer;
+    const std::string pore_model_name = loaded.metadata.model_name;
 
     PIRU_PROFILE_STOP(profile, "index");
 
@@ -494,20 +288,17 @@ int handle_map(const std::vector<std::string>& args) {
     map_config.linearization_coords = &linearization_coords;  // For DP chaining
     map_config.path_lengths = &path_lengths;  // For anchor bounds checking
 
-    // Configure fuzzy quantizer from index metadata
+    // Configure fuzzy quantizer from index metadata.
+    // Match index-time defaults (IndexPipelineConfig) — these are not yet stored in .pirx.
     if (!fuzzy_quantizer_name.empty()) {
         map_config.fuzzy_config.backend = fuzzy_quantizer_name;
     }
-    map_config.fuzzy_config.pore_model = pore_model_name;  // For chemistry-specific defaults
-    map_config.fuzzy_config.fine_min = fuzzy_fine_min;
-    map_config.fuzzy_config.fine_max = fuzzy_fine_max;
-    map_config.fuzzy_config.fine_range = fuzzy_fine_range;
-    map_config.fuzzy_config.n_bins = fuzzy_n_bins;
-    LOG_DEBUG("Using fuzzy quantizer: " + map_config.fuzzy_config.backend +
-              " (fine_min=" + std::to_string(fuzzy_fine_min) +
-              ", fine_max=" + std::to_string(fuzzy_fine_max) +
-              ", fine_range=" + std::to_string(fuzzy_fine_range) +
-              ", n_bins=" + std::to_string(fuzzy_n_bins) + ")");
+    map_config.fuzzy_config.pore_model = pore_model_name;
+    map_config.fuzzy_config.fine_min = -2.0f;
+    map_config.fuzzy_config.fine_max = 2.0f;
+    map_config.fuzzy_config.fine_range = 0.4f;
+    map_config.fuzzy_config.n_bins = 0;
+    LOG_DEBUG("Using fuzzy quantizer: " + map_config.fuzzy_config.backend);
 
     // Configure seed extractor from seed store parameters
     const auto* hash_seed_store = dynamic_cast<piru::index::HashSeedStore*>(seed_store.get());

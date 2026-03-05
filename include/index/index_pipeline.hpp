@@ -19,8 +19,7 @@ namespace piru::index {
 
 // Configuration for the indexing pipeline.
 //
-// IMPORTANT: These defaults are shared by both `piru index` and `piru map --graph`.
-// This is the single source of truth for indexing parameters.
+// Single source of truth for indexing parameters (used by `piru index`).
 struct IndexPipelineConfig {
     // -------------------------------------------------------------------------
     // Indexer Backend

@@ -10,7 +10,7 @@
 #include "cli/parse.hpp"
 #include "index/index_pipeline.hpp"
 #include "io/graphs/graph_loader_factory.hpp"
-#include "io/index/simple_serialization.hpp"
+#include "io/index/serialization.hpp"
 #include "io/models/model_factory.hpp"
 #include "util/logging.hpp"
 #include "util/timing.hpp"
@@ -162,7 +162,7 @@ int handle_index(const std::vector<std::string>& args) {
     LOG_INFO("output: " + output_base);
 
     // -------------------------------------------------------------------------
-    // Run Indexing Pipeline (shared with map --graph)
+    // Run Indexing Pipeline
     // -------------------------------------------------------------------------
 
     piru::index::IndexPipelineConfig index_config;
@@ -196,11 +196,11 @@ int handle_index(const std::vector<std::string>& args) {
         output_path += ".pirx";
     }
 
-    piru::io::index::SimpleIndexMetadata metadata;
+    piru::io::index::IndexMetadata metadata;
     metadata.model_name = result.model_name;
     metadata.pore_k = result.pore_k;
     metadata.fuzzy_quantizer = result.fuzzy_quantizer;
-    piru::io::index::save_simple_index(
+    piru::io::index::save_index(
         output_path,
         *result.graph_store,
         *result.seed_store,
@@ -210,8 +210,8 @@ int handle_index(const std::vector<std::string>& args) {
     LOG_INFO("Index written to " + output_path);
 
     PIRU_PROFILE_STOP(profile, "serialize");
-
     PIRU_PROFILE_STOP(profile, "index");
     if (profile) piru::timing::report(std::cerr);
+    
     return 0;
 }

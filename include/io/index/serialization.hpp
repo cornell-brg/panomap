@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Serialization for simple index pipeline (single-file format).
+// Serialization for .pirx index format (single-file binary).
 
 #pragma once
 
@@ -13,39 +13,39 @@
 
 namespace piru::io::index {
 
-struct SimpleIndexMetadata {
+struct IndexMetadata {
     std::string model_name;
     uint32_t pore_k{0};
     std::string fuzzy_quantizer;
 };
 
-struct SimpleLoadedIndex {
-    SimpleIndexMetadata metadata;
+struct LoadedIndex {
+    IndexMetadata metadata;
     std::unique_ptr<piru::index::AdjListGraphStore> graph;
     std::unique_ptr<piru::index::HashSeedStore> seeds;
     std::vector<std::vector<piru::index::LinearCoordinate>> linearization_coords;
 };
 
 /**
- * Save a simple index to a single file.
+ * Save an index to a single .pirx file.
  *
- * Format: PIR2 header + metadata + graph + linearization + seeds
+ * Format: PIRX header + metadata + graph + linearization + seeds
  */
-void save_simple_index(
+void save_index(
     const std::string& path,
     const piru::index::GraphStore& graph,
     const piru::index::SeedStore& seeds,
     const std::vector<std::vector<piru::index::LinearCoordinate>>& linearization_coords,
-    const SimpleIndexMetadata& metadata);
+    const IndexMetadata& metadata);
 
 /**
- * Load a simple index from a single file.
+ * Load an index from a .pirx file.
  */
-SimpleLoadedIndex load_simple_index(const std::string& path);
+LoadedIndex load_index(const std::string& path);
 
 /**
- * Check if a file is a simple index (has PIR2 magic).
+ * Check if a file is a .pirx index (has PIRX magic header).
  */
-bool is_simple_index(const std::string& path);
+bool is_pirx_index(const std::string& path);
 
 }  // namespace piru::io::index

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-#include "io/index/simple_serialization.hpp"
+#include "io/index/serialization.hpp"
 
 #include <fstream>
 #include <stdexcept>
@@ -46,21 +46,21 @@ std::string read_string(std::istream& in) {
 
 }  // namespace
 
-void save_simple_index(
+void save_index(
     const std::string& path,
     const piru::index::GraphStore& graph_store,
     const piru::index::SeedStore& seed_store,
     const std::vector<std::vector<piru::index::LinearCoordinate>>& linearization_coords,
-    const SimpleIndexMetadata& metadata)
+    const IndexMetadata& metadata)
 {
     const auto* adj_store = dynamic_cast<const piru::index::AdjListGraphStore*>(&graph_store);
     if (!adj_store) {
-        throw std::runtime_error("Unsupported GraphStore backend for simple serialization");
+        throw std::runtime_error("Unsupported GraphStore backend for serialization");
     }
 
     const auto* hash_store = dynamic_cast<const piru::index::HashSeedStore*>(&seed_store);
     if (!hash_store) {
-        throw std::runtime_error("Unsupported SeedStore backend for simple serialization");
+        throw std::runtime_error("Unsupported SeedStore backend for serialization");
     }
 
     std::ofstream out(path, std::ios::binary);
@@ -151,11 +151,11 @@ void save_simple_index(
         }
     }
 
-    LOG_INFO("Saved simple index: " + std::to_string(graph.nodeCount()) + " nodes, " +
+    LOG_INFO("Saved index: " + std::to_string(graph.nodeCount()) + " nodes, " +
              std::to_string(seed_data.size()) + " seeds → " + path);
 }
 
-SimpleLoadedIndex load_simple_index(const std::string& path) {
+LoadedIndex load_index(const std::string& path) {
     std::ifstream in(path, std::ios::binary);
     if (!in) {
         throw std::runtime_error("Failed to open file for reading: " + path);
@@ -165,13 +165,13 @@ SimpleLoadedIndex load_simple_index(const std::string& path) {
     char magic[4];
     in.read(magic, 4);
     if (std::string(magic, 4) != std::string(kMagic, 4)) {
-        throw std::runtime_error("Invalid magic number for simple index file");
+        throw std::runtime_error("Invalid magic number for index file");
     }
 
     uint32_t version;
     read_pod(in, version);
     if (version > kVersion) {
-        LOG_WARN("Simple index version " + std::to_string(version) +
+        LOG_WARN("Index version " + std::to_string(version) +
                  " is newer than supported version " + std::to_string(kVersion));
     }
 
@@ -179,7 +179,7 @@ SimpleLoadedIndex load_simple_index(const std::string& path) {
     read_pod(in, flags);
 
     // [Metadata]
-    SimpleIndexMetadata metadata;
+    IndexMetadata metadata;
     metadata.model_name = read_string(in);
     read_pod(in, metadata.pore_k);
     metadata.fuzzy_quantizer = read_string(in);
@@ -298,7 +298,7 @@ SimpleLoadedIndex load_simple_index(const std::string& path) {
         }
     }
 
-    LOG_INFO("Loaded simple index: " + std::to_string(node_count) + " nodes, " +
+    LOG_INFO("Loaded index: " + std::to_string(node_count) + " nodes, " +
              std::to_string(entry_count) + " seeds ← " + path);
 
     return {
@@ -309,7 +309,7 @@ SimpleLoadedIndex load_simple_index(const std::string& path) {
     };
 }
 
-bool is_simple_index(const std::string& path) {
+bool is_pirx_index(const std::string& path) {
     std::ifstream in(path, std::ios::binary);
     if (!in) {
         return false;
