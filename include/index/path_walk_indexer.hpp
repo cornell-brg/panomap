@@ -5,7 +5,7 @@
  * Combines squigglization, linearization, and seed extraction into a single
  * path-walking pass (conceptually - two passes needed for normalization stats).
  *
- * This replaces the separate squigglize → linearize → seed_builder stages
+ * This replaces the separate squigglize -> linearize -> seed_builder stages
  * of the classic pipeline.
  */
 
@@ -29,7 +29,7 @@ struct PathWalkIndexConfig {
     // Seed extraction parameters
     std::size_t seed_k{6};
     std::size_t seed_stride{1};
-    double seed_freq_cutoff{0.5};  // threshold percentile (above this → subsample)
+    double seed_freq_cutoff{0.5};  // threshold percentile (above this -> subsample)
     double seed_freq_cap{0.55};    // subsample cap percentile (target for subsampled seeds)
 
     // Debug: dump per-path normalization stats to file (empty = disabled)
@@ -66,12 +66,12 @@ struct PathWalkIndexResult {
  *   Pass 2: Normalize, fuzzy quantize, extract seeds, track linear coordinates
  *
  * @param graph AlnGraph from simpleExpand() (2x nodes: forward + reverse)
- * @param model Pore model for squigglization (k-mer → expected signal)
+ * @param model Pore model for squigglization (k-mer -> expected signal)
  * @param fuzzy_quantizer Converts normalized signal to discrete tokens
  * @param extractor Extracts seeds from fuzzy-quantized tokens
  * @param config Seed extraction parameters
  *
- * @return seed_store (hash → [(node_id, offset), ...] with dedup) and
+ * @return seed_store (hash -> [(node_id, offset), ...] with dedup) and
  *         linearization_coords (per-node linear coordinates from path walks)
  *
  * @note No SignalStore output - the simple pipeline doesn't store per-node signals.

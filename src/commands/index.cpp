@@ -1,3 +1,17 @@
+/**
+ * index.cpp
+ *
+ * CLI handler for `piru index`. Parses arguments, loads a graph and
+ * pore model, runs the indexing pipeline, and serializes the result
+ * to a .pirx file.
+ *
+ * Related:
+ *  - index_pipeline.cpp  (indexing logic)
+ *  - serialization.cpp   (.pirx format)
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 #include "commands/index.hpp"
 
 #include <filesystem>
@@ -77,7 +91,8 @@ int handle_index(const std::vector<std::string>& args) {
         piru::logger.set_level(piru::LogLevel::DEBUG);
     }
 
-    // Parse thread count and create executor
+    /* Thread setup */
+
     const int num_threads = [&]() {
         auto it = parsed.values.find("threads");
         if (it == parsed.values.end()) return -1;
@@ -91,6 +106,8 @@ int handle_index(const std::vector<std::string>& args) {
     auto executor = piru::concurrency::make_executor(num_threads);
     LOG_DEBUG("Using " + std::to_string(executor->max_concurrency()) + " threads (" +
               executor->backend_name() + ")");
+
+    /* Input validation */
 
     const std::string model_arg =
         parsed.values.count("model") ? parsed.values.at("model") : "r10.4";
@@ -128,9 +145,7 @@ int handle_index(const std::vector<std::string>& args) {
              std::to_string(imported.edges.size()) + " edges, " +
              std::to_string(imported.paths.size()) + " paths (" + loader->get_format_name() + ")");
 
-    // -------------------------------------------------------------------------
-    // Parameter parsing and validation
-    // -------------------------------------------------------------------------
+    /* Parameter parsing */
 
     const std::size_t pore_k = model->k();
 
@@ -153,7 +168,6 @@ int handle_index(const std::vector<std::string>& args) {
                                      ? std::stod(parsed.values.at("seed-freq-cap"))
                                      : defaults.seed_freq_cap;
 
-    // Default output in current directory (stem without extension)
     std::string output_base = std::filesystem::path(graph_path).stem().string();
     if (parsed.values.count("output")) {
         output_base = parsed.values.at("output");
@@ -167,9 +181,7 @@ int handle_index(const std::vector<std::string>& args) {
              ", freq_cap=" + std::to_string(seed_freq_cap));
     LOG_INFO("output: " + output_base);
 
-    // -------------------------------------------------------------------------
-    // Run Indexing Pipeline
-    // -------------------------------------------------------------------------
+    /* Run indexing pipeline */
 
     piru::index::IndexPipelineConfig index_config;
     index_config.seed_type = seed_type;
@@ -186,14 +198,11 @@ int handle_index(const std::vector<std::string>& args) {
         index_config.dump_norm_stats_path = parsed.values.at("dump-norm-stats");
     }
 
-    // Pass executor for parallel indexing
     index_config.executor = executor.get();
 
     auto result = piru::index::run_index_pipeline(imported, *model, index_config);
 
-    // -------------------------------------------------------------------------
-    // Serialize Index
-    // -------------------------------------------------------------------------
+    /* Serialize index */
 
     PIRU_PROFILE_START(profile, "serialize");
 

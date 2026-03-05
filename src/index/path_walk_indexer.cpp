@@ -229,12 +229,12 @@ PathWalkIndexResult pathWalkIndex(const AlnGraph& graph, const io::KmerModel& mo
         std::mt19937 rng(static_cast<unsigned>(path_idx));
         for (auto& [hash, hits] : path_seed_store.mutableData()) {
             if (hits.size() <= threshold) {
-                // Below threshold — merge all
+                // Below threshold -- merge all
                 for (const auto& hit : hits) {
                     thread_store.insert(hash, hit);
                 }
             } else if (subsample_cap > 0) {
-                // Above threshold — subsample to subsample_cap
+                // Above threshold -- subsample to subsample_cap
                 std::size_t target = std::min(subsample_cap, hits.size());
                 std::size_t n = hits.size();
                 for (std::size_t i = 0; i < target; ++i) {
@@ -245,7 +245,7 @@ PathWalkIndexResult pathWalkIndex(const AlnGraph& graph, const io::KmerModel& mo
                     thread_store.insert(hash, hits[i]);
                 }
             }
-            // else: subsample_cap == 0 → harddrop (discard entirely)
+            // else: subsample_cap == 0 -> harddrop (discard entirely)
         }
     };
 

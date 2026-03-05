@@ -24,8 +24,6 @@ public:
     virtual std::optional<std::int64_t> linearPosition(std::size_t node_id) const = 0;
 };
 
-using GraphStorePtr = std::unique_ptr<GraphStore>;
-
 class AdjListGraphStore : public GraphStore {
 public:
     AdjListGraphStore() = default;

@@ -1,3 +1,17 @@
+/**
+ * map.cpp
+ *
+ * CLI handler for `piru map`. Loads a pre-built index, processes reads
+ * through the mapping pipeline (seeds -> anchors -> chains -> results),
+ * and writes output in PAF/GAF/GAM/JSON format.
+ *
+ * Related:
+ *  - batch_mapper.cpp    (mapping pipeline)
+ *  - serialization.cpp   (.pirx loading)
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 #include "commands/map.hpp"
 
 #include <algorithm>
@@ -45,9 +59,7 @@ piru::signal::SeedExtractorConfig seed_config_from_store(const piru::index::Hash
 }  // namespace
 
 int handle_map(const std::vector<std::string>& args) {
-    // =========================================================================
-    // CLI PARSING
-    // =========================================================================
+    /* CLI parsing */
 
     piru::cli::Parsed parsed;
     piru::cli::ParseConfig config;
@@ -118,9 +130,7 @@ int handle_map(const std::vector<std::string>& args) {
         return 0;
     }
 
-    // =========================================================================
-    // ARGUMENT VALIDATION
-    // =========================================================================
+    /* Argument validation */
 
     // Validate required --index
     if (!parsed.values.count("index")) {
@@ -213,9 +223,7 @@ int handle_map(const std::vector<std::string>& args) {
 
     PIRU_PROFILE_START(profile, "map");
 
-    // =========================================================================
-    // INDEX LOADING
-    // =========================================================================
+    /* Index loading */
 
     PIRU_PROFILE_START(profile, "index");
 
@@ -252,9 +260,7 @@ int handle_map(const std::vector<std::string>& args) {
 
     PIRU_PROFILE_STOP(profile, "index");
 
-    // =========================================================================
-    // READ FILE DISCOVERY
-    // =========================================================================
+    /* Read file discovery */
 
     const std::string reads_path = parsed.positionals[0];
     std::vector<std::filesystem::path> files;
@@ -283,9 +289,7 @@ int handle_map(const std::vector<std::string>& args) {
         return 1;
     }
 
-    // =========================================================================
-    // MAPPER CONFIGURATION
-    // =========================================================================
+    /* Mapper configuration */
 
     piru::mapping::BatchMapperConfig map_config;
     map_config.num_threads = num_threads;
@@ -295,7 +299,7 @@ int handle_map(const std::vector<std::string>& args) {
     map_config.path_lengths = &path_lengths;                  // For anchor bounds checking
 
     // Configure fuzzy quantizer from index metadata.
-    // Match index-time defaults (IndexPipelineConfig) — these are not yet stored in .pirx.
+    // Match index-time defaults (IndexPipelineConfig) -- these are not yet stored in .pirx.
     if (!fuzzy_quantizer_name.empty()) {
         map_config.fuzzy_config.backend = fuzzy_quantizer_name;
     }
@@ -381,7 +385,7 @@ int handle_map(const std::vector<std::string>& args) {
         map_config.roi_nodes = &roi_nodes;
         map_config.roi_threshold = roi_threshold;
         map_config.classify_mode = classify_mode;
-        // Force top-1 chain only — we only need the best for classification
+        // Force top-1 chain only -- we only need the best for classification
         map_config.clusterer_config.dp_max_chains = 1;
         LOG_INFO("ROI classification: mode=" + classify_mode +
                  ", threshold=" + std::to_string(roi_threshold) + ", " +
@@ -422,7 +426,7 @@ int handle_map(const std::vector<std::string>& args) {
             ->recompute_threshold_from_percentile(percentile);
         LOG_INFO(
             "Map-time seed freq cap at " + std::to_string(percentile * 100) +
-            "th percentile → threshold=" + std::to_string(hash_seed_store->frequency_threshold()));
+            "th percentile -> threshold=" + std::to_string(hash_seed_store->frequency_threshold()));
     }
 
     // Log the seed frequency threshold being used
@@ -508,9 +512,7 @@ int handle_map(const std::vector<std::string>& args) {
             std::stod(parsed.values.at("min-secondary-ratio"));
     }
 
-    // =========================================================================
-    // READ PROCESSING
-    // =========================================================================
+    /* Read processing */
 
     PIRU_PROFILE_START(profile, "mapping");
 

@@ -47,7 +47,7 @@ using AnchorExpanderPtr = std::unique_ptr<AnchorExpander>;
 // - Emit one anchor per coordinate occurrence (handles multiple paths/cycles)
 // - Add node_offset to ref_coord to get precise position
 //
-// Multiplicity: 1 hit → N anchors (N = number of paths the node appears on)
+// Multiplicity: 1 hit -> N anchors (N = number of paths the node appears on)
 // Seeds with no linearization coordinates (empty vector) are skipped.
 class PathWalkExpander : public AnchorExpander {
 public:
@@ -72,7 +72,7 @@ private:
 // - Lookup chain_id and linear_position from GraphStore
 // - Create anchor with path_id = chain_id, ref_coord = linear_position + offset
 //
-// Multiplicity: 1 hit → 1 anchor (trivial mapping)
+// Multiplicity: 1 hit -> 1 anchor (trivial mapping)
 // Seeds without chain_id (unmapped nodes) are skipped.
 class SuperbubbleExpander : public AnchorExpander {
 public:

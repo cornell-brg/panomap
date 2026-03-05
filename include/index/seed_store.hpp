@@ -43,8 +43,6 @@ public:
     virtual const std::map<std::string, std::string>& params() const = 0;
 };
 
-using SeedStorePtr = std::unique_ptr<SeedStore>;
-
 class HashSeedStore : public SeedStore {
 public:
     void insert(std::uint64_t hash, SeedHit hit) override {

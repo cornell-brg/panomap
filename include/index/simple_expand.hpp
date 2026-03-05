@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Simple ±expand transformation: ImportedGraph → AlnGraph with exactly 2x nodes.
+// Simple ±expand transformation: ImportedGraph -> AlnGraph with exactly 2x nodes.
 
 #pragma once
 

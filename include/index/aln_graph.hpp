@@ -7,7 +7,6 @@
 #include <cstdint>
 #include <optional>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 namespace piru::index {
@@ -25,8 +24,6 @@ struct AlnPath {
     // The size would be steps.size() - 1 for overlaps between steps.
     std::vector<std::size_t> overlaps;
 };
-
-// ... (rest of the file)
 
 struct AlnNode {
     std::size_t id{0};        // Sequential ID within the graph.

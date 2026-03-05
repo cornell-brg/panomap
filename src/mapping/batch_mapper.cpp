@@ -345,7 +345,7 @@ void dumpPathChainsToFile(const char* filename, const std::string& read_id, std:
             num_skipped = 0;
             double cost = gap_cost(anchor_j, anchor_i);
             // minimap2-style matching bonus: min(Δq, Δr, anchor_length)
-            // Penalizes drift — only get credit for the shorter advance
+            // Penalizes drift -- only get credit for the shorter advance
             std::int64_t dq = static_cast<std::int64_t>(anchor_i.query_pos) -
                               static_cast<std::int64_t>(anchor_j.query_pos);
             std::int64_t dr = anchor_i.ref_coord - anchor_j.ref_coord;
@@ -692,14 +692,14 @@ PipelineComponents BatchMapper::create_components() const {
 
     // Create AnchorExpander based on linearization type
     if (config_.linearization_coords) {
-        // Path-walk linearization → PathWalkExpander
+        // Path-walk linearization -> PathWalkExpander
         if (!config_.path_lengths) {
             throw std::runtime_error("PathWalkExpander requires path_lengths for bounds checking");
         }
         comps.expander = std::make_unique<PathWalkExpander>(*config_.linearization_coords,
                                                             *config_.path_lengths);
     } else {
-        // Superbubble linearization → SuperbubbleExpander
+        // Superbubble linearization -> SuperbubbleExpander
         if (!config_.graph_store) {
             throw std::runtime_error("BatchMapper requires GraphStore for superbubble expansion");
         }

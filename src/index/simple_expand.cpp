@@ -31,7 +31,7 @@ std::string revcomp(const std::string& seq) {
 AlnGraph simpleExpand(const piru::io::ImportedGraph& imported) {
     AlnGraph graph;
 
-    // Build mapping: original string ID → index (0-based)
+    // Build mapping: original string ID -> index (0-based)
     // Needed because edges/paths reference nodes by string ID, but we need the
     // numeric index to compute AlnGraph node IDs (index*2 for fwd, index*2+1 for rev)
     std::unordered_map<std::string, std::size_t> id_to_index;
@@ -54,16 +54,16 @@ AlnGraph simpleExpand(const piru::io::ImportedGraph& imported) {
 
         // Forward node at ID = i * 2
         AlnNode fwd;
-        fwd.label = orig.id + "+";  // TODO: remove later, not needed
-        fwd.original_id = orig.id;  // TODO: remove later, not needed
+        fwd.label = orig.id + "+";
+        fwd.original_id = orig.id;
         fwd.is_reverse = false;
         fwd.sequence = orig.sequence;
         graph.setNode(forwardNodeId(i), fwd);
 
         // Reverse node at ID = i * 2 + 1
         AlnNode rev;
-        rev.label = orig.id + "-";  // TODO: remove later, not needed
-        rev.original_id = orig.id;  // TODO: remove later, not needed
+        rev.label = orig.id + "-";
+        rev.original_id = orig.id;
         rev.is_reverse = true;
         rev.sequence = revcomp(orig.sequence);
         graph.setNode(reverseNodeId(i), rev);
@@ -100,8 +100,8 @@ AlnGraph simpleExpand(const piru::io::ImportedGraph& imported) {
             graph.addEdge(edge);
         }
 
-        // Add reverse complement edge: rev(to) → rev(from)
-        // If original edge is A+ → B+, reverse is B- → A-
+        // Add reverse complement edge: rev(to) -> rev(from)
+        // If original edge is A+ -> B+, reverse is B- -> A-
         std::size_t rev_from_aln_id =
             orig_edge.to_reverse ? forwardNodeId(to_idx) : reverseNodeId(to_idx);
         std::size_t rev_to_aln_id =

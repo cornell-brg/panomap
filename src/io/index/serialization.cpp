@@ -1,4 +1,11 @@
-// SPDX-License-Identifier: MIT
+/**
+ * serialization.cpp
+ *
+ * Binary read/write for the .pirx index format.
+ * See serialization.hpp for format layout.
+ *
+ * SPDX-License-Identifier: MIT
+ */
 
 #include "io/index/serialization.hpp"
 
@@ -15,10 +22,9 @@ namespace {
 constexpr char kMagic[4] = {'P', 'I', 'R', 'X'};
 constexpr uint32_t kVersion = 1;
 
-// Flags (bit field)
-constexpr uint32_t kFlagHasSequences = 1 << 0;     // Node DNA sequences stored
-constexpr uint32_t kFlagHasFuzzySignals = 1 << 1;  // Fuzzy quantized signals (future)
-constexpr uint32_t kFlagHasAlignSignals = 1 << 2;  // Alignment quantized signals (future)
+constexpr uint32_t kFlagHasSequences = 1 << 0;
+constexpr uint32_t kFlagHasFuzzySignals = 1 << 1;   // reserved
+constexpr uint32_t kFlagHasAlignSignals = 1 << 2;    // reserved
 
 template <typename T>
 void write_pod(std::ostream& out, const T& val) {
@@ -67,22 +73,24 @@ void save_index(const std::string& path, const piru::index::GraphStore& graph_st
 
     const auto& graph = adj_store->graph();
 
-    // [Header]
+    /* 1. Header */
+
     out.write(kMagic, 4);
     write_pod<uint32_t>(out, kVersion);
-    uint32_t flags = 0;  // No sequences by default
+    uint32_t flags = 0;
     write_pod<uint32_t>(out, flags);
 
-    // [Metadata]
+    /* 2. Metadata */
+
     write_string(out, metadata.model_name);
     write_pod<uint32_t>(out, metadata.pore_k);
     write_string(out, metadata.fuzzy_quantizer);
-    // Legacy: graph_flavor string (was "vg" vs "dbg"). Only variation graphs
-    // are supported now. Write empty string to preserve .pirx binary layout.
-    // TODO: remove on next .pirx format version bump.
+    // Legacy: graph_flavor was "vg" vs "dbg", now unused. Write empty string
+    // to preserve .pirx binary layout. Remove on next format version bump.
     write_string(out, std::string{});
 
-    // [Graph - Nodes]
+    /* 3. Graph - nodes */
+
     write_pod<uint64_t>(out, graph.nodeCount());
     for (std::size_t i = 0; i < graph.nodeCount(); ++i) {
         const auto& node = graph.node(i);
@@ -93,7 +101,8 @@ void save_index(const std::string& path, const piru::index::GraphStore& graph_st
         }
     }
 
-    // [Graph - Edges]
+    /* 4. Graph - edges */
+
     write_pod<uint64_t>(out, graph.edgeCount());
     for (const auto& edge : graph.edges()) {
         write_pod<uint64_t>(out, edge.from);
@@ -101,7 +110,8 @@ void save_index(const std::string& path, const piru::index::GraphStore& graph_st
         write_pod<uint64_t>(out, edge.overlap_bases);
     }
 
-    // [Graph - Paths]
+    /* 5. Graph - paths */
+
     write_pod<uint64_t>(out, graph.pathCount());
     for (std::size_t i = 0; i < graph.pathCount(); ++i) {
         const auto& path = graph.paths()[i];
@@ -114,7 +124,8 @@ void save_index(const std::string& path, const piru::index::GraphStore& graph_st
         }
     }
 
-    // [Linearization]
+    /* 6. Linearization */
+
     write_pod<uint64_t>(out, linearization_coords.size());
     for (const auto& coords : linearization_coords) {
         write_pod<uint64_t>(out, coords.size());
@@ -124,7 +135,8 @@ void save_index(const std::string& path, const piru::index::GraphStore& graph_st
         }
     }
 
-    // [Seeds]
+    /* 7. Seeds */
+
     write_string(out, hash_store->extractor_name());
     const auto& params = hash_store->params();
     write_pod<uint64_t>(out, params.size());
@@ -149,7 +161,7 @@ void save_index(const std::string& path, const piru::index::GraphStore& graph_st
     }
 
     LOG_INFO("Saved index: " + std::to_string(graph.nodeCount()) + " nodes, " +
-             std::to_string(seed_data.size()) + " seeds → " + path);
+             std::to_string(seed_data.size()) + " seeds -> " + path);
 }
 
 LoadedIndex load_index(const std::string& path) {
@@ -158,7 +170,8 @@ LoadedIndex load_index(const std::string& path) {
         throw std::runtime_error("Failed to open file for reading: " + path);
     }
 
-    // [Header]
+    /* 1. Header */
+
     char magic[4];
     in.read(magic, 4);
     if (std::string(magic, 4) != std::string(kMagic, 4)) {
@@ -175,15 +188,17 @@ LoadedIndex load_index(const std::string& path) {
     uint32_t flags;
     read_pod(in, flags);
 
-    // [Metadata]
+    /* 2. Metadata */
+
     IndexMetadata metadata;
     metadata.model_name = read_string(in);
     read_pod(in, metadata.pore_k);
     metadata.fuzzy_quantizer = read_string(in);
-    // Legacy: graph_flavor was "vg" vs "dbg", now unused. Read and discard.
+    // Legacy: graph_flavor, read and discard
     read_string(in);
 
-    // [Graph - Nodes]
+    /* 3. Graph - nodes */
+
     uint64_t node_count;
     read_pod(in, node_count);
 
@@ -202,7 +217,8 @@ LoadedIndex load_index(const std::string& path) {
         graph->setNode(i, std::move(node));
     }
 
-    // [Graph - Edges]
+    /* 4. Graph - edges */
+
     uint64_t edge_count;
     read_pod(in, edge_count);
     for (uint64_t i = 0; i < edge_count; ++i) {
@@ -213,7 +229,8 @@ LoadedIndex load_index(const std::string& path) {
         graph->addEdge(edge);
     }
 
-    // [Graph - Paths]
+    /* 5. Graph - paths */
+
     uint64_t path_count;
     read_pod(in, path_count);
     for (uint64_t i = 0; i < path_count; ++i) {
@@ -234,7 +251,8 @@ LoadedIndex load_index(const std::string& path) {
         graph->addPath(std::move(aln_path));
     }
 
-    // [Linearization]
+    /* 6. Linearization */
+
     uint64_t lin_node_count;
     read_pod(in, lin_node_count);
 
@@ -252,7 +270,8 @@ LoadedIndex load_index(const std::string& path) {
         }
     }
 
-    // [Seeds]
+    /* 7. Seeds */
+
     auto seeds = std::make_unique<piru::index::HashSeedStore>();
     seeds->set_extractor_name(read_string(in));
 

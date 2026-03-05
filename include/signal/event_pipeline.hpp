@@ -54,7 +54,7 @@ public:
     virtual ~EventPipeline() = default;
 
     // Process a raw read and return normalized event signal.
-    // The internal ordering (detect→normalize or normalize→detect) is backend-specific.
+    // The internal ordering (detect->normalize or normalize->detect) is backend-specific.
     virtual NormalizedSignal process(const io::RawRead& read) const = 0;
 
     virtual const EventPipelineConfig& config() const = 0;

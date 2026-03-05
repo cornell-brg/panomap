@@ -1,4 +1,12 @@
-// SPDX-License-Identifier: MIT
+/**
+ * index_pipeline.cpp
+ *
+ * Implements the indexing pipeline: graph expansion, signal generation,
+ * quantization, and seed extraction. Delegates to node-first or
+ * path-walk backend based on config.
+ *
+ * SPDX-License-Identifier: MIT
+ */
 
 #include "index/index_pipeline.hpp"
 
@@ -20,7 +28,8 @@ IndexPipelineResult run_index_pipeline(const io::ImportedGraph& imported,
                                        const IndexPipelineConfig& config) {
     auto stage_start = std::chrono::high_resolution_clock::now();
 
-    // Stage 1: Simple +-expand (2x nodes)
+    /* 1. Expand graph (forward + reverse nodes) */
+
     AlnGraph aln_graph = simpleExpand(imported);
 
     auto stage_elapsed =
@@ -31,10 +40,10 @@ IndexPipelineResult run_index_pipeline(const io::ImportedGraph& imported,
         " nodes, " + std::to_string(aln_graph.edgeCount()) + " edges, " +
         std::to_string(aln_graph.pathCount()) + " paths [" + std::to_string(stage_elapsed) + "s]");
 
-    // Stage 2: Indexing (squigglize + linearize + seed extraction)
+    /* 2. Index (squigglize + linearize + seed extraction) */
+
     stage_start = std::chrono::high_resolution_clock::now();
 
-    // Create fuzzy quantizer
     signal::FuzzyQuantizerConfig fuzzy_cfg;
     fuzzy_cfg.backend = config.fuzzy_quantizer;
     fuzzy_cfg.pore_model = model.name();
@@ -47,7 +56,6 @@ IndexPipelineResult run_index_pipeline(const io::ImportedGraph& imported,
         throw std::runtime_error("Failed to create fuzzy quantizer: " + config.fuzzy_quantizer);
     }
 
-    // Create seed extractor
     signal::SeedExtractorConfig extractor_cfg;
     extractor_cfg.backend = config.seed_type;
     extractor_cfg.k = config.seed_k;
@@ -59,12 +67,10 @@ IndexPipelineResult run_index_pipeline(const io::ImportedGraph& imported,
         throw std::runtime_error("Failed to create seed extractor");
     }
 
-    // Package result - populated by either backend
     IndexPipelineResult result;
     std::vector<std::size_t> path_lengths;
 
     if (config.indexer_backend == "node-first") {
-        // Node-first indexing: process node interiors once, then fill boundaries
         NodeFirstIndexConfig nfi_config;
         nfi_config.seed_k = config.seed_k;
         nfi_config.seed_stride = config.seed_stride;
@@ -86,7 +92,6 @@ IndexPipelineResult run_index_pipeline(const io::ImportedGraph& imported,
         result.seed_store = std::move(nfi_result.seed_store);
         result.linearization_coords = std::move(nfi_result.linearization_coords);
     } else {
-        // Path-walk indexing: process each path independently (per-path normalization)
         PathWalkIndexConfig pwi_config;
         pwi_config.seed_k = config.seed_k;
         pwi_config.seed_stride = config.seed_stride;
@@ -108,14 +113,15 @@ IndexPipelineResult run_index_pipeline(const io::ImportedGraph& imported,
         result.linearization_coords = std::move(pwi_result.linearization_coords);
     }
 
-    // Copy path lengths to graph paths (for result_formatter coordinate flipping)
+    /* 3. Package result */
+
+    // Store path lengths in graph (for result_formatter coordinate flipping)
     for (std::size_t i = 0; i < aln_graph.pathCount(); ++i) {
         aln_graph.mutablePath(i).length = path_lengths[i];
     }
 
-    // Package remaining result fields
     result.graph_store = std::make_unique<AdjListGraphStore>(std::move(aln_graph));
-    result.path_lengths = std::move(path_lengths);  // For anchor bounds checking
+    result.path_lengths = std::move(path_lengths);
     result.pore_k = model.k();
     result.model_name = model.name();
     result.fuzzy_quantizer = fuzzy_cfg.backend;

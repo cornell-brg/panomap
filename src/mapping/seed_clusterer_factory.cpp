@@ -122,10 +122,10 @@ std::size_t calculate_cluster_coverage(const std::vector<const Anchor*>& cluster
     for (std::size_t i = 1; i < intervals.size(); ++i) {
         auto [start, end] = intervals[i];
         if (start <= current_end + 1) {
-            // Overlapping or adjacent — extend
+            // Overlapping or adjacent -- extend
             current_end = std::max(current_end, end);
         } else {
-            // No overlap — finalize current interval
+            // No overlap -- finalize current interval
             total_coverage += current_end - current_start + 1;
             current_start = start;
             current_end = end;

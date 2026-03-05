@@ -1,5 +1,14 @@
-// SPDX-License-Identifier: MIT
-// Serialization for .pirx index format (single-file binary).
+/**
+ * serialization.hpp
+ *
+ * .pirx index format: single-file binary containing graph topology,
+ * linearization coordinates, and seed hash table.
+ *
+ * Format: PIRX magic + metadata + graph (nodes/edges/paths)
+ *         + linearization + seeds.
+ *
+ * SPDX-License-Identifier: MIT
+ */
 
 #pragma once
 
@@ -26,24 +35,16 @@ struct LoadedIndex {
     std::vector<std::vector<piru::index::LinearCoordinate>> linearization_coords;
 };
 
-/**
- * Save an index to a single .pirx file.
- *
- * Format: PIRX header + metadata + graph + linearization + seeds
- */
+/** Save an index to a single .pirx file. */
 void save_index(const std::string& path, const piru::index::GraphStore& graph,
                 const piru::index::SeedStore& seeds,
                 const std::vector<std::vector<piru::index::LinearCoordinate>>& linearization_coords,
                 const IndexMetadata& metadata);
 
-/**
- * Load an index from a .pirx file.
- */
+/** Load an index from a .pirx file. */
 LoadedIndex load_index(const std::string& path);
 
-/**
- * Check if a file is a .pirx index (has PIRX magic header).
- */
+/** Check if a file has the PIRX magic header. */
 bool is_pirx_index(const std::string& path);
 
 }  // namespace piru::io::index
