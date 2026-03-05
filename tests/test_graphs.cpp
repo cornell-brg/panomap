@@ -55,7 +55,6 @@ TEST_CASE("GFA loader parses segments and links") {
 
 TEST_CASE("ImportedGraph basic helpers") {
     piru::io::ImportedGraph graph;
-    CHECK(graph.flavor == piru::io::ImportedGraphFlavor::kUnknown);
 
     graph.add_node({"id1", "AC"});
     graph.add_edge({"id1", "id2", false, true, "5M", 5});

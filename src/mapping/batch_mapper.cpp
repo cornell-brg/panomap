@@ -869,21 +869,6 @@ void BatchMapper::process_batch(BatchBuffer& batch) {
 void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
     const auto& read = batch.raw_reads[index];
 
-#ifdef PIRU_DUMP_GRAPHS
-    // Dump read signal processing stages to file (first read only)
-    static std::atomic<int> dump_count{0};
-    const int dump_idx = dump_count.fetch_add(1);
-    const bool should_dump = (dump_idx < 1);  // Only dump first read
-
-    std::ofstream signal_file;
-    if (should_dump) {
-        std::string filename = "signal_dump_" + std::to_string(dump_idx) + ".txt";
-        signal_file.open(filename);
-        if (!signal_file.is_open()) {
-            LOG_WARN("Failed to open signal dump file: " + filename);
-        }
-    }
-#endif
 
     // Signal processing: event detection + normalization
     batch.normalized[index] = components_.event_pipeline->process(batch.raw_reads[index]);
@@ -900,43 +885,6 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
     batch.fuzzy_quantized[index] = components_.fuzzy_quantizer->quantize(batch.normalized[index]);
     batch.seeds[index] = components_.seed_extractor->extract(batch.fuzzy_quantized[index]);
 
-#ifdef PIRU_DUMP_GRAPHS
-    if (should_dump && signal_file.is_open()) {
-        // Line 1: Metadata (read name)
-        signal_file << read.read_id << "\n";
-
-        // Line 2: Raw signal (ADC values converted to picoamps)
-        const auto& raw = read.raw_signal;
-        const float digitisation = read.digitisation;
-        const float offset = read.offset;
-        const float range = read.range;
-
-        for (std::size_t i = 0; i < read.len_raw_signal; ++i) {
-            if (i > 0) signal_file << ",";
-            float pA = ((raw[i] + offset) * range) / digitisation;
-            signal_file << pA;
-        }
-        signal_file << "\n";
-
-        // Line 3: Normalized signal (output of event pipeline)
-        const auto& normalized = batch.normalized[index].samples;
-        for (std::size_t i = 0; i < normalized.size(); ++i) {
-            if (i > 0) signal_file << ",";
-            signal_file << normalized[i];
-        }
-        signal_file << "\n";
-
-        // Line 4: Fuzzy quantized tokens
-        const auto& fuzzy = batch.fuzzy_quantized[index].tokens;
-        for (std::size_t i = 0; i < fuzzy.size(); ++i) {
-            if (i > 0) signal_file << ",";
-            signal_file << static_cast<int>(fuzzy[i]);
-        }
-        signal_file << "\n";
-
-        signal_file.close();
-    }
-#endif
 
     // Lookup seeds in the index and collect hits.
     components_.lookup.lookup(batch.seeds[index], batch.seed_hits[index]);
@@ -997,6 +945,36 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
         mapping.anchors = cluster.anchors;
         mapping.chain_score = cluster.cluster_score;
         result.mappings.push_back(std::move(mapping));
+    }
+
+    // ROI classification (if --roi is active)
+    if (config_.roi_nodes && !config_.classify_mode.empty() && result.mapped()) {
+        const auto& anchors = result.mappings[0].anchors;
+        const auto& roi = *config_.roi_nodes;
+
+        double roi_bases = 0.0;
+        double total_bases = 0.0;
+
+        for (std::size_t i = 0; i + 1 < anchors.size(); ++i) {
+            double segment_len = static_cast<double>(
+                anchors[i + 1].read_pos - anchors[i].read_pos);
+            total_bases += segment_len;
+
+            bool cur_in_roi = roi.count(anchors[i].target.node_id) > 0;
+            bool next_in_roi = roi.count(anchors[i + 1].target.node_id) > 0;
+            if (cur_in_roi && next_in_roi) {
+                roi_bases += segment_len;
+            }
+        }
+
+        result.roi_overlap = (total_bases > 0.0) ? roi_bases / total_bases : 0.0;
+
+        bool above_threshold = result.roi_overlap >= config_.roi_threshold;
+        if (config_.classify_mode == "enrich") {
+            result.roi_keep = above_threshold;
+        } else {  // deplete
+            result.roi_keep = !above_threshold;
+        }
     }
 
     // Dump chain if --dump-chains is set

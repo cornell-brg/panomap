@@ -27,8 +27,6 @@ struct ImportedGraphEdge {
     std::optional<std::size_t> overlap_bases;
 };
 
-// Graph flavor enum - note: value 1 was previously kDbg (removed)
-enum class ImportedGraphFlavor { kUnknown = 0, kVg = 2 };
 
 struct ImportedPathStep {
     std::string segment_id;
@@ -65,7 +63,6 @@ public:
         lookup_.clear();
     }
 
-    ImportedGraphFlavor flavor{ImportedGraphFlavor::kUnknown};
     std::vector<ImportedGraphNode> nodes;
     std::vector<ImportedGraphEdge> edges;
     std::vector<ImportedPath> paths;

@@ -36,6 +36,10 @@ struct ReadMapResult {
   std::vector<Mapping> mappings;          // primary (index 0) + secondaries
   std::size_t expanded_anchor_count{0};   // anchors before chaining
 
+  // ROI classification (populated when --roi is active)
+  double roi_overlap{-1.0};              // -1 = not computed
+  bool roi_keep{false};                  // final keep/reject decision
+
   /// Check if read mapped (has at least one mapping).
   bool mapped() const { return !mappings.empty(); }
 

@@ -78,6 +78,14 @@ std::vector<io::AlignmentResult> ResultFormatter::format(
 
     // Set graph path traversal (for GAF column 6)
     results.back().graph_path = buildPathString(mapping.anchors);
+
+    // ROI classification tags (primary only)
+    if (is_primary && map_result.roi_overlap >= 0.0) {
+      results.back().optional_fields.push_back(
+          "ro:f:" + std::to_string(map_result.roi_overlap));
+      results.back().optional_fields.push_back(
+          std::string("rd:A:") + (map_result.roi_keep ? "K" : "R"));
+    }
   }
 
   return results;

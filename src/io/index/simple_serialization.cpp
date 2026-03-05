@@ -80,7 +80,10 @@ void save_simple_index(
     write_string(out, metadata.model_name);
     write_pod<uint32_t>(out, metadata.pore_k);
     write_string(out, metadata.fuzzy_quantizer);
-    write_string(out, metadata.graph_flavor);
+    // Legacy: graph_flavor string (was "vg" vs "dbg"). Only variation graphs
+    // are supported now. Write empty string to preserve .pirx binary layout.
+    // TODO: remove on next .pirx format version bump.
+    write_string(out, std::string{});
 
     // [Graph - Nodes]
     write_pod<uint64_t>(out, graph.nodeCount());
@@ -180,7 +183,8 @@ SimpleLoadedIndex load_simple_index(const std::string& path) {
     metadata.model_name = read_string(in);
     read_pod(in, metadata.pore_k);
     metadata.fuzzy_quantizer = read_string(in);
-    metadata.graph_flavor = read_string(in);
+    // Legacy: graph_flavor was "vg" vs "dbg", now unused. Read and discard.
+    read_string(in);
 
     // [Graph - Nodes]
     uint64_t node_count;

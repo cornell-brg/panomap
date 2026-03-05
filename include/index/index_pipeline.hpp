@@ -50,7 +50,7 @@ struct IndexPipelineConfig {
     // -------------------------------------------------------------------------
 
     // Seed extractor backend: "kmer" or "minimizer"
-    std::string seed_backend{"kmer"};
+    std::string seed_backend{"minimizer"};
 
     // Minimizer window size (only used when seed_backend="minimizer")
     // Within each window of w consecutive k-mers, only the minimum hash is kept.
@@ -83,14 +83,14 @@ struct IndexPipelineConfig {
     // - 1.0 = keep all seeds (no filtering)
     // - Lower values reduce index size and mapping noise
     // - Default: 0.9 (configurable via CLI: --seed-filter)
-    double seed_filter{1.0};
+    double seed_filter{0.9};
 
     // Subsample cap percentile for seeds above the filter threshold.
     // - When seed_filter < 1.0, seeds above the threshold are subsampled
     //   down to the frequency at this percentile (instead of hard-dropped).
     // - Range: 0.0 to 1.0
-    // - Default: 0.55 (configurable via CLI: --seed-subsample)
-    double seed_subsample{0.55};
+    // - Default: 0.25 (configurable via CLI: --seed-subsample)
+    double seed_subsample{0.25};
 
     // -------------------------------------------------------------------------
     // Debug Options

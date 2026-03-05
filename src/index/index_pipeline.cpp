@@ -13,9 +13,6 @@
 #include "signal/seed_extractors/seed_extractor_factory.hpp"
 #include "util/logging.hpp"
 
-#ifdef PIRU_DUMP_GRAPHS
-#include "io/graphs/gfa_exporter.hpp"
-#endif
 
 namespace piru::index {
 
@@ -36,10 +33,6 @@ IndexPipelineResult run_index_pipeline(
              std::to_string(aln_graph.pathCount()) + " paths [" +
              std::to_string(stage_elapsed) + "s]");
 
-#ifdef PIRU_DUMP_GRAPHS
-    GfaExporter::dumpAlnGraph(aln_graph, "simple_expanded.gfa", AlnGraphDumpMode::Bases);
-    LOG_INFO("Exported simple expanded graph to simple_expanded.gfa");
-#endif
 
     // Stage 2: Indexing (squigglize + linearize + seed extraction)
     stage_start = std::chrono::high_resolution_clock::now();

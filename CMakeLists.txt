@@ -20,7 +20,6 @@ else()
 endif()
 
 option(PIRU_ENABLE_WARNINGS "Enable compiler warnings" ON)
-option(PIRU_DUMP_GRAPHS "Dump imported graph to GFA for debugging" OFF)
 option(PIRU_USE_TBB "Enable oneTBB backend for concurrency" ON)
 option(PIRU_FETCH_TBB "Fetch oneTBB via FetchContent if not found" ON)
 option(PIRU_FETCH_DOCTEST "Fetch doctest during configure (for tests)" ON)
@@ -78,6 +77,7 @@ add_executable(piru
     src/io/reads/pod5_provider.cpp
     src/io/reads/slow5_provider.cpp
     src/io/regions/bed_parser.cpp
+    src/io/regions/pira_parser.cpp
     src/io/models/builtin_models.cpp
     src/io/index/simple_serialization.cpp
     src/cli/parse.cpp
@@ -121,9 +121,6 @@ if(PIRU_ENABLE_WARNINGS)
     endif()
 endif()
 
-if(PIRU_DUMP_GRAPHS)
-    target_compile_definitions(piru PRIVATE PIRU_DUMP_GRAPHS)
-endif()
 
 if(PIRU_TBB_AVAILABLE)
     target_link_libraries(piru PRIVATE TBB::tbb)

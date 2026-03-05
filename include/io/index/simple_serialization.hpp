@@ -17,7 +17,6 @@ struct SimpleIndexMetadata {
     std::string model_name;
     uint32_t pore_k{0};
     std::string fuzzy_quantizer;
-    std::string graph_flavor;
 };
 
 struct SimpleLoadedIndex {

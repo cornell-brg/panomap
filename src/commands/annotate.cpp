@@ -220,7 +220,6 @@ int handle_annotate(const std::vector<std::string>& args) {
     }
 
     piru::io::ImportedGraph imported;
-    imported.flavor = piru::io::ImportedGraphFlavor::kVg;
     if (!loader->load(imported)) {
         LOG_ERROR("annotate: failed to read graph file '" + graph_path + "'");
         return 1;
@@ -249,6 +248,16 @@ int handle_annotate(const std::vector<std::string>& args) {
             lin_coords[node_id].emplace_back(path_idx, offset);
             offset += static_cast<std::int64_t>(aln_graph.node(node_id).sequence.size());
         }
+    }
+
+    // --- Write .pira header ---
+    {
+        std::ofstream ofs(output_path);
+        if (!ofs.is_open()) {
+            LOG_ERROR("annotate: cannot open output file '" + output_path + "'");
+            return 1;
+        }
+        ofs << "#pira v1 node-space=" << (use_original_ids ? "gfa" : "alngraph") << "\n";
     }
 
     // --- Step 1: Project BED intervals onto reference path ---

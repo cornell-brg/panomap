@@ -74,6 +74,11 @@ struct BatchMapperConfig {
     // Anchor merging (disable for debugging/heatmap comparison)
     bool enable_anchor_merge{true};
 
+    // ROI classification
+    const std::unordered_set<std::size_t>* roi_nodes{nullptr};  // non-owning
+    double roi_threshold{0.5};
+    std::string classify_mode{};  // "enrich" or "deplete", empty = disabled
+
     // Result formatting configuration
     ResultFormatterConfig formatter_config{};
 };

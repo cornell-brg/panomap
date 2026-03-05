@@ -16,9 +16,6 @@
 #include "util/timing.hpp"
 #include "version.hpp"
 
-#ifdef PIRU_DUMP_GRAPHS
-#include "io/graphs/gfa_exporter.hpp"
-#endif
 
 namespace {
 
@@ -43,17 +40,17 @@ int handle_index(const std::vector<std::string>& args) {
     config.options = {
         {'h', "help", false, "Show help"},
         {'v', "verbose", false, "Enable verbose logging (DEBUG level)"},
-        {'m', "model", true, "Pore model (builtin name: r9.4/r10.4 or model file path)"},
+        {'m', "model", true, "Pore model (builtin name: r9.4/r10.4 or model file path, default: r10.4)"},
         {'o', "output", true, "Output index file (default: <graph-file>.pirx)"},
         {'t', "threads", true, "Worker threads"},
         {'p', "profile", false, "Emit timing profile (tree)"},
         {'\0', "", false, "\nSeed Generation Options:"},
-        {'\0', "seed-backend", true, "Seed extractor backend: kmer (default), minimizer"},
+        {'\0', "seed-backend", true, "Seed extractor backend: kmer, minimizer (default)"},
         {'\0', "seed-k", true, "Seed k-mer size (default: 6)"},
         {'\0', "seed-w", true, "Minimizer window size (default: 5, only with --seed-backend minimizer)"},
         {'\0', "seed-stride", true, "Seed stride (default: 1)"},
-        {'\0', "seed-filter", true, "Seed frequency filter percentile (0.0-1.0, default: 1.0)"},
-        {'\0', "seed-subsample", true, "Subsample cap percentile for filtered seeds (0.0-1.0, default: 0.55)"},
+        {'\0', "seed-filter", true, "Seed frequency filter percentile (0.0-1.0, default: 0.9)"},
+        {'\0', "seed-subsample", true, "Subsample cap percentile for filtered seeds (0.0-1.0, default: 0.25)"},
         {'\0', "seed-mode", true, "Seeding mode: node, path (default)"},
         {'\0', "", false, "\nIndexer Options:"},
         {'\0', "indexer-backend", true, "Indexer backend: node-first, path-walk (default)"},
@@ -117,7 +114,6 @@ int handle_index(const std::vector<std::string>& args) {
     }
 
     piru::io::ImportedGraph imported;
-    imported.flavor = piru::io::ImportedGraphFlavor::kVg;
 
     if (!loader->load(imported)) {
         LOG_ERROR("index: failed to read graph file '" + graph_path + "'");
@@ -128,9 +124,6 @@ int handle_index(const std::vector<std::string>& args) {
              std::to_string(imported.edges.size()) + " edges, " +
              std::to_string(imported.paths.size()) + " paths (" + loader->get_format_name() + ")");
 
-#ifdef PIRU_DUMP_GRAPHS
-    piru::GfaExporter::dumpImportedGraph(imported, "imported_graph.gfa");
-#endif
 
     // -------------------------------------------------------------------------
     // Parameter parsing and validation
@@ -212,8 +205,6 @@ int handle_index(const std::vector<std::string>& args) {
     metadata.model_name = result.model_name;
     metadata.pore_k = result.pore_k;
     metadata.fuzzy_quantizer = result.fuzzy_quantizer;
-    metadata.graph_flavor = "vg";
-
     piru::io::index::save_simple_index(
         output_path,
         *result.graph_store,

@@ -16,6 +16,7 @@
 #include "io/index/simple_serialization.hpp"
 #include "io/models/model_factory.hpp"
 #include "io/reads/read_provider_factory.hpp"
+#include "io/regions/pira_parser.hpp"
 #include "io/results/result_writer_factory.hpp"
 #include "mapping/batch_mapper.hpp"
 #include "util/logging.hpp"
@@ -116,6 +117,10 @@ int handle_map(const std::vector<std::string>& args) {
         {'\0', "dump-anchor-detail", true, "Dump per-anchor detail to directory (use with --dump-anchor-reads)"},
         {'\0', "dump-anchor-reads", true, "Comma-separated read ID substrings to dump anchors for"},
         {'\0', "no-anchor-merge", false, "Disable anchor merging (for heatmap debugging)"},
+        {'\0', "", false, "\nClassification Options:"},
+        {'\0', "roi", true, "ROI annotation file (.pira from piru annotate)"},
+        {'\0', "mode", true, "Classification mode: enrich or deplete (requires --roi)"},
+        {'\0', "roi-threshold", true, "ROI overlap threshold for keep/reject decision (0.0-1.0, default: 0.5)"},
         {'\0', "", false, "\nOutput Options:"},
         {'o', "output", true, "Output file path (format auto-detected from extension: .paf, .gaf, .gam, .json)"},
         {'\0', "output-format", true, "Override output format (paf, gaf, gam, json)"},
@@ -210,6 +215,39 @@ int handle_map(const std::vector<std::string>& args) {
             return -1;
         }
     }();
+
+    // Classification options
+    const std::string roi_path = parsed.values.count("roi") ? parsed.values.at("roi") : "";
+    const std::string classify_mode = parsed.values.count("mode") ? parsed.values.at("mode") : "";
+    const double roi_threshold = [&]() {
+        auto it = parsed.values.find("roi-threshold");
+        if (it == parsed.values.end()) return 0.5;
+        try {
+            return std::stod(it->second);
+        } catch (...) {
+            LOG_WARN("map: invalid --roi-threshold value '" + it->second + "', using 0.5");
+            return 0.5;
+        }
+    }();
+
+    if (!roi_path.empty() && classify_mode.empty()) {
+        LOG_ERROR("map: --roi requires --mode (enrich or deplete)");
+        return 1;
+    }
+    if (!classify_mode.empty() && roi_path.empty()) {
+        LOG_ERROR("map: --mode requires --roi <file>");
+        return 1;
+    }
+    if (!classify_mode.empty() && classify_mode != "enrich" && classify_mode != "deplete") {
+        LOG_ERROR("map: --mode must be 'enrich' or 'deplete', got '" + classify_mode + "'");
+        return 1;
+    }
+
+    // Load ROI annotation if provided
+    std::unordered_set<std::size_t> roi_nodes;
+    if (!roi_path.empty()) {
+        roi_nodes = piru::io::parse_pira(roi_path);
+    }
 
     // Create executor for parallel operations (indexing and mapping)
     auto executor = piru::concurrency::make_executor(num_threads);
@@ -324,7 +362,6 @@ int handle_map(const std::vector<std::string>& args) {
         }
 
         piru::io::ImportedGraph imported;
-        imported.flavor = piru::io::ImportedGraphFlavor::kVg;
 
         if (!loader->load(imported)) {
             LOG_ERROR("map: failed to read graph file '" + graph_path + "'");
@@ -539,6 +576,18 @@ int handle_map(const std::vector<std::string>& args) {
     if (parsed.values.count("chain-merge")) {
         const std::string val = parsed.values.at("chain-merge");
         map_config.clusterer_config.dp_merge_chains = (val == "true" || val == "1" || val == "yes");
+    }
+
+    // ROI classification config
+    if (!roi_nodes.empty()) {
+        map_config.roi_nodes = &roi_nodes;
+        map_config.roi_threshold = roi_threshold;
+        map_config.classify_mode = classify_mode;
+        // Force top-1 chain only — we only need the best for classification
+        map_config.clusterer_config.dp_max_chains = 1;
+        LOG_INFO("ROI classification: mode=" + classify_mode +
+                 ", threshold=" + std::to_string(roi_threshold) +
+                 ", " + std::to_string(roi_nodes.size()) + " ROI nodes");
     }
 
     // Configure event pipeline (unified event detection + normalization)
