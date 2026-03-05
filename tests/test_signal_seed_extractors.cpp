@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 
+#include <doctest/doctest.h>
+
 #include "signal/seed_extractors/seed_extractor_factory.hpp"
 #include "signal/signal_types.hpp"
-
-#include <doctest/doctest.h>
 
 using namespace piru::signal;
 
@@ -18,7 +18,7 @@ TEST_CASE("K-mer seed extractor emits sliding window hashes") {
     REQUIRE(seeds.seeds.size() == 2);
     CHECK(seeds.seeds[0].hash == 3911557750ULL);  // hash([1,2])
     CHECK(seeds.seeds[0].position == 0);
-    CHECK(seeds.seeds[0].length == 2);  // Initialized to k
+    CHECK(seeds.seeds[0].length == 2);           // Initialized to k
     CHECK(seeds.seeds[1].hash == 447855090ULL);  // hash([2,3])
     CHECK(seeds.seeds[1].position == 1);
     CHECK(seeds.seeds[1].length == 2);  // Initialized to k
@@ -53,4 +53,3 @@ TEST_CASE("Seed length can be updated after merging") {
     seed.length = 35;
     CHECK(seed.length == 35);  // Updated coverage after hypothetical merge
 }
-

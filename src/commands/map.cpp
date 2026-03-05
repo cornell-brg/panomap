@@ -35,7 +35,8 @@ piru::signal::SeedExtractorConfig seed_config_from_store(const piru::index::Hash
     cfg.stride = get_u64("stride", cfg.stride);
     cfg.window = get_u64("window", cfg.window);
     auto it_qbits = params.find("qbits");
-    if (it_qbits != params.end()) cfg.qbits = static_cast<std::uint32_t>(std::stoul(it_qbits->second));
+    if (it_qbits != params.end())
+        cfg.qbits = static_cast<std::uint32_t>(std::stoul(it_qbits->second));
     auto it_params = params.find("params");
     if (it_params != params.end()) cfg.params = it_params->second;
     return cfg;
@@ -51,7 +52,8 @@ int handle_map(const std::vector<std::string>& args) {
     piru::cli::Parsed parsed;
     piru::cli::ParseConfig config;
     config.usage = "Usage: piru map [options] --index <file> <reads-path>";
-    config.positional_help = {"<reads-path>       Input slow5/blow5 file or directory containing reads"};
+    config.positional_help = {
+        "<reads-path>       Input slow5/blow5 file or directory containing reads"};
     config.options = {
         {'h', "help", false, "Show help"},
         {'i', "index", true, "Path to pre-built index file (.pirx)"},
@@ -59,9 +61,11 @@ int handle_map(const std::vector<std::string>& args) {
         {'p', "profile", false, "Emit timing profile (tree)"},
         {'v', "verbose", false, "Enable verbose logging (DEBUG level)"},
         {'\0', "", false, "\nMapping Options:"},
-        {'\0', "seed-freq-cap", true, "Skip seeds above this frequency percentile at lookup (0.0-1.0, default: none)"},
+        {'\0', "seed-freq-cap", true,
+         "Skip seeds above this frequency percentile at lookup (0.0-1.0, default: none)"},
         {'\0', "clusterer", true, "Clusterer backend: dp-chain (default), fse, probe"},
-        {'\0', "chain-max-dist", true, "DP chain: max query/ref distance between anchors (default: 500)"},
+        {'\0', "chain-max-dist", true,
+         "DP chain: max query/ref distance between anchors (default: 500)"},
         {'\0', "chain-max-diag-dev", true, "DP chain: max diagonal deviation (default: 500)"},
         {'\0', "chain-gap-penalty", true, "DP chain: gap penalty factor (default: 0.02)"},
         {'\0', "chain-diag-penalty", true, "DP chain: diagonal penalty factor (default: 0.05)"},
@@ -69,10 +73,12 @@ int handle_map(const std::vector<std::string>& args) {
         {'\0', "chain-anchor-weight", true, "DP chain: anchor weight (default: 1.5)"},
         {'\0', "chain-min-score", true, "DP chain: minimum chain score (default: 12)"},
         {'\0', "chain-max-chains", true, "DP chain: max chains to extract (default: 10)"},
-        {'\0', "chain-max-skip", true, "DP chain: stop after N consecutive failed attempts (default: 25)"},
+        {'\0', "chain-max-skip", true,
+         "DP chain: stop after N consecutive failed attempts (default: 25)"},
         {'\0', "chain-merge", true, "DP chain: merge overlapping chains (default: true)"},
         {'\0', "", false, "\nSignal Processing Options:"},
-        {'\0', "event-pipeline", true, "Event pipeline backend: rawhash (default), scrappie, passthrough"},
+        {'\0', "event-pipeline", true,
+         "Event pipeline backend: rawhash (default), scrappie, passthrough"},
         {'\0', "event-w1", true, "Event detection short window length (default: 3)"},
         {'\0', "event-w2", true, "Event detection long window length (default: backend-specific)"},
         {'\0', "event-t1", true, "Event detection threshold1 (default: backend-specific)"},
@@ -85,17 +91,21 @@ int handle_map(const std::vector<std::string>& args) {
         {'\0', "dump-path-chains", true, "Dump best chain per path to directory (diagnostic)"},
         {'\0', "dump-seed-store", true, "Dump full seed store hash table to TSV file"},
         {'\0', "dump-read-seeds", true, "Dump all read seeds (including no-hit) to directory"},
-        {'\0', "dump-anchor-detail", true, "Dump per-anchor detail to directory (use with --dump-anchor-reads)"},
+        {'\0', "dump-anchor-detail", true,
+         "Dump per-anchor detail to directory (use with --dump-anchor-reads)"},
         {'\0', "dump-anchor-reads", true, "Comma-separated read ID substrings to dump anchors for"},
         {'\0', "no-anchor-merge", false, "Disable anchor merging (for heatmap debugging)"},
         {'\0', "", false, "\nClassification Options:"},
         {'\0', "roi", true, "ROI annotation file (.pira from piru annotate)"},
         {'\0', "mode", true, "Classification mode: enrich or deplete (requires --roi)"},
-        {'\0', "roi-threshold", true, "ROI overlap threshold for keep/reject decision (0.0-1.0, default: 0.5)"},
+        {'\0', "roi-threshold", true,
+         "ROI overlap threshold for keep/reject decision (0.0-1.0, default: 0.5)"},
         {'\0', "", false, "\nOutput Options:"},
-        {'o', "output", true, "Output file path (format auto-detected from extension: .paf, .gaf, .gam, .json)"},
+        {'o', "output", true,
+         "Output file path (format auto-detected from extension: .paf, .gaf, .gam, .json)"},
         {'\0', "output-format", true, "Override output format (paf, gaf, gam, json)"},
-        {'\0', "min-secondary-ratio", true, "Min chain score ratio vs primary for secondaries (default: 0.4)"},
+        {'\0', "min-secondary-ratio", true,
+         "Min chain score ratio vs primary for secondaries (default: 0.4)"},
     };
     config.on_error = [](const std::string&) { std::cerr << "map: invalid option\n"; };
 
@@ -180,12 +190,9 @@ int handle_map(const std::vector<std::string>& args) {
               executor->backend_name() + ")");
 
     // Extract output options
-    const std::string output_path = parsed.values.count("output")
-                                        ? parsed.values.at("output")
-                                        : "";
-    const std::string output_format = parsed.values.count("output-format")
-                                          ? parsed.values.at("output-format")
-                                          : "";
+    const std::string output_path = parsed.values.count("output") ? parsed.values.at("output") : "";
+    const std::string output_format =
+        parsed.values.count("output-format") ? parsed.values.at("output-format") : "";
 
     // Create result writer if output specified
     piru::io::ResultWriterPtr result_writer;
@@ -223,9 +230,8 @@ int handle_map(const std::vector<std::string>& args) {
     auto loaded = piru::io::index::load_index(index_path);
 
     LOG_INFO("index loaded: " + std::to_string(loaded.graph->nodeCount()) + " nodes");
-    LOG_INFO("index metadata: model=" + loaded.metadata.model_name +
-             ", fuzzy=" + loaded.metadata.fuzzy_quantizer +
-             ", seeds=" + loaded.seeds->extractor_name());
+    LOG_INFO("index metadata: model=" + loaded.metadata.model_name + ", fuzzy=" +
+             loaded.metadata.fuzzy_quantizer + ", seeds=" + loaded.seeds->extractor_name());
 
     // Extract path lengths from loaded graph BEFORE moving (AdjListGraphStore has path access)
     std::vector<std::size_t> path_lengths;
@@ -286,7 +292,7 @@ int handle_map(const std::vector<std::string>& args) {
     map_config.seed_store = seed_store.get();
     map_config.graph_store = graph_store.get();
     map_config.linearization_coords = &linearization_coords;  // For DP chaining
-    map_config.path_lengths = &path_lengths;  // For anchor bounds checking
+    map_config.path_lengths = &path_lengths;                  // For anchor bounds checking
 
     // Configure fuzzy quantizer from index metadata.
     // Match index-time defaults (IndexPipelineConfig) — these are not yet stored in .pirx.
@@ -326,9 +332,8 @@ int handle_map(const std::vector<std::string>& args) {
               std::to_string(map_config.clusterer_config.max_hash_frequency));
 
     // Configure clusterer backend (default: dp-chain for path-walk pipeline)
-    const std::string clusterer = parsed.values.count("clusterer")
-                                   ? parsed.values.at("clusterer")
-                                   : "dp-chain";
+    const std::string clusterer =
+        parsed.values.count("clusterer") ? parsed.values.at("clusterer") : "dp-chain";
     map_config.clusterer_config.backend = clusterer;
 
     // DP chain parameter overrides (only relevant when clusterer=dp-chain)
@@ -336,25 +341,32 @@ int handle_map(const std::vector<std::string>& args) {
         map_config.clusterer_config.dp_max_dist = std::stoull(parsed.values.at("chain-max-dist"));
     }
     if (parsed.values.count("chain-max-diag-dev")) {
-        map_config.clusterer_config.dp_max_diag_dev = std::stoull(parsed.values.at("chain-max-diag-dev"));
+        map_config.clusterer_config.dp_max_diag_dev =
+            std::stoull(parsed.values.at("chain-max-diag-dev"));
     }
     if (parsed.values.count("chain-gap-penalty")) {
-        map_config.clusterer_config.dp_gap_penalty = std::stod(parsed.values.at("chain-gap-penalty"));
+        map_config.clusterer_config.dp_gap_penalty =
+            std::stod(parsed.values.at("chain-gap-penalty"));
     }
     if (parsed.values.count("chain-diag-penalty")) {
-        map_config.clusterer_config.dp_diag_penalty = std::stod(parsed.values.at("chain-diag-penalty"));
+        map_config.clusterer_config.dp_diag_penalty =
+            std::stod(parsed.values.at("chain-diag-penalty"));
     }
     if (parsed.values.count("chain-overlap-penalty")) {
-        map_config.clusterer_config.dp_overlap_penalty = std::stod(parsed.values.at("chain-overlap-penalty"));
+        map_config.clusterer_config.dp_overlap_penalty =
+            std::stod(parsed.values.at("chain-overlap-penalty"));
     }
     if (parsed.values.count("chain-anchor-weight")) {
-        map_config.clusterer_config.dp_anchor_weight = std::stod(parsed.values.at("chain-anchor-weight"));
+        map_config.clusterer_config.dp_anchor_weight =
+            std::stod(parsed.values.at("chain-anchor-weight"));
     }
     if (parsed.values.count("chain-min-score")) {
-        map_config.clusterer_config.dp_min_chain_score = std::stoull(parsed.values.at("chain-min-score"));
+        map_config.clusterer_config.dp_min_chain_score =
+            std::stoull(parsed.values.at("chain-min-score"));
     }
     if (parsed.values.count("chain-max-chains")) {
-        map_config.clusterer_config.dp_max_chains = std::stoull(parsed.values.at("chain-max-chains"));
+        map_config.clusterer_config.dp_max_chains =
+            std::stoull(parsed.values.at("chain-max-chains"));
     }
     if (parsed.values.count("chain-max-skip")) {
         map_config.clusterer_config.dp_max_skip = std::stoull(parsed.values.at("chain-max-skip"));
@@ -372,8 +384,8 @@ int handle_map(const std::vector<std::string>& args) {
         // Force top-1 chain only — we only need the best for classification
         map_config.clusterer_config.dp_max_chains = 1;
         LOG_INFO("ROI classification: mode=" + classify_mode +
-                 ", threshold=" + std::to_string(roi_threshold) +
-                 ", " + std::to_string(roi_nodes.size()) + " ROI nodes");
+                 ", threshold=" + std::to_string(roi_threshold) + ", " +
+                 std::to_string(roi_nodes.size()) + " ROI nodes");
     }
 
     // Configure event pipeline (unified event detection + normalization)
@@ -383,32 +395,40 @@ int handle_map(const std::vector<std::string>& args) {
     }
     // Event detection parameter overrides (take precedence over backend defaults)
     if (parsed.values.count("event-w1")) {
-        map_config.event_pipeline_config.override_window_length1 = std::stoi(parsed.values.at("event-w1"));
+        map_config.event_pipeline_config.override_window_length1 =
+            std::stoi(parsed.values.at("event-w1"));
     }
     if (parsed.values.count("event-w2")) {
-        map_config.event_pipeline_config.override_window_length2 = std::stoi(parsed.values.at("event-w2"));
+        map_config.event_pipeline_config.override_window_length2 =
+            std::stoi(parsed.values.at("event-w2"));
     }
     if (parsed.values.count("event-t1")) {
-        map_config.event_pipeline_config.override_threshold1 = std::stof(parsed.values.at("event-t1"));
+        map_config.event_pipeline_config.override_threshold1 =
+            std::stof(parsed.values.at("event-t1"));
     }
     if (parsed.values.count("event-t2")) {
-        map_config.event_pipeline_config.override_threshold2 = std::stof(parsed.values.at("event-t2"));
+        map_config.event_pipeline_config.override_threshold2 =
+            std::stof(parsed.values.at("event-t2"));
     }
     if (parsed.values.count("event-peak")) {
-        map_config.event_pipeline_config.override_peak_height = std::stof(parsed.values.at("event-peak"));
+        map_config.event_pipeline_config.override_peak_height =
+            std::stof(parsed.values.at("event-peak"));
     }
 
     // Map-time frequency cap: recompute threshold from percentile
     if (parsed.values.count("seed-freq-cap")) {
         const double percentile = std::stod(parsed.values.at("seed-freq-cap"));
-        const_cast<piru::index::HashSeedStore*>(hash_seed_store)->recompute_threshold_from_percentile(percentile);
-        LOG_INFO("Map-time seed freq cap at " + std::to_string(percentile * 100) + "th percentile → threshold=" +
-                 std::to_string(hash_seed_store->frequency_threshold()));
+        const_cast<piru::index::HashSeedStore*>(hash_seed_store)
+            ->recompute_threshold_from_percentile(percentile);
+        LOG_INFO(
+            "Map-time seed freq cap at " + std::to_string(percentile * 100) +
+            "th percentile → threshold=" + std::to_string(hash_seed_store->frequency_threshold()));
     }
 
     // Log the seed frequency threshold being used
     LOG_INFO("Seed frequency threshold: " + std::to_string(hash_seed_store->frequency_threshold()) +
-             " (seeds with freq > " + std::to_string(hash_seed_store->frequency_threshold()) + " will be skipped)");
+             " (seeds with freq > " + std::to_string(hash_seed_store->frequency_threshold()) +
+             " will be skipped)");
 
     // Dump seed store if requested (do this before mapping starts)
     if (parsed.values.count("dump-seed-store")) {
@@ -425,7 +445,8 @@ int handle_map(const std::vector<std::string>& args) {
             out << std::hex << hash << std::dec << "\t" << hits.size() << "\n";
         }
         out.close();
-        LOG_INFO("Dumped seed store (" + std::to_string(hash_seed_store->size()) + " hashes) to: " + dump_path);
+        LOG_INFO("Dumped seed store (" + std::to_string(hash_seed_store->size()) +
+                 " hashes) to: " + dump_path);
     }
 
     // Configure result writer if specified
@@ -473,7 +494,8 @@ int handle_map(const std::vector<std::string>& args) {
                 map_config.dump_anchor_reads.insert(token);
             }
         }
-        LOG_INFO("Dumping anchor detail for " + std::to_string(map_config.dump_anchor_reads.size()) + " read filters");
+        LOG_INFO("Dumping anchor detail for " +
+                 std::to_string(map_config.dump_anchor_reads.size()) + " read filters");
     }
     if (parsed.values.count("no-anchor-merge")) {
         map_config.enable_anchor_merge = false;
@@ -516,9 +538,8 @@ int handle_map(const std::vector<std::string>& args) {
         return 1;
     }
 
-    LOG_INFO("map: done. files=" + std::to_string(files_processed) +
-             ", batches=" + std::to_string(total_batches) +
-             ", reads=" + std::to_string(total_reads));
+    LOG_INFO("map: done. files=" + std::to_string(files_processed) + ", batches=" +
+             std::to_string(total_batches) + ", reads=" + std::to_string(total_reads));
 
     PIRU_PROFILE_STOP(profile, "map");
     if (profile) piru::timing::report(std::cerr);

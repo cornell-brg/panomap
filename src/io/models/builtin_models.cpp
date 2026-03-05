@@ -1,5 +1,3 @@
-#include "io/models/model_factory.hpp"
-
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
@@ -13,6 +11,7 @@
 #include "io/models/builtin_model_common.hpp"
 #include "io/models/builtin_model_r10.hpp"
 #include "io/models/builtin_model_r9.hpp"
+#include "io/models/model_factory.hpp"
 #include "util/logging.hpp"
 
 namespace piru::io {
@@ -55,15 +54,13 @@ Table make_table(const generated::ModelEntry* entries, std::size_t count) {
 }
 
 TablePtr r9_table() {
-    static const Table table =
-        make_table(generated::kR9Entries, generated::kR9Count);
+    static const Table table = make_table(generated::kR9Entries, generated::kR9Count);
     static const TablePtr ptr(&table, [](const Table*) {});
     return ptr;
 }
 
 TablePtr r10_table() {
-    static const Table table =
-        make_table(generated::kR10Entries, generated::kR10Count);
+    static const Table table = make_table(generated::kR10Entries, generated::kR10Count);
     static const TablePtr ptr(&table, [](const Table*) {});
     return ptr;
 }

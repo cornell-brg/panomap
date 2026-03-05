@@ -51,7 +51,7 @@ struct EvalResult {
     bool correct_target{false};
     bool correct_strand{false};
     bool correct_position{false};
-    int64_t position_error{0};  // Distance from ground truth start
+    int64_t position_error{0};      // Distance from ground truth start
     double best_overlap_frac{0.0};  // Best overlap fraction with ground truth
     GroundTruth truth;
     MappingResult mapping;
@@ -66,8 +66,8 @@ int64_t computeOverlap(int64_t a_start, int64_t a_end, int64_t b_start, int64_t 
 
 // Compute overlap fraction relative to mapping result length
 // (what fraction of the mapping falls within the truth region)
-double computeOverlapFraction(int64_t truth_start, int64_t truth_end,
-                               int64_t mapping_start, int64_t mapping_end) {
+double computeOverlapFraction(int64_t truth_start, int64_t truth_end, int64_t mapping_start,
+                              int64_t mapping_end) {
     int64_t mapping_len = mapping_end - mapping_start;
     if (mapping_len <= 0) return 0.0;
     int64_t overlap = computeOverlap(truth_start, truth_end, mapping_start, mapping_end);
@@ -228,7 +228,8 @@ int handle_eval(const std::vector<std::string>& args) {
         truths = std::move(filtered);
 
         if (truths.empty()) {
-            LOG_ERROR("No reads remaining after min-length filter (" + std::to_string(min_length) + " bp)");
+            LOG_ERROR("No reads remaining after min-length filter (" + std::to_string(min_length) +
+                      " bp)");
             return 1;
         }
     }
@@ -273,9 +274,10 @@ int handle_eval(const std::vector<std::string>& args) {
 
             for (const auto& candidate : it->second) {
                 // Check target
-                bool target_match = (candidate.target_name.find(gt.reference) != std::string::npos ||
-                                     gt.reference.find(candidate.target_name) != std::string::npos ||
-                                     candidate.target_name == gt.reference);
+                bool target_match =
+                    (candidate.target_name.find(gt.reference) != std::string::npos ||
+                     gt.reference.find(candidate.target_name) != std::string::npos ||
+                     candidate.target_name == gt.reference);
 
                 // Check strand
                 bool strand_match = (candidate.strand == gt.strand);
@@ -301,7 +303,8 @@ int handle_eval(const std::vector<std::string>& args) {
                 if (target_match) eval.correct_target = true;
                 if (strand_match) eval.correct_strand = true;
                 if (pos_match) eval.correct_position = true;
-                if (overlap_match) eval.best_overlap_frac = std::max(eval.best_overlap_frac, overlap_frac);
+                if (overlap_match)
+                    eval.best_overlap_frac = std::max(eval.best_overlap_frac, overlap_frac);
             }
 
             eval.mapping = best_mapping;
@@ -334,9 +337,11 @@ int handle_eval(const std::vector<std::string>& args) {
         *out << "Ground truth: " << truth_path << "\n";
         *out << "Calls: " << calls_path << "\n";
         *out << "Position tolerance: " << tolerance << " bp\n";
-        *out << "Min overlap: " << std::fixed << std::setprecision(0) << (min_overlap * 100) << "%\n";
+        *out << "Min overlap: " << std::fixed << std::setprecision(0) << (min_overlap * 100)
+             << "%\n";
         if (min_length > 0) {
-            *out << "Min length filter: " << min_length << " bp (" << filtered_count << " reads excluded)\n";
+            *out << "Min length filter: " << min_length << " bp (" << filtered_count
+                 << " reads excluded)\n";
         }
         *out << "\n";
         *out << "Read length (from truth): min=" << min_len << ", max=" << max_len
@@ -353,8 +358,8 @@ int handle_eval(const std::vector<std::string>& args) {
              << std::setprecision(1) << (100.0 * correct_position / total) << "%, within "
              << tolerance << "bp)\n";
         *out << "Correct overlap:  " << correct_overlap << " (" << std::fixed
-             << std::setprecision(1) << (100.0 * correct_overlap / total) << "%, >="
-             << std::setprecision(0) << (min_overlap * 100) << "% overlap)\n";
+             << std::setprecision(1) << (100.0 * correct_overlap / total)
+             << "%, >=" << std::setprecision(0) << (min_overlap * 100) << "% overlap)\n";
 
         // Verbose: per-read results
         if (parsed.values.count("verbose")) {
@@ -362,17 +367,15 @@ int handle_eval(const std::vector<std::string>& args) {
             for (const auto& r : results) {
                 int64_t read_len = r.truth.end - r.truth.start;
                 bool pass = r.mapped && r.best_overlap_frac >= min_overlap;
-                *out << (pass ? "PASS" : "FAIL") << "  " << r.read_id
-                     << " (len=" << read_len << "bp)";
+                *out << (pass ? "PASS" : "FAIL") << "  " << r.read_id << " (len=" << read_len
+                     << "bp)";
                 if (!r.mapped) {
                     *out << "  UNMAPPED";
                 } else {
-                    *out << "  mapped=" << r.mapping.target_name
-                         << ":" << r.mapping.target_start << "-" << r.mapping.target_end
-                         << "(" << r.mapping.strand << ")"
-                         << "  truth=" << r.truth.reference
-                         << ":" << r.truth.start << "-" << r.truth.end
-                         << "(" << r.truth.strand << ")"
+                    *out << "  mapped=" << r.mapping.target_name << ":" << r.mapping.target_start
+                         << "-" << r.mapping.target_end << "(" << r.mapping.strand << ")"
+                         << "  truth=" << r.truth.reference << ":" << r.truth.start << "-"
+                         << r.truth.end << "(" << r.truth.strand << ")"
                          << "  overlap=" << std::fixed << std::setprecision(1)
                          << (r.best_overlap_frac * 100) << "%"
                          << "  pos_err=" << r.position_error << "bp";
@@ -403,16 +406,16 @@ int handle_eval(const std::vector<std::string>& args) {
             }
         }
     } else if (format == "tsv") {
-        *out << "read_id\tread_length\tmapped\tcorrect_target\tcorrect_strand\tcorrect_position\toverlap_frac\t"
+        *out << "read_id\tread_length\tmapped\tcorrect_target\tcorrect_strand\tcorrect_"
+                "position\toverlap_frac\t"
              << "position_error\ttruth_start\ttruth_end\tmapping_start\tmapping_end\n";
         for (const auto& r : results) {
             int64_t read_len = r.truth.end - r.truth.start;
             *out << r.read_id << "\t" << read_len << "\t" << (r.mapped ? "1" : "0") << "\t"
                  << (r.correct_target ? "1" : "0") << "\t" << (r.correct_strand ? "1" : "0") << "\t"
-                 << (r.correct_position ? "1" : "0") << "\t"
-                 << std::fixed << std::setprecision(3) << r.best_overlap_frac << "\t"
-                 << r.position_error << "\t"
-                 << r.truth.start << "\t" << r.truth.end << "\t"
+                 << (r.correct_position ? "1" : "0") << "\t" << std::fixed << std::setprecision(3)
+                 << r.best_overlap_frac << "\t" << r.position_error << "\t" << r.truth.start << "\t"
+                 << r.truth.end << "\t"
                  << (r.mapped ? std::to_string(r.mapping.target_start) : "NA") << "\t"
                  << (r.mapped ? std::to_string(r.mapping.target_end) : "NA") << "\n";
         }
@@ -426,7 +429,8 @@ int handle_eval(const std::vector<std::string>& args) {
         *out << "    \"correct_position\": " << correct_position << ",\n";
         *out << "    \"correct_overlap\": " << correct_overlap << ",\n";
         *out << "    \"tolerance_bp\": " << tolerance << ",\n";
-        *out << "    \"min_overlap\": " << std::fixed << std::setprecision(2) << min_overlap << ",\n";
+        *out << "    \"min_overlap\": " << std::fixed << std::setprecision(2) << min_overlap
+             << ",\n";
         *out << "    \"min_length_bp\": " << min_length << ",\n";
         *out << "    \"filtered_count\": " << filtered_count << ",\n";
         *out << "    \"mapping_rate\": " << std::fixed << std::setprecision(4)
@@ -437,7 +441,8 @@ int handle_eval(const std::vector<std::string>& args) {
              << (1.0 * correct_overlap / total) << ",\n";
         *out << "    \"read_length_min_bp\": " << min_len << ",\n";
         *out << "    \"read_length_max_bp\": " << max_len << ",\n";
-        *out << "    \"read_length_avg_bp\": " << std::fixed << std::setprecision(0) << avg_len << "\n";
+        *out << "    \"read_length_avg_bp\": " << std::fixed << std::setprecision(0) << avg_len
+             << "\n";
         *out << "  }\n";
         *out << "}\n";
     } else {

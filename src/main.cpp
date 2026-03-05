@@ -91,9 +91,9 @@ int main(int argc, char** argv) {
         std::cerr << " " << arg;
     }
     std::cerr << "\n[main] Real time: " << std::fixed << std::setprecision(3)
-              << (piru::realtime() - realtime_0) << " sec; CPU time: "
-              << (piru::cputime() - cputime_0) << " sec; Peak RAM: "
-              << (piru::peakrss() / 1024.0 / 1024.0 / 1024.0) << " GB\n\n";
+              << (piru::realtime() - realtime_0)
+              << " sec; CPU time: " << (piru::cputime() - cputime_0)
+              << " sec; Peak RAM: " << (piru::peakrss() / 1024.0 / 1024.0 / 1024.0) << " GB\n\n";
 
     return exit_code;
 }

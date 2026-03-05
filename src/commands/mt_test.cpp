@@ -88,8 +88,8 @@ int handle_mt_test(const std::vector<std::string>& args) {
     double checksum = 0.0;
     for (double v : c) checksum += v;
 
-    LOG_INFO("mt-test completed (threads=" + std::to_string(threads) + ", size=" +
-             std::to_string(size) + ", backend=" + exec->backend_name() +
+    LOG_INFO("mt-test completed (threads=" + std::to_string(threads) +
+             ", size=" + std::to_string(size) + ", backend=" + exec->backend_name() +
              ", max_concurrency=" + std::to_string(exec->max_concurrency()) +
              ", checksum=" + std::to_string(checksum) + ").");
 

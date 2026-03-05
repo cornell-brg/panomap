@@ -1,8 +1,8 @@
 #include "io/graphs/vg_loader.hpp"
 
 #include <exception>
-#include <unordered_set>
 #include <string>
+#include <unordered_set>
 
 #ifdef PIRU_HAS_LIBVGIO
 #include <vg/io/basic_stream.hpp>

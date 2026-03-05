@@ -31,9 +31,9 @@ namespace piru::index {
 
 struct NodeFirstIndexConfig {
     // Seed extraction parameters
-    std::size_t seed_k{6};      // Hash window size (fuzzy samples per seed)
+    std::size_t seed_k{6};  // Hash window size (fuzzy samples per seed)
     std::size_t seed_stride{1};
-    double seed_freq_cutoff{0.5};    // keep_least_frequent_fraction
+    double seed_freq_cutoff{0.5};  // keep_least_frequent_fraction
 
     // Parallelization
     // If non-null, enables parallel indexing using this executor.
@@ -56,9 +56,9 @@ struct NodeFirstIndexResult {
     float global_std{1.0f};
 
     // Stats
-    std::size_t seeds_interior{0};   // Seeds from node interiors (pass 1)
-    std::size_t seeds_boundary{0};   // Seeds from boundary fill (pass 2)
-    std::size_t seeds_unique{0};     // After dedup
+    std::size_t seeds_interior{0};  // Seeds from node interiors (pass 1)
+    std::size_t seeds_boundary{0};  // Seeds from boundary fill (pass 2)
+    std::size_t seeds_unique{0};    // After dedup
 };
 
 /**
@@ -87,11 +87,9 @@ struct NodeFirstIndexResult {
  * @return NodeFirstIndexResult with seed_store, linearization_coords,
  *         global normalization params, and stats
  */
-NodeFirstIndexResult nodeFirstIndex(
-    const AlnGraph& graph,
-    const io::KmerModel& model,
-    const signal::FuzzyQuantizer& fuzzy_quantizer,
-    const signal::SeedExtractor& extractor,
-    const NodeFirstIndexConfig& config = {});
+NodeFirstIndexResult nodeFirstIndex(const AlnGraph& graph, const io::KmerModel& model,
+                                    const signal::FuzzyQuantizer& fuzzy_quantizer,
+                                    const signal::SeedExtractor& extractor,
+                                    const NodeFirstIndexConfig& config = {});
 
 }  // namespace piru::index

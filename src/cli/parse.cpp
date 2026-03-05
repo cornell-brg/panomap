@@ -29,8 +29,8 @@ std::vector<::option> build_longopts(const std::vector<Option>& opts) {
             // Assign unique negative value based on position in vector
             val = -1 - static_cast<int>(&o - opts.data());
         }
-        longs.push_back({o.long_opt.c_str(), o.requires_arg ? required_argument : no_argument,
-                         nullptr, val});
+        longs.push_back(
+            {o.long_opt.c_str(), o.requires_arg ? required_argument : no_argument, nullptr, val});
     }
     longs.push_back({nullptr, 0, nullptr, 0});
     return longs;

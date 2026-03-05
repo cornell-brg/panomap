@@ -26,10 +26,9 @@ SeedBuffer MinimizerSeedExtractor::extract(const FuzzyQuantizedSignal& signal) c
     const std::uint64_t token_mask = makeMask(qbits);
 
     const bool use_shift = qbits > 0 && qbits < 64;
-    const std::uint64_t window_mask =
-        (!use_shift || k >= (64 / static_cast<std::size_t>(qbits)))
-            ? std::numeric_limits<std::uint64_t>::max()
-            : makeMask(static_cast<std::uint32_t>(k * qbits));
+    const std::uint64_t window_mask = (!use_shift || k >= (64 / static_cast<std::size_t>(qbits)))
+                                          ? std::numeric_limits<std::uint64_t>::max()
+                                          : makeMask(static_cast<std::uint32_t>(k * qbits));
 
     // Step 1: Compute all k-mer hashes.
     const std::size_t num_kmers = tokens.size() - k + 1;

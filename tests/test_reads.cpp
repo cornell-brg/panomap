@@ -1,9 +1,8 @@
 #include <doctest/doctest.h>
-
 #include <string>
 
-#include "io/reads/read_provider_factory.hpp"
 #include "io/reads/read_provider.hpp"
+#include "io/reads/read_provider_factory.hpp"
 
 TEST_CASE("slow5 provider reads bundled blow5") {
 #ifdef PIRU_HAS_SLOW5

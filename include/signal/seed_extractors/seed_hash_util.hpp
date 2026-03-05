@@ -34,10 +34,9 @@ inline constexpr std::int16_t kTokenSentinel = std::numeric_limits<std::int16_t>
 // Compute the hash for a k-mer starting at tokens[start].
 // Returns the hash, or std::nullopt-equivalent behavior is handled by the caller
 // via the has_sentinel check.
-inline std::uint64_t hashKmer(const std::int16_t* tokens, std::size_t start,
-                              std::size_t k, std::uint32_t qbits,
-                              std::uint64_t token_mask, std::uint64_t window_mask,
-                              bool use_shift) {
+inline std::uint64_t hashKmer(const std::int16_t* tokens, std::size_t start, std::size_t k,
+                              std::uint32_t qbits, std::uint64_t token_mask,
+                              std::uint64_t window_mask, bool use_shift) {
     std::uint64_t packed = 0;
     for (std::size_t j = 0; j < k; ++j) {
         const auto token =

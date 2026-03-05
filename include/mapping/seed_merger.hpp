@@ -30,9 +30,8 @@ class SeedMerger {
 public:
     // Merge adjacent seed hits within the configured tolerance.
     // Returns a new vector with merged hits (original vector unchanged).
-    static std::vector<SeedHitRecord> merge(
-        const std::vector<SeedHitRecord>& hits,
-        const SeedMergerConfig& config);
+    static std::vector<SeedHitRecord> merge(const std::vector<SeedHitRecord>& hits,
+                                            const SeedMergerConfig& config);
 };
 
 }  // namespace piru::mapping

@@ -12,10 +12,10 @@ std::string to_gaf_line(const AlignmentResult& r) {
     std::stringstream ss;
     // GAF column 6 is graph path traversal (e.g., ">n1>n2>n3"), not path name
     const std::string& path_col = r.graph_path.empty() ? r.target_path : r.graph_path;
-    ss << r.query_name << '\t' << r.query_length << '\t' << r.query_start << '\t'
-       << r.query_end << '\t' << r.strand << '\t' << path_col << '\t'
-       << r.target_length << '\t' << r.target_start << '\t' << r.target_end << '\t'
-       << r.matches << '\t' << r.alignment_block_length << '\t' << r.mapq;
+    ss << r.query_name << '\t' << r.query_length << '\t' << r.query_start << '\t' << r.query_end
+       << '\t' << r.strand << '\t' << path_col << '\t' << r.target_length << '\t' << r.target_start
+       << '\t' << r.target_end << '\t' << r.matches << '\t' << r.alignment_block_length << '\t'
+       << r.mapq;
     // Add path name as pn:Z: tag if we have a graph path
     if (!r.graph_path.empty() && !r.target_path.empty()) {
         ss << '\t' << "pn:Z:" << r.target_path;

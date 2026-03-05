@@ -1,5 +1,13 @@
 BasedOnStyle: Google
 IndentWidth: 4
 ColumnLimit: 100
+AccessModifierOffset: -4
 DerivePointerAlignment: false
 PointerAlignment: Left
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex: '^".*"'        # Project headers
+    Priority: 3
+  - Regex: '^<.*>'        # System/C++/third-party headers
+    Priority: 2
+SortIncludes: CaseSensitive

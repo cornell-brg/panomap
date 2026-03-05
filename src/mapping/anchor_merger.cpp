@@ -54,10 +54,8 @@ void merge_into(Anchor& a, const Anchor& b) {
 
 }  // namespace
 
-std::vector<Anchor> AnchorMerger::merge(
-    const std::vector<Anchor>& anchors,
-    const AnchorMergerConfig& /*config*/) {
-
+std::vector<Anchor> AnchorMerger::merge(const std::vector<Anchor>& anchors,
+                                        const AnchorMergerConfig& /*config*/) {
     if (anchors.empty()) {
         return {};
     }

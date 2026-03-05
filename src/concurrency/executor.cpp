@@ -49,7 +49,8 @@ private:
 
 class TbbExecutor : public Executor {
 public:
-    explicit TbbExecutor(int threads) : arena_(threads > 0 ? threads : tbb::task_arena::automatic) {}
+    explicit TbbExecutor(int threads)
+        : arena_(threads > 0 ? threads : tbb::task_arena::automatic) {}
 
     void parallel_for(std::size_t begin, std::size_t end, std::size_t grain,
                       const std::function<void(std::size_t)>& fn) override {

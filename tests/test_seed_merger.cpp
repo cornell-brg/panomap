@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 
-#include "mapping/seed_merger.hpp"
-
 #include <doctest/doctest.h>
+
+#include "mapping/seed_merger.hpp"
 
 using namespace piru::mapping;
 using namespace piru::index;
@@ -65,10 +65,7 @@ TEST_CASE("SeedMerger: Perfect overlap merges with tolerance=0") {
     SeedMergerConfig config{.merge_tolerance = 0};
 
     // Two identical seeds (perfect overlap)
-    std::vector<SeedHitRecord> hits = {
-        make_hit(1, 10, 100, 20),
-        make_hit(1, 10, 100, 20)
-    };
+    std::vector<SeedHitRecord> hits = {make_hit(1, 10, 100, 20), make_hit(1, 10, 100, 20)};
 
     auto merged = SeedMerger::merge(hits, config);
 
@@ -121,8 +118,7 @@ TEST_CASE("SeedMerger: Different nodes do not merge") {
 
     // Two seeds on different nodes (but close in query positions)
     std::vector<SeedHitRecord> hits = {
-        make_hit(1, 10, 100, 20),
-        make_hit(2, 10, 105, 20)  // Different node_id
+        make_hit(1, 10, 100, 20), make_hit(2, 10, 105, 20)  // Different node_id
     };
 
     auto merged = SeedMerger::merge(hits, config);
@@ -158,9 +154,8 @@ TEST_CASE("SeedMerger: Handles unsorted input correctly") {
 
     // Provide hits in unsorted order
     std::vector<SeedHitRecord> hits = {
-        make_hit(2, 20, 200, 10),
-        make_hit(1, 10, 100, 10),
-        make_hit(1, 12, 105, 10)   // Should merge with previous seed on node 1
+        make_hit(2, 20, 200, 10), make_hit(1, 10, 100, 10),
+        make_hit(1, 12, 105, 10)  // Should merge with previous seed on node 1
     };
 
     auto merged = SeedMerger::merge(hits, config);
@@ -184,10 +179,7 @@ TEST_CASE("SeedMerger: Overlapping seeds merge correctly") {
     // Two seeds with significant overlap
     // Seed 1: query 100-120 (span=20)
     // Seed 2: query 110-130 (span=20, overlap=10)
-    std::vector<SeedHitRecord> hits = {
-        make_hit(1, 10, 100, 20),
-        make_hit(1, 15, 110, 20)
-    };
+    std::vector<SeedHitRecord> hits = {make_hit(1, 10, 100, 20), make_hit(1, 15, 110, 20)};
 
     auto merged = SeedMerger::merge(hits, config);
 
@@ -201,19 +193,14 @@ TEST_CASE("SeedMerger: Multiple clusters remain separate") {
     SeedMergerConfig config{.merge_tolerance = 5};
 
     // Two clusters of mergeable seeds with large gap between clusters
-    std::vector<SeedHitRecord> hits = {
-        // Cluster 1 on node 1
-        make_hit(1, 10, 100, 10),
-        make_hit(1, 12, 105, 10),
+    std::vector<SeedHitRecord> hits = {// Cluster 1 on node 1
+                                       make_hit(1, 10, 100, 10), make_hit(1, 12, 105, 10),
 
-        // Cluster 2 on node 1 (far away in query space)
-        make_hit(1, 50, 500, 10),
-        make_hit(1, 52, 505, 10),
+                                       // Cluster 2 on node 1 (far away in query space)
+                                       make_hit(1, 50, 500, 10), make_hit(1, 52, 505, 10),
 
-        // Cluster 3 on node 2
-        make_hit(2, 10, 100, 10),
-        make_hit(2, 12, 105, 10)
-    };
+                                       // Cluster 3 on node 2
+                                       make_hit(2, 10, 100, 10), make_hit(2, 12, 105, 10)};
 
     auto merged = SeedMerger::merge(hits, config);
 

@@ -8,6 +8,4 @@ TEST_CASE("realtime is monotonic") {
     CHECK(t2 >= t1);
 }
 
-TEST_CASE("cputime is non-negative") {
-    CHECK(piru::cputime() >= 0.0);
-}
+TEST_CASE("cputime is non-negative") { CHECK(piru::cputime() >= 0.0); }

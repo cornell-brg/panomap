@@ -30,9 +30,7 @@ std::vector<std::string> split_commas(const std::string& s) {
     return parts;
 }
 
-bool parse_orientation(const std::string& token) {
-    return !token.empty() && token[0] == '-';
-}
+bool parse_orientation(const std::string& token) { return !token.empty() && token[0] == '-'; }
 
 std::optional<std::size_t> parse_overlap_bases(const std::string& cigar) {
     if (cigar.empty() || cigar == "*") return std::nullopt;

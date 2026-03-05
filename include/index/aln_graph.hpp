@@ -14,7 +14,7 @@ namespace piru::index {
 
 struct AlnPathStep {
     std::string node_id;
-    bool is_reverse{false}; // Indicates if this step traverses the node in reverse
+    bool is_reverse{false};  // Indicates if this step traverses the node in reverse
 };
 
 struct AlnPath {
@@ -29,11 +29,11 @@ struct AlnPath {
 // ... (rest of the file)
 
 struct AlnNode {
-    std::size_t id{0};                // Sequential ID within the graph.
-    std::string label;                // Friendly label (default: original node id).
-    std::string original_id;          // Original node id from the imported graph.
-    bool is_reverse{false};           // True if this node is the reverse complement.
-    std::string sequence;             // Sequence including k-1 overlaps where applicable.
+    std::size_t id{0};        // Sequential ID within the graph.
+    std::string label;        // Friendly label (default: original node id).
+    std::string original_id;  // Original node id from the imported graph.
+    bool is_reverse{false};   // True if this node is the reverse complement.
+    std::string sequence;     // Sequence including k-1 overlaps where applicable.
     std::optional<std::int64_t> chain_id;
     std::optional<std::int64_t> linear_position;
 };
@@ -120,4 +120,4 @@ private:
     std::vector<AlnPath> paths_;
 };
 
-} // namespace piru::index
+}  // namespace piru::index

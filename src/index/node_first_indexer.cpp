@@ -62,18 +62,11 @@ float safeNormalize(float value, float mean, float stddev) {
  *
  * @return Vector of fuzzy tokens (size = window_size if successful, empty if insufficient context)
  */
-std::vector<std::int16_t> getHashWindow(
-    const AlnGraph& graph,
-    const io::KmerModel& model,
-    const signal::FuzzyQuantizer& fuzzy_quantizer,
-    std::size_t path_idx,
-    std::size_t node_idx,
-    std::size_t offset,
-    int pore_k,
-    std::size_t window_size,
-    float global_mean,
-    float global_std)
-{
+std::vector<std::int16_t> getHashWindow(const AlnGraph& graph, const io::KmerModel& model,
+                                        const signal::FuzzyQuantizer& fuzzy_quantizer,
+                                        std::size_t path_idx, std::size_t node_idx,
+                                        std::size_t offset, int pore_k, std::size_t window_size,
+                                        float global_mean, float global_std) {
     const auto& path = graph.paths()[path_idx];
     const std::size_t num_steps = path.steps.size();
 
@@ -151,13 +144,10 @@ std::vector<std::int16_t> getHashWindow(
 
 }  // namespace
 
-NodeFirstIndexResult nodeFirstIndex(
-    const AlnGraph& graph,
-    const io::KmerModel& model,
-    const signal::FuzzyQuantizer& fuzzy_quantizer,
-    const signal::SeedExtractor& extractor,
-    const NodeFirstIndexConfig& config)
-{
+NodeFirstIndexResult nodeFirstIndex(const AlnGraph& graph, const io::KmerModel& model,
+                                    const signal::FuzzyQuantizer& fuzzy_quantizer,
+                                    const signal::SeedExtractor& extractor,
+                                    const NodeFirstIndexConfig& config) {
     NodeFirstIndexResult result;
     result.seed_store = std::make_unique<HashSeedStore>();
     result.linearization_coords.resize(graph.nodeCount());
@@ -216,7 +206,8 @@ NodeFirstIndexResult nodeFirstIndex(
         std::size_t local_count = 0;
 
         for (std::size_t i = 0; i < num_kmers; ++i) {
-            std::copy_n(node.sequence.data() + i, static_cast<std::size_t>(pore_k), kmer_buf.begin());
+            std::copy_n(node.sequence.data() + i, static_cast<std::size_t>(pore_k),
+                        kmer_buf.begin());
 
             if (hasNBase(kmer_buf)) {
                 raw_values.push_back(std::numeric_limits<float>::quiet_NaN());
@@ -277,8 +268,8 @@ NodeFirstIndexResult nodeFirstIndex(
     result.global_std = (variance > 0.0) ? static_cast<float>(std::sqrt(variance)) : 1.0f;
 
     LOG_DEBUG("NodeFirstIndex: global_mean=" + std::to_string(result.global_mean) +
-              ", global_std=" + std::to_string(result.global_std) +
-              " (from " + std::to_string(global_count) + " k-mers)");
+              ", global_std=" + std::to_string(result.global_std) + " (from " +
+              std::to_string(global_count) + " k-mers)");
 
     // =========================================================================
     // Pass 1c: Normalize, fuzzy quantize, index node interiors
@@ -297,7 +288,8 @@ NodeFirstIndexResult nodeFirstIndex(
             if (std::isnan(val)) {
                 normalized.samples.push_back(val);
             } else {
-                normalized.samples.push_back(safeNormalize(val, result.global_mean, result.global_std));
+                normalized.samples.push_back(
+                    safeNormalize(val, result.global_mean, result.global_std));
             }
         }
 
@@ -318,7 +310,8 @@ NodeFirstIndexResult nodeFirstIndex(
 
                 auto seeds = extractor.extract(window_fuzzy);
                 for (const auto& seed : seeds.seeds) {
-                    local_store.insert(seed.hash, SeedHit{node_id, pos + seed.position, seed.length});
+                    local_store.insert(seed.hash,
+                                       SeedHit{node_id, pos + seed.position, seed.length});
                     ++local_count;
                 }
             }
@@ -400,11 +393,8 @@ NodeFirstIndexResult nodeFirstIndex(
 
             // Fill boundary positions using getHashWindow
             for (std::size_t pos = first_boundary_pos; pos < node_len; pos += config.seed_stride) {
-                auto window = getHashWindow(
-                    graph, model, fuzzy_quantizer,
-                    path_idx, step_idx, pos,
-                    pore_k, seed_k,
-                    result.global_mean, result.global_std);
+                auto window = getHashWindow(graph, model, fuzzy_quantizer, path_idx, step_idx, pos,
+                                            pore_k, seed_k, result.global_mean, result.global_std);
 
                 if (window.empty()) {
                     continue;
@@ -415,7 +405,8 @@ NodeFirstIndexResult nodeFirstIndex(
 
                 auto seeds = extractor.extract(fuzzy_window);
                 for (const auto& seed : seeds.seeds) {
-                    local_store.insert(seed.hash, SeedHit{node_id, pos + seed.position, seed.length});
+                    local_store.insert(seed.hash,
+                                       SeedHit{node_id, pos + seed.position, seed.length});
                     ++local_seed_count;
                 }
             }
@@ -490,9 +481,10 @@ NodeFirstIndexResult nodeFirstIndex(
     result.seed_store->set_frequency_threshold(threshold);
 
     LOG_INFO("NodeFirstIndex: " + std::to_string(result.seeds_interior) + " interior + " +
-             std::to_string(result.seeds_boundary) + " boundary = " +
-             std::to_string(result.seeds_interior + result.seeds_boundary) + " seeds, " +
-             std::to_string(result.seeds_unique) + " unique (max_freq=" + std::to_string(max_freq) + ")");
+             std::to_string(result.seeds_boundary) +
+             " boundary = " + std::to_string(result.seeds_interior + result.seeds_boundary) +
+             " seeds, " + std::to_string(result.seeds_unique) +
+             " unique (max_freq=" + std::to_string(max_freq) + ")");
 
     return result;
 }

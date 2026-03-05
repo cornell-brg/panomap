@@ -15,32 +15,34 @@ bool AlnGraph::validate() const {
         for (const auto u : out_edges_[v]) {
             if (u >= n) {
                 ok = false;
-                break; // Exit early if an invalid edge is found
+                break;  // Exit early if an invalid edge is found
             }
             const auto& incoming_u = in_edges_[u];
-            const bool has_back = std::find(incoming_u.begin(), incoming_u.end(), v) != incoming_u.end();
+            const bool has_back =
+                std::find(incoming_u.begin(), incoming_u.end(), v) != incoming_u.end();
             if (!has_back) {
                 ok = false;
-                break; // Exit early if asymmetry is found
+                break;  // Exit early if asymmetry is found
             }
         }
-        if (!ok) break; // Exit outer loop if an issue was found
+        if (!ok) break;  // Exit outer loop if an issue was found
         for (const auto u : in_edges_[v]) {
             if (u >= n) {
                 ok = false;
-                break; // Exit early if an invalid edge is found
+                break;  // Exit early if an invalid edge is found
             }
             const auto& outgoing_u = out_edges_[u];
-            const bool has_fwd = std::find(outgoing_u.begin(), outgoing_u.end(), v) != outgoing_u.end();
+            const bool has_fwd =
+                std::find(outgoing_u.begin(), outgoing_u.end(), v) != outgoing_u.end();
             if (!has_fwd) {
                 ok = false;
-                break; // Exit early if asymmetry is found
+                break;  // Exit early if asymmetry is found
             }
         }
-        if (!ok) break; // Exit outer loop if an issue was found
+        if (!ok) break;  // Exit outer loop if an issue was found
     }
 
-    if (!ok) return false; // If basic graph structure is invalid, no need to check further
+    if (!ok) return false;  // If basic graph structure is invalid, no need to check further
 
     // Optional metadata consistency: if chain_id present, linear_position should also be set.
     for (const auto& node : nodes_) {

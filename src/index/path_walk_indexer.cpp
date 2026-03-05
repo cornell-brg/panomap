@@ -44,13 +44,14 @@ struct NodeBoundary {
     std::size_t base_start;
 };
 
-/* Map signal position back to (node_id, local_offset). Binary search since boundaries are sorted. */
+/* Map signal position back to (node_id, local_offset). Binary search since boundaries are sorted.
+ */
 std::pair<std::size_t, std::size_t> signalPositionToNodeOffset(
-    std::size_t signal_pos,
-    const std::vector<NodeBoundary>& boundaries) {
+    std::size_t signal_pos, const std::vector<NodeBoundary>& boundaries) {
     // Find first boundary with base_start > signal_pos, then back up one
-    auto it = std::upper_bound(boundaries.begin(), boundaries.end(), signal_pos,
-        [](std::size_t pos, const NodeBoundary& b) { return pos < b.base_start; });
+    auto it =
+        std::upper_bound(boundaries.begin(), boundaries.end(), signal_pos,
+                         [](std::size_t pos, const NodeBoundary& b) { return pos < b.base_start; });
     if (it != boundaries.begin()) {
         --it;
     }
@@ -59,13 +60,10 @@ std::pair<std::size_t, std::size_t> signalPositionToNodeOffset(
 
 }  // namespace
 
-PathWalkIndexResult pathWalkIndex(
-    const AlnGraph& graph,
-    const io::KmerModel& model,
-    const signal::FuzzyQuantizer& fuzzy_quantizer,
-    const signal::SeedExtractor& extractor,
-    const PathWalkIndexConfig& config)
-{
+PathWalkIndexResult pathWalkIndex(const AlnGraph& graph, const io::KmerModel& model,
+                                  const signal::FuzzyQuantizer& fuzzy_quantizer,
+                                  const signal::SeedExtractor& extractor,
+                                  const PathWalkIndexConfig& config) {
     PathWalkIndexResult result;
     result.seed_store = std::make_unique<HashSeedStore>();
     result.linearization_coords.resize(graph.nodeCount());
@@ -139,7 +137,8 @@ PathWalkIndexResult pathWalkIndex(
         std::string kmer_buf(static_cast<std::size_t>(pore_k), '\0');
 
         for (std::size_t i = 0; i + static_cast<std::size_t>(pore_k) <= path_sequence.size(); ++i) {
-            std::copy_n(path_sequence.data() + i, static_cast<std::size_t>(pore_k), kmer_buf.begin());
+            std::copy_n(path_sequence.data() + i, static_cast<std::size_t>(pore_k),
+                        kmer_buf.begin());
 
             if (hasNBase(kmer_buf)) {
                 raw_signal.push_back(std::numeric_limits<float>::quiet_NaN());
@@ -219,7 +218,8 @@ PathWalkIndexResult pathWalkIndex(
             };
             threshold = freq_at(std::clamp(config.seed_freq_cutoff, 0.0, 1.0));
             if (config.seed_freq_cap > 0.0) {
-                subsample_cap = std::max<std::size_t>(1, freq_at(std::clamp(config.seed_freq_cap, 0.0, 1.0)));
+                subsample_cap =
+                    std::max<std::size_t>(1, freq_at(std::clamp(config.seed_freq_cap, 0.0, 1.0)));
             } else {
                 subsample_cap = 0;  // harddrop mode
             }
@@ -299,9 +299,8 @@ PathWalkIndexResult pathWalkIndex(
     std::size_t threshold = max_freq + 1;
     result.seed_store->set_frequency_threshold(threshold);
 
-    LOG_INFO("PathWalkIndex: " + std::to_string(result.seeds_extracted) +
-             " seeds extracted, " + std::to_string(result.seeds_unique) +
-             " unique (max_freq=" + std::to_string(max_freq) +
+    LOG_INFO("PathWalkIndex: " + std::to_string(result.seeds_extracted) + " seeds extracted, " +
+             std::to_string(result.seeds_unique) + " unique (max_freq=" + std::to_string(max_freq) +
              ", global_threshold=" + std::to_string(threshold) + ")");
 
     return result;

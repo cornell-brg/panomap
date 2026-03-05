@@ -39,10 +39,10 @@ struct IndexPipelineConfig {
     // - Converts normalized signal to discrete tokens (default: 4-bit = 16 values)
     // - rh2: Adaptive quantization with fine/coarse regions
     std::string fuzzy_quantizer{"rh2"};
-    float fuzzy_fine_min{-2.0f};   // Minimum value for fine quantization region
-    float fuzzy_fine_max{2.0f};    // Maximum value for fine quantization region
-    float fuzzy_fine_range{0.4f};  // Range per fine quantization bin
-    std::uint32_t fuzzy_n_bins{0}; // Number of bins (0 = use 2^qbits = 16)
+    float fuzzy_fine_min{-2.0f};    // Minimum value for fine quantization region
+    float fuzzy_fine_max{2.0f};     // Maximum value for fine quantization region
+    float fuzzy_fine_range{0.4f};   // Range per fine quantization bin
+    std::uint32_t fuzzy_n_bins{0};  // Number of bins (0 = use 2^qbits = 16)
 
     // -------------------------------------------------------------------------
     // Seed Extraction Parameters
@@ -55,7 +55,6 @@ struct IndexPipelineConfig {
     // Within each window of w consecutive k-mers, only the minimum hash is kept.
     // w=1 recovers the rolling k-mer behavior.
     std::size_t minimizer_window{5};
-
 
     // Seed k-mer size (number of fuzzy tokens hashed together)
     // - Larger k = more specific seeds, fewer false matches
@@ -143,9 +142,8 @@ struct IndexPipelineResult {
 // 5. Build seeds: Extract and index k-mer seeds from fuzzy signals
 //
 // Returns an IndexPipelineResult with all components in memory.
-IndexPipelineResult run_index_pipeline(
-    const io::ImportedGraph& imported,
-    const io::KmerModel& model,
-    const IndexPipelineConfig& config);
+IndexPipelineResult run_index_pipeline(const io::ImportedGraph& imported,
+                                       const io::KmerModel& model,
+                                       const IndexPipelineConfig& config);
 
 }  // namespace piru::index

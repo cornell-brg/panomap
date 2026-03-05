@@ -31,8 +31,8 @@ std::uint32_t piru_quantize(float value, const FuzzyQuantizerConfig& cfg) {
 
     // Calculate bucket boundaries
     const float coarse_range = (1.0f - fine_range) / 2.0f;
-    const float lower_coarse_end = coarse_range;           // e.g., 0.3
-    const float fine_end = coarse_range + fine_range;      // e.g., 0.7
+    const float lower_coarse_end = coarse_range;       // e.g., 0.3
+    const float fine_end = coarse_range + fine_range;  // e.g., 0.7
     // upper_coarse_end = 1.0
 
     float quantized;
@@ -58,8 +58,7 @@ std::uint32_t piru_quantize(float value, const FuzzyQuantizerConfig& cfg) {
 
 }  // namespace
 
-PiruFuzzyQuantizer::PiruFuzzyQuantizer(FuzzyQuantizerConfig config)
-    : config_(std::move(config)) {}
+PiruFuzzyQuantizer::PiruFuzzyQuantizer(FuzzyQuantizerConfig config) : config_(std::move(config)) {}
 
 FuzzyQuantizedSignal PiruFuzzyQuantizer::quantize(const NormalizedSignal& signal) const {
     FuzzyQuantizedSignal quantized;

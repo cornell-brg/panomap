@@ -10,34 +10,33 @@
 #include <vector>
 
 #include "concurrency/executor.hpp"
+#include "index/graph_store.hpp"
+#include "index/linearizer.hpp"
+#include "index/seed_store.hpp"
 #include "io/reads/read_provider.hpp"
+#include "io/results/result_writer.hpp"
+#include "mapping/anchor.hpp"
+#include "mapping/anchor_expander.hpp"
+#include "mapping/map_result.hpp"
+#include "mapping/result_formatter.hpp"
+#include "mapping/seed_clusterer.hpp"
 #include "signal/event_pipelines/event_pipeline_factory.hpp"
 #include "signal/fuzzy_quantizers/fuzzy_quantizer_factory.hpp"
 #include "signal/seed_extractors/seed_extractor_factory.hpp"
 #include "signal/signal_types.hpp"
-#include "index/seed_store.hpp"
-#include "index/graph_store.hpp"
-#include "index/linearizer.hpp"
-#include "mapping/anchor.hpp"
-#include "mapping/seed_clusterer.hpp"
-#include "mapping/anchor_expander.hpp"
-#include "mapping/map_result.hpp"
-#include "mapping/result_formatter.hpp"
-#include "io/results/result_writer.hpp"
 
 namespace piru::mapping {
 
 class SeedLookup {
 public:
-    SeedLookup(const index::SeedStore* store,
-               const index::GraphStore* graph_store,
+    SeedLookup(const index::SeedStore* store, const index::GraphStore* graph_store,
                std::size_t freq_threshold)
         : store_(store), graph_store_(graph_store), freq_threshold_(freq_threshold) {}
 
     void lookup(const signal::SeedBuffer& seeds, std::vector<SeedHitRecord>& out_hits) const;
 
 private:
-    const index::SeedStore* store_{nullptr};  // non-owning
+    const index::SeedStore* store_{nullptr};         // non-owning
     const index::GraphStore* graph_store_{nullptr};  // non-owning
     std::size_t freq_threshold_{0};
 };
@@ -45,16 +44,17 @@ private:
 struct BatchMapperConfig {
     std::size_t batch_capacity_reads{4000};
     std::size_t batch_capacity_bytes{512 * 1024 * 1024};  // Reserved for future use.
-    int num_threads{-1};  // -1 = automatic.
+    int num_threads{-1};                                  // -1 = automatic.
 
     signal::EventPipelineConfig event_pipeline_config{};  // Unified event detection + normalization
     signal::FuzzyQuantizerConfig fuzzy_config{};
     signal::SeedExtractorConfig seed_config{};
     SeedClustererConfig clusterer_config{};
-    const index::SeedStore* seed_store{nullptr};  // non-owning pointer to loaded SeedStore
+    const index::SeedStore* seed_store{nullptr};    // non-owning pointer to loaded SeedStore
     const index::GraphStore* graph_store{nullptr};  // non-owning pointer to loaded GraphStore
     // Linearization coordinates (needed for DP chaining)
-    // Non-owning pointer to linearization coords (from in-memory indexing or future deserialization)
+    // Non-owning pointer to linearization coords (from in-memory indexing or future
+    // deserialization)
     const std::vector<std::vector<index::LinearCoordinate>>* linearization_coords{nullptr};
     // Path lengths for anchor bounds checking (parallel to graph paths)
     const std::vector<std::size_t>* path_lengths{nullptr};
@@ -63,11 +63,11 @@ struct BatchMapperConfig {
     io::ResultWriter* result_writer{nullptr};
 
     // Debug dump directories (empty = disabled)
-    std::string dump_anchors_dir{};      // Dump anchors per read
-    std::string dump_chains_dir{};       // Dump chains per read
-    std::string dump_hit_stats_dir{};    // Dump seed hit statistics per read
-    std::string dump_path_chains_dir{};  // Dump best chain per path (diagnostic)
-    std::string dump_read_seeds_dir{};   // Dump all read seeds (including no-hit)
+    std::string dump_anchors_dir{};        // Dump anchors per read
+    std::string dump_chains_dir{};         // Dump chains per read
+    std::string dump_hit_stats_dir{};      // Dump seed hit statistics per read
+    std::string dump_path_chains_dir{};    // Dump best chain per path (diagnostic)
+    std::string dump_read_seeds_dir{};     // Dump all read seeds (including no-hit)
     std::string dump_anchor_detail_dir{};  // Per-anchor detail dump for selected reads
     std::unordered_set<std::string> dump_anchor_reads{};  // Read ID prefixes to dump anchors for
 
@@ -86,9 +86,9 @@ struct BatchMapperConfig {
 struct BatchMapperStats {
     std::size_t batches{0};
     std::size_t reads_processed{0};
-    std::size_t reads_mapped{0};      // reads with at least one chain
-    std::size_t reads_unmapped{0};    // reads with no chains
-    std::size_t results_written{0};   // total alignment results written
+    std::size_t reads_mapped{0};     // reads with at least one chain
+    std::size_t reads_unmapped{0};   // reads with no chains
+    std::size_t results_written{0};  // total alignment results written
     std::size_t primary_alignments{0};
     std::size_t secondary_alignments{0};
 };
@@ -111,7 +111,7 @@ struct PipelineComponents {
     signal::EventPipelinePtr event_pipeline;
     signal::FuzzyQuantizerPtr fuzzy_quantizer;
     signal::SeedExtractorPtr seed_extractor;
-    const index::SeedStore* seed_store{nullptr};  // non-owning; loaded index
+    const index::SeedStore* seed_store{nullptr};    // non-owning; loaded index
     const index::GraphStore* graph_store{nullptr};  // non-owning; loaded index
     SeedLookup lookup{nullptr, nullptr, 0};
     AnchorExpanderPtr expander;  // Expands SeedHits to Anchors

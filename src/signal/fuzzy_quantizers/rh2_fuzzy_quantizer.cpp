@@ -50,8 +50,7 @@ std::uint32_t dynamic_quantize(float value, const FuzzyQuantizerConfig& cfg) {
 
 }  // namespace
 
-Rh2FuzzyQuantizer::Rh2FuzzyQuantizer(FuzzyQuantizerConfig config)
-    : config_(std::move(config)) {}
+Rh2FuzzyQuantizer::Rh2FuzzyQuantizer(FuzzyQuantizerConfig config) : config_(std::move(config)) {}
 
 FuzzyQuantizedSignal Rh2FuzzyQuantizer::quantize(const NormalizedSignal& signal) const {
     FuzzyQuantizedSignal quantized;

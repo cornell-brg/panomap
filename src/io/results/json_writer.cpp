@@ -7,8 +7,8 @@ namespace piru::io {
 
 JsonWriter::JsonWriter(const std::string& path) {
 #ifdef PIRU_HAS_LIBVGIO
-    emitter_ = vg::io::get_non_hts_alignment_emitter(
-        path, "JSON", {}, /*threads=*/1, nullptr, nullptr);
+    emitter_ =
+        vg::io::get_non_hts_alignment_emitter(path, "JSON", {}, /*threads=*/1, nullptr, nullptr);
 #else
     (void)path;
 #endif

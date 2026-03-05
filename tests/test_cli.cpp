@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
-#include <doctest/doctest.h>
-
 #include <cstdlib>
+#include <doctest/doctest.h>
 #include <filesystem>
 #include <string>
 

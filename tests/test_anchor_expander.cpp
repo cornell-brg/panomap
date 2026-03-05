@@ -1,12 +1,10 @@
 // SPDX-License-Identifier: MIT
 
-#include "mapping/anchor_expander.hpp"
-
+#include <doctest/doctest.h>
 #include <unordered_map>
 
-#include <doctest/doctest.h>
-
 #include "index/graph_store.hpp"
+#include "mapping/anchor_expander.hpp"
 
 using namespace piru::mapping;
 using namespace piru::index;
@@ -201,8 +199,8 @@ TEST_CASE("PathWalkExpander: Multiple seeds produce multiple anchors") {
     PathWalkExpander expander(coords, path_lengths);
 
     std::vector<SeedHitRecord> hits = {
-        make_hit(0, 10, 50, 20),   // First seed on node 0
-        make_hit(1, 5, 70, 15)     // Second seed on node 1
+        make_hit(0, 10, 50, 20),  // First seed on node 0
+        make_hit(1, 5, 70, 15)    // Second seed on node 1
     };
 
     auto anchors = expander.expand(hits);
@@ -220,7 +218,8 @@ TEST_CASE("PathWalkExpander: Multiple seeds produce multiple anchors") {
     CHECK(anchors[1].node_id == 1);
 }
 
-TEST_CASE("PathWalkExpander: Node appearing on same path multiple times produces multiple anchors") {
+TEST_CASE(
+    "PathWalkExpander: Node appearing on same path multiple times produces multiple anchors") {
     // Node 0 appears twice on path 0 (e.g., in a cycle)
     std::vector<std::vector<LinearCoordinate>> coords(1);
     coords[0] = {{0, 100}, {0, 500}};  // Same path_id, different positions
@@ -272,9 +271,9 @@ TEST_CASE("PathWalkExpander: Mix of valid and invalid nodes") {
     PathWalkExpander expander(coords, path_lengths);
 
     std::vector<SeedHitRecord> hits = {
-        make_hit(0, 10, 50, 20),   // Valid (has coords)
-        make_hit(1, 5, 70, 15),    // Invalid (no coords)
-        make_hit(5, 0, 90, 10)     // Invalid (out of bounds)
+        make_hit(0, 10, 50, 20),  // Valid (has coords)
+        make_hit(1, 5, 70, 15),   // Invalid (no coords)
+        make_hit(5, 0, 90, 10)    // Invalid (out of bounds)
     };
 
     auto anchors = expander.expand(hits);
@@ -342,8 +341,8 @@ TEST_CASE("SuperbubbleExpander: Skips nodes without chain_id") {
     SuperbubbleExpander expander(&graph_store);
 
     std::vector<SeedHitRecord> hits = {
-        make_hit(0, 10, 50, 20),   // Valid
-        make_hit(1, 5, 70, 15)     // No linearization
+        make_hit(0, 10, 50, 20),  // Valid
+        make_hit(1, 5, 70, 15)    // No linearization
     };
 
     auto anchors = expander.expand(hits);
@@ -385,15 +384,12 @@ TEST_CASE("SuperbubbleExpander: Zero offset produces ref_coord equal to linear_p
 
 TEST_CASE("SuperbubbleExpander: Multiple seeds on different chains") {
     MockGraphStore graph_store;
-    graph_store.setLinearization(0, 1, 100);   // Node 0 on chain 1
-    graph_store.setLinearization(1, 2, 500);   // Node 1 on chain 2
+    graph_store.setLinearization(0, 1, 100);  // Node 0 on chain 1
+    graph_store.setLinearization(1, 2, 500);  // Node 1 on chain 2
 
     SuperbubbleExpander expander(&graph_store);
 
-    std::vector<SeedHitRecord> hits = {
-        make_hit(0, 10, 50, 20),
-        make_hit(1, 5, 70, 15)
-    };
+    std::vector<SeedHitRecord> hits = {make_hit(0, 10, 50, 20), make_hit(1, 5, 70, 15)};
 
     auto anchors = expander.expand(hits);
 

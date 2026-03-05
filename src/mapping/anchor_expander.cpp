@@ -8,9 +8,8 @@ namespace piru::mapping {
 // PathWalkExpander Implementation
 // ============================================================================
 
-PathWalkExpander::PathWalkExpander(
-    const std::vector<std::vector<index::LinearCoordinate>>& coords,
-    const std::vector<std::size_t>& path_lengths)
+PathWalkExpander::PathWalkExpander(const std::vector<std::vector<index::LinearCoordinate>>& coords,
+                                   const std::vector<std::size_t>& path_lengths)
     : coords_(coords), path_lengths_(path_lengths) {}
 
 std::vector<Anchor> PathWalkExpander::expand(const std::vector<SeedHitRecord>& hits) const {

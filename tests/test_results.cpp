@@ -1,5 +1,4 @@
 #include <doctest/doctest.h>
-
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -8,12 +7,11 @@
 #include "index/aln_graph.hpp"
 #include "io/results/result.hpp"
 #include "io/results/result_writer_factory.hpp"
-#include "mapping/result_formatter.hpp"
 #include "mapping/map_result.hpp"
+#include "mapping/result_formatter.hpp"
 
 TEST_CASE("GAF writer writes basic record") {
-    const auto tmp_path =
-        std::filesystem::temp_directory_path() / "piru_test_output.gaf";
+    const auto tmp_path = std::filesystem::temp_directory_path() / "piru_test_output.gaf";
 
     auto writer = piru::io::make_result_writer(tmp_path.string());
     REQUIRE(writer != nullptr);
@@ -45,8 +43,7 @@ TEST_CASE("GAF writer writes basic record") {
     }
     REQUIRE(lines.size() == 2);  // header + data
     CHECK(lines[0][0] == '#');   // header starts with #
-    CHECK(lines[1] ==
-          "read1\t100\t10\t90\t+\tchr1\t1000\t100\t180\t70\t80\t60\ttp:A:P");
+    CHECK(lines[1] == "read1\t100\t10\t90\t+\tchr1\t1000\t100\t180\t70\t80\t60\ttp:A:P");
 }
 
 TEST_CASE("Result writer factory produces json writer") {
@@ -80,8 +77,7 @@ TEST_CASE("Result writer factory produces gam writer") {
 // =============================================================================
 
 TEST_CASE("PAF writer writes basic record") {
-    const auto tmp_path =
-        std::filesystem::temp_directory_path() / "piru_test_output.paf";
+    const auto tmp_path = std::filesystem::temp_directory_path() / "piru_test_output.paf";
 
     auto writer = piru::io::make_result_writer(tmp_path.string());
     REQUIRE(writer != nullptr);
@@ -115,8 +111,7 @@ TEST_CASE("PAF writer writes basic record") {
     CHECK(lines[0][0] == '#');   // header starts with #
     // PAF: query_name, query_len, query_start, query_end, strand, target_name,
     //      target_len, target_start, target_end, matches, block_len, mapq, [tags]
-    CHECK(lines[1] ==
-          "read1\t100\t10\t90\t+\tchr1\t1000\t100\t180\t70\t80\t60\ttp:A:P\tcs:i:150");
+    CHECK(lines[1] == "read1\t100\t10\t90\t+\tchr1\t1000\t100\t180\t70\t80\t60\ttp:A:P\tcs:i:150");
 
     std::filesystem::remove(tmp_path);
 }

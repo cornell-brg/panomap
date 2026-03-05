@@ -3,13 +3,13 @@
 
 #pragma once
 
-#include <string>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "index/graph_store.hpp"
-#include "index/seed_store.hpp"
 #include "index/linearizer.hpp"
+#include "index/seed_store.hpp"
 
 namespace piru::io::index {
 
@@ -31,12 +31,10 @@ struct LoadedIndex {
  *
  * Format: PIRX header + metadata + graph + linearization + seeds
  */
-void save_index(
-    const std::string& path,
-    const piru::index::GraphStore& graph,
-    const piru::index::SeedStore& seeds,
-    const std::vector<std::vector<piru::index::LinearCoordinate>>& linearization_coords,
-    const IndexMetadata& metadata);
+void save_index(const std::string& path, const piru::index::GraphStore& graph,
+                const piru::index::SeedStore& seeds,
+                const std::vector<std::vector<piru::index::LinearCoordinate>>& linearization_coords,
+                const IndexMetadata& metadata);
 
 /**
  * Load an index from a .pirx file.

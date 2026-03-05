@@ -7,8 +7,8 @@ namespace piru::io {
 
 GamWriter::GamWriter(const std::string& path) : path_(path) {
 #ifdef PIRU_HAS_LIBVGIO
-    emitter_ = vg::io::get_non_hts_alignment_emitter(
-        path_, "GAM", {}, /*threads=*/1, nullptr, nullptr);
+    emitter_ =
+        vg::io::get_non_hts_alignment_emitter(path_, "GAM", {}, /*threads=*/1, nullptr, nullptr);
 #else
     (void)path_;
 #endif

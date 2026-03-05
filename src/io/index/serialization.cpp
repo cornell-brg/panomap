@@ -16,9 +16,9 @@ constexpr char kMagic[4] = {'P', 'I', 'R', 'X'};
 constexpr uint32_t kVersion = 1;
 
 // Flags (bit field)
-constexpr uint32_t kFlagHasSequences = 1 << 0;      // Node DNA sequences stored
-constexpr uint32_t kFlagHasFuzzySignals = 1 << 1;   // Fuzzy quantized signals (future)
-constexpr uint32_t kFlagHasAlignSignals = 1 << 2;   // Alignment quantized signals (future)
+constexpr uint32_t kFlagHasSequences = 1 << 0;     // Node DNA sequences stored
+constexpr uint32_t kFlagHasFuzzySignals = 1 << 1;  // Fuzzy quantized signals (future)
+constexpr uint32_t kFlagHasAlignSignals = 1 << 2;  // Alignment quantized signals (future)
 
 template <typename T>
 void write_pod(std::ostream& out, const T& val) {
@@ -46,13 +46,10 @@ std::string read_string(std::istream& in) {
 
 }  // namespace
 
-void save_index(
-    const std::string& path,
-    const piru::index::GraphStore& graph_store,
-    const piru::index::SeedStore& seed_store,
-    const std::vector<std::vector<piru::index::LinearCoordinate>>& linearization_coords,
-    const IndexMetadata& metadata)
-{
+void save_index(const std::string& path, const piru::index::GraphStore& graph_store,
+                const piru::index::SeedStore& seed_store,
+                const std::vector<std::vector<piru::index::LinearCoordinate>>& linearization_coords,
+                const IndexMetadata& metadata) {
     const auto* adj_store = dynamic_cast<const piru::index::AdjListGraphStore*>(&graph_store);
     if (!adj_store) {
         throw std::runtime_error("Unsupported GraphStore backend for serialization");
@@ -171,8 +168,8 @@ LoadedIndex load_index(const std::string& path) {
     uint32_t version;
     read_pod(in, version);
     if (version > kVersion) {
-        LOG_WARN("Index version " + std::to_string(version) +
-                 " is newer than supported version " + std::to_string(kVersion));
+        LOG_WARN("Index version " + std::to_string(version) + " is newer than supported version " +
+                 std::to_string(kVersion));
     }
 
     uint32_t flags;
@@ -301,12 +298,9 @@ LoadedIndex load_index(const std::string& path) {
     LOG_INFO("Loaded index: " + std::to_string(node_count) + " nodes, " +
              std::to_string(entry_count) + " seeds ← " + path);
 
-    return {
-        std::move(metadata),
-        std::make_unique<piru::index::AdjListGraphStore>(std::move(*graph)),
-        std::move(seeds),
-        std::move(linearization_coords)
-    };
+    return {std::move(metadata),
+            std::make_unique<piru::index::AdjListGraphStore>(std::move(*graph)), std::move(seeds),
+            std::move(linearization_coords)};
 }
 
 bool is_pirx_index(const std::string& path) {

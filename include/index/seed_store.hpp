@@ -6,18 +6,18 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <memory>
 #include <map>
+#include <memory>
+#include <string>
 #include <unordered_map>
 #include <vector>
-#include <string>
 
 namespace piru::index {
 
 struct SeedHit {
     std::size_t node_id{0};
     std::size_t offset{0};
-    std::size_t length{0};     // Seed coverage length (from Seed.length)
+    std::size_t length{0};  // Seed coverage length (from Seed.length)
 
     // For sorting and deduplication (ignore length for uniqueness)
     bool operator<(const SeedHit& other) const {

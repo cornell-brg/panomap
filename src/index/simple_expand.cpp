@@ -14,10 +14,8 @@ namespace {
 // Reverse complement a DNA sequence
 std::string revcomp(const std::string& seq) {
     static const std::unordered_map<char, char> comp = {
-        {'A', 'T'}, {'T', 'A'}, {'C', 'G'}, {'G', 'C'},
-        {'a', 't'}, {'t', 'a'}, {'c', 'g'}, {'g', 'c'},
-        {'N', 'N'}, {'n', 'n'}
-    };
+        {'A', 'T'}, {'T', 'A'}, {'C', 'G'}, {'G', 'C'}, {'a', 't'},
+        {'t', 'a'}, {'c', 'g'}, {'g', 'c'}, {'N', 'N'}, {'n', 'n'}};
 
     std::string rc;
     rc.reserve(seq.size());
@@ -56,16 +54,16 @@ AlnGraph simpleExpand(const piru::io::ImportedGraph& imported) {
 
         // Forward node at ID = i * 2
         AlnNode fwd;
-        fwd.label = orig.id + "+"; // TODO: remove later, not needed
-        fwd.original_id = orig.id; // TODO: remove later, not needed
+        fwd.label = orig.id + "+";  // TODO: remove later, not needed
+        fwd.original_id = orig.id;  // TODO: remove later, not needed
         fwd.is_reverse = false;
         fwd.sequence = orig.sequence;
         graph.setNode(forwardNodeId(i), fwd);
 
         // Reverse node at ID = i * 2 + 1
         AlnNode rev;
-        rev.label = orig.id + "-"; // TODO: remove later, not needed
-        rev.original_id = orig.id; // TODO: remove later, not needed
+        rev.label = orig.id + "-";  // TODO: remove later, not needed
+        rev.original_id = orig.id;  // TODO: remove later, not needed
         rev.is_reverse = true;
         rev.sequence = revcomp(orig.sequence);
         graph.setNode(reverseNodeId(i), rev);
@@ -88,8 +86,10 @@ AlnGraph simpleExpand(const piru::io::ImportedGraph& imported) {
         std::size_t to_idx = to_it->second;
 
         // Determine which ±node to use based on orientation
-        std::size_t from_aln_id = orig_edge.from_reverse ? reverseNodeId(from_idx) : forwardNodeId(from_idx);
-        std::size_t to_aln_id = orig_edge.to_reverse ? reverseNodeId(to_idx) : forwardNodeId(to_idx);
+        std::size_t from_aln_id =
+            orig_edge.from_reverse ? reverseNodeId(from_idx) : forwardNodeId(from_idx);
+        std::size_t to_aln_id =
+            orig_edge.to_reverse ? reverseNodeId(to_idx) : forwardNodeId(to_idx);
 
         // Add forward edge
         if (!graph.hasEdge(from_aln_id, to_aln_id)) {
@@ -102,8 +102,10 @@ AlnGraph simpleExpand(const piru::io::ImportedGraph& imported) {
 
         // Add reverse complement edge: rev(to) → rev(from)
         // If original edge is A+ → B+, reverse is B- → A-
-        std::size_t rev_from_aln_id = orig_edge.to_reverse ? forwardNodeId(to_idx) : reverseNodeId(to_idx);
-        std::size_t rev_to_aln_id = orig_edge.from_reverse ? forwardNodeId(from_idx) : reverseNodeId(from_idx);
+        std::size_t rev_from_aln_id =
+            orig_edge.to_reverse ? forwardNodeId(to_idx) : reverseNodeId(to_idx);
+        std::size_t rev_to_aln_id =
+            orig_edge.from_reverse ? forwardNodeId(from_idx) : reverseNodeId(from_idx);
 
         if (!graph.hasEdge(rev_from_aln_id, rev_to_aln_id)) {
             AlnEdge rev_edge;
@@ -126,7 +128,8 @@ AlnGraph simpleExpand(const piru::io::ImportedGraph& imported) {
             auto it = id_to_index.find(step.segment_id);
             if (it == id_to_index.end()) continue;
 
-            std::size_t aln_id = step.is_reverse ? reverseNodeId(it->second) : forwardNodeId(it->second);
+            std::size_t aln_id =
+                step.is_reverse ? reverseNodeId(it->second) : forwardNodeId(it->second);
             AlnPathStep aln_step;
             aln_step.node_id = std::to_string(aln_id);  // Use numeric AlnGraph node ID
             aln_step.is_reverse = false;  // Always + since orientation is encoded in node choice
@@ -144,7 +147,8 @@ AlnGraph simpleExpand(const piru::io::ImportedGraph& imported) {
 
             // Flip orientation for reverse path
             bool flipped = !step.is_reverse;
-            std::size_t aln_id = flipped ? reverseNodeId(idx_it->second) : forwardNodeId(idx_it->second);
+            std::size_t aln_id =
+                flipped ? reverseNodeId(idx_it->second) : forwardNodeId(idx_it->second);
             AlnPathStep aln_step;
             aln_step.node_id = std::to_string(aln_id);  // Use numeric AlnGraph node ID
             aln_step.is_reverse = false;  // Always + since orientation is encoded in node choice

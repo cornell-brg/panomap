@@ -13,26 +13,23 @@
 #include "signal/seed_extractors/seed_extractor_factory.hpp"
 #include "util/logging.hpp"
 
-
 namespace piru::index {
 
-IndexPipelineResult run_index_pipeline(
-    const io::ImportedGraph& imported,
-    const io::KmerModel& model,
-    const IndexPipelineConfig& config) {
-
+IndexPipelineResult run_index_pipeline(const io::ImportedGraph& imported,
+                                       const io::KmerModel& model,
+                                       const IndexPipelineConfig& config) {
     auto stage_start = std::chrono::high_resolution_clock::now();
 
     // Stage 1: Simple +-expand (2x nodes)
     AlnGraph aln_graph = simpleExpand(imported);
 
-    auto stage_elapsed = std::chrono::duration<double>(
-        std::chrono::high_resolution_clock::now() - stage_start).count();
-    LOG_INFO("[1/2] Transforming graph to directional graph: " + std::to_string(aln_graph.nodeCount()) +
-             " nodes, " + std::to_string(aln_graph.edgeCount()) + " edges, " +
-             std::to_string(aln_graph.pathCount()) + " paths [" +
-             std::to_string(stage_elapsed) + "s]");
-
+    auto stage_elapsed =
+        std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - stage_start)
+            .count();
+    LOG_INFO(
+        "[1/2] Transforming graph to directional graph: " + std::to_string(aln_graph.nodeCount()) +
+        " nodes, " + std::to_string(aln_graph.edgeCount()) + " edges, " +
+        std::to_string(aln_graph.pathCount()) + " paths [" + std::to_string(stage_elapsed) + "s]");
 
     // Stage 2: Indexing (squigglize + linearize + seed extraction)
     stage_start = std::chrono::high_resolution_clock::now();
@@ -74,14 +71,16 @@ IndexPipelineResult run_index_pipeline(
         nfi_config.seed_freq_cutoff = config.seed_freq_cutoff;
         nfi_config.executor = config.executor;
 
-        auto nfi_result = nodeFirstIndex(aln_graph, model, *fuzzy_quantizer, *extractor, nfi_config);
+        auto nfi_result =
+            nodeFirstIndex(aln_graph, model, *fuzzy_quantizer, *extractor, nfi_config);
 
-        stage_elapsed = std::chrono::duration<double>(
-            std::chrono::high_resolution_clock::now() - stage_start).count();
+        stage_elapsed =
+            std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - stage_start)
+                .count();
         LOG_INFO("[2/2] node-first indexed: " + std::to_string(nfi_result.seeds_unique) +
                  " unique seeds (global_mean=" + std::to_string(nfi_result.global_mean) +
-                 ", global_std=" + std::to_string(nfi_result.global_std) +
-                 ") [" + std::to_string(stage_elapsed) + "s]");
+                 ", global_std=" + std::to_string(nfi_result.global_std) + ") [" +
+                 std::to_string(stage_elapsed) + "s]");
 
         path_lengths = std::move(nfi_result.path_lengths);
         result.seed_store = std::move(nfi_result.seed_store);
@@ -98,8 +97,9 @@ IndexPipelineResult run_index_pipeline(
 
         auto pwi_result = pathWalkIndex(aln_graph, model, *fuzzy_quantizer, *extractor, pwi_config);
 
-        stage_elapsed = std::chrono::duration<double>(
-            std::chrono::high_resolution_clock::now() - stage_start).count();
+        stage_elapsed =
+            std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - stage_start)
+                .count();
         LOG_INFO("[2/2] path-walk indexed: " + std::to_string(pwi_result.seeds_unique) +
                  " unique seeds [" + std::to_string(stage_elapsed) + "s]");
 

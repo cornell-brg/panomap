@@ -50,8 +50,8 @@ public:
         os << "\n[timing]\n";
         for (const auto& [label, e] : entries_) {
             auto [val, unit] = pretty_time(e.wall_ms);
-            os << "  " << label << ": " << std::fixed << std::setprecision(3) << val << " "
-               << unit << "\n";
+            os << "  " << label << ": " << std::fixed << std::setprecision(3) << val << " " << unit
+               << "\n";
         }
     }
 

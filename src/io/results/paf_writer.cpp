@@ -25,18 +25,10 @@ namespace {
 // 12. Mapping quality
 std::string to_paf_line(const AlignmentResult& r) {
     std::stringstream ss;
-    ss << r.query_name << '\t'
-       << r.query_length << '\t'
-       << r.query_start << '\t'
-       << r.query_end << '\t'
-       << r.strand << '\t'
-       << r.target_path << '\t'
-       << r.target_length << '\t'
-       << r.target_start << '\t'
-       << r.target_end << '\t'
-       << r.matches << '\t'
-       << r.alignment_block_length << '\t'
-       << r.mapq;
+    ss << r.query_name << '\t' << r.query_length << '\t' << r.query_start << '\t' << r.query_end
+       << '\t' << r.strand << '\t' << r.target_path << '\t' << r.target_length << '\t'
+       << r.target_start << '\t' << r.target_end << '\t' << r.matches << '\t'
+       << r.alignment_block_length << '\t' << r.mapq;
 
     // Optional tags
     for (const auto& tag : r.optional_fields) {

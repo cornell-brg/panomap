@@ -44,7 +44,7 @@ struct AlignmentQuantizedSignal {
 struct Seed {
     std::uint64_t hash{0};
     std::size_t position{0};
-    std::size_t length{0};     // Seed coverage length (initially k, may increase after merging)
+    std::size_t length{0};  // Seed coverage length (initially k, may increase after merging)
 };
 
 struct SeedBuffer {

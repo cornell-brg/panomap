@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 
-#include "signal/fuzzy_quantizers/fuzzy_quantizer_factory.hpp"
-
 #include <doctest/doctest.h>
+
+#include "signal/fuzzy_quantizers/fuzzy_quantizer_factory.hpp"
 
 using namespace piru::signal;
 

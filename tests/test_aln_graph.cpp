@@ -23,7 +23,7 @@ TEST_CASE("AlnGraph basic path operations") {
     path1.name = "pathA";
     path1.steps.push_back({"node1", false});
     path1.steps.push_back({"node2", true});
-    path1.overlaps.push_back(1); // Example overlap
+    path1.overlaps.push_back(1);  // Example overlap
     graph.addPath(path1);
 
     CHECK(graph.pathCount() == 1);
@@ -91,7 +91,7 @@ TEST_CASE("AlnGraph validation with paths") {
     AlnPath empty_path;
     empty_path.name = "empty";
     empty_path_graph.addPath(empty_path);
-    CHECK(empty_path_graph.validate() == true); // Empty path is valid
+    CHECK(empty_path_graph.validate() == true);  // Empty path is valid
 }
 
 TEST_CASE("AlnGraph validation with path steps referencing correct labels") {
@@ -119,7 +119,7 @@ TEST_CASE("AlnGraph validation with path steps referencing correct labels") {
     // Path with non-existent node
     AlnPath p_invalid_node;
     p_invalid_node.name = "p_invalid_node";
-    p_invalid_node.steps.push_back({"C", false}); // 'C' does not exist
+    p_invalid_node.steps.push_back({"C", false});  // 'C' does not exist
     graph.addPath(p_invalid_node);
 
     CHECK(graph.validate() == false);
@@ -149,8 +149,8 @@ TEST_CASE("AlnGraph validation with path overlaps size") {
     p_valid_overlaps.steps.push_back({"N1", false});
     p_valid_overlaps.steps.push_back({"N2", false});
     p_valid_overlaps.steps.push_back({"N3", false});
-    p_valid_overlaps.overlaps.push_back(10); // Overlap N1->N2
-    p_valid_overlaps.overlaps.push_back(20); // Overlap N2->N3
+    p_valid_overlaps.overlaps.push_back(10);  // Overlap N1->N2
+    p_valid_overlaps.overlaps.push_back(20);  // Overlap N2->N3
     graph.addPath(p_valid_overlaps);
     CHECK(graph.validate() == true);
 
@@ -160,7 +160,7 @@ TEST_CASE("AlnGraph validation with path overlaps size") {
     p_invalid_overlaps_size.steps.push_back({"N1", false});
     p_invalid_overlaps_size.steps.push_back({"N2", false});
     p_invalid_overlaps_size.steps.push_back({"N3", false});
-    p_invalid_overlaps_size.overlaps.push_back(10); // Only one overlap, but 3 steps
+    p_invalid_overlaps_size.overlaps.push_back(10);  // Only one overlap, but 3 steps
     graph.addPath(p_invalid_overlaps_size);
     CHECK(graph.validate() == false);
 

@@ -15,20 +15,20 @@ namespace piru::mapping {
 // Configuration for DP-based chaining algorithm.
 // Note: Cross-path chaining is not supported. See DEV033 for planned alias-based approach.
 struct DPChainClustererConfig {
-    std::size_t max_dist{500};               // Max query/ref distance for chaining (also used for banding)
-    std::size_t max_diag_dev{500};           // Max diagonal deviation |Δr - Δq|
-    std::size_t min_chain_score{12};         // Min score to report a chain
-    std::size_t max_chains{10};              // Max number of chains to extract (multi-mapping)
-    std::size_t max_skip{25};                // Stop after this many consecutive failed chain attempts
+    std::size_t max_dist{500};        // Max query/ref distance for chaining (also used for banding)
+    std::size_t max_diag_dev{500};    // Max diagonal deviation |Δr - Δq|
+    std::size_t min_chain_score{12};  // Min score to report a chain
+    std::size_t max_chains{10};       // Max number of chains to extract (multi-mapping)
+    std::size_t max_skip{25};         // Stop after this many consecutive failed chain attempts
 
     // Scoring parameters
-    double anchor_weight{1.5};               // Weight per anchor length
-    double gap_penalty_factor{0.1};          // Penalty per unit gap distance
-    double diag_penalty_factor{0.5};         // Penalty per unit diagonal deviation
-    double overlap_penalty_factor{0.4};      // Penalty per unit overlap
+    double anchor_weight{1.5};           // Weight per anchor length
+    double gap_penalty_factor{0.1};      // Penalty per unit gap distance
+    double diag_penalty_factor{0.5};     // Penalty per unit diagonal deviation
+    double overlap_penalty_factor{0.4};  // Penalty per unit overlap
 
     // Post-processing
-    bool merge_chains{true};                 // Merge overlapping chains on same path
+    bool merge_chains{true};  // Merge overlapping chains on same path
 };
 
 // DP-based colinear chaining clusterer.
@@ -66,7 +66,7 @@ private:
 
     // Extract chain by backtracking from given anchor index.
     std::vector<std::size_t> backtrack_chain(const std::vector<int>& pred,
-                                              std::size_t best_idx) const;
+                                             std::size_t best_idx) const;
 };
 
 }  // namespace piru::mapping

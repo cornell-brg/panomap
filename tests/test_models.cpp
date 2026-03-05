@@ -1,5 +1,4 @@
 #include <doctest/doctest.h>
-
 #include <filesystem>
 
 #include "io/models/model_factory.hpp"

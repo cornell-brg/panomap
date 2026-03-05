@@ -33,16 +33,15 @@ void merge_overlapping_chains(std::vector<ClusterGroup>& chains, double /*anchor
         merged = false;
 
         // Sort chains by (path_id, ref_start)
-        std::sort(chains.begin(), chains.end(),
-                  [](const ClusterGroup& a, const ClusterGroup& b) {
-                      if (a.anchors.empty() || b.anchors.empty()) {
-                          return a.anchors.size() > b.anchors.size();
-                      }
-                      if (a.anchors.front().path_id != b.anchors.front().path_id) {
-                          return a.anchors.front().path_id < b.anchors.front().path_id;
-                      }
-                      return a.anchors.front().ref_coord < b.anchors.front().ref_coord;
-                  });
+        std::sort(chains.begin(), chains.end(), [](const ClusterGroup& a, const ClusterGroup& b) {
+            if (a.anchors.empty() || b.anchors.empty()) {
+                return a.anchors.size() > b.anchors.size();
+            }
+            if (a.anchors.front().path_id != b.anchors.front().path_id) {
+                return a.anchors.front().path_id < b.anchors.front().path_id;
+            }
+            return a.anchors.front().ref_coord < b.anchors.front().ref_coord;
+        });
 
         // Try to merge adjacent chains on same path
         for (std::size_t i = 0; i + 1 < chains.size(); ++i) {
@@ -106,11 +105,11 @@ void merge_overlapping_chains(std::vector<ClusterGroup>& chains, double /*anchor
                           });
 
                 // Remove duplicates (same ref_coord and read_pos)
-                auto last = std::unique(merged_anchors.begin(), merged_anchors.end(),
-                                        [](const SeedAnchor& a, const SeedAnchor& b) {
-                                            return a.ref_coord == b.ref_coord &&
-                                                   a.read_pos == b.read_pos;
-                                        });
+                auto last =
+                    std::unique(merged_anchors.begin(), merged_anchors.end(),
+                                [](const SeedAnchor& a, const SeedAnchor& b) {
+                                    return a.ref_coord == b.ref_coord && a.read_pos == b.read_pos;
+                                });
                 merged_anchors.erase(last, merged_anchors.end());
 
                 // Update c1 with merged result
@@ -127,10 +126,9 @@ void merge_overlapping_chains(std::vector<ClusterGroup>& chains, double /*anchor
     }
 
     // Sort by score descending (highest score = rank 0)
-    std::sort(chains.begin(), chains.end(),
-              [](const ClusterGroup& a, const ClusterGroup& b) {
-                  return a.cluster_score > b.cluster_score;
-              });
+    std::sort(chains.begin(), chains.end(), [](const ClusterGroup& a, const ClusterGroup& b) {
+        return a.cluster_score > b.cluster_score;
+    });
 
     // Reassign cluster IDs after merging (now reflects rank)
     for (std::size_t i = 0; i < chains.size(); ++i) {
@@ -169,8 +167,7 @@ struct AnchorComparator {
 
 }  // namespace
 
-DPChainClusterer::DPChainClusterer(DPChainClustererConfig config)
-    : config_(std::move(config)) {}
+DPChainClusterer::DPChainClusterer(DPChainClustererConfig config) : config_(std::move(config)) {}
 
 ClusterSummary DPChainClusterer::cluster(const std::vector<Anchor>& anchors) const {
     ClusterSummary summary;
@@ -212,7 +209,7 @@ ClusterSummary DPChainClusterer::cluster(const std::vector<Anchor>& anchors) con
         // If we've checked max_skip anchors and none can chain, further anchors are unlikely
         // to be better predecessors.
         std::size_t num_skipped = 0;
-        for (std::size_t j = i; j > 0 && num_skipped < config_.max_skip; ) {
+        for (std::size_t j = i; j > 0 && num_skipped < config_.max_skip;) {
             --j;
             const auto& anchor_j = sorted_anchors[j];
 
@@ -244,11 +241,9 @@ ClusterSummary DPChainClusterer::cluster(const std::vector<Anchor>& anchors) con
             const std::int64_t dq = static_cast<std::int64_t>(anchor_i.query_pos) -
                                     static_cast<std::int64_t>(anchor_j.query_pos);
             const std::int64_t dr = anchor_i.ref_coord - anchor_j.ref_coord;
-            const double match_bonus = std::min({
-                anchor_score(anchor_i),
-                static_cast<double>(std::max<std::int64_t>(0, dq)),
-                static_cast<double>(std::max<std::int64_t>(0, dr))
-            });
+            const double match_bonus = std::min(
+                {anchor_score(anchor_i), static_cast<double>(std::max<std::int64_t>(0, dq)),
+                 static_cast<double>(std::max<std::int64_t>(0, dr))});
             const double score = dp[j] + match_bonus - cost;
 
             if (score > best_score) {
@@ -319,7 +314,8 @@ ClusterSummary DPChainClusterer::cluster(const std::vector<Anchor>& anchors) con
         const auto& first_anchor = sorted_anchors[chain_indices.front()];
         const auto& last_anchor = sorted_anchors[chain_indices.back()];
         std::int64_t ref_start = first_anchor.ref_coord;
-        std::int64_t ref_end = last_anchor.ref_coord + static_cast<std::int64_t>(last_anchor.length);
+        std::int64_t ref_end =
+            last_anchor.ref_coord + static_cast<std::int64_t>(last_anchor.length);
 
         // Add this chain's interval to covered intervals for its path
         covered_intervals[first_anchor.path_id].emplace_back(ref_start, ref_end);
@@ -382,8 +378,8 @@ bool DPChainClusterer::can_chain(const Anchor& j, const Anchor& i) const {
 
     // Compute deltas
     const std::int64_t delta_ref = i.ref_coord - j.ref_coord;
-    const std::int64_t delta_query = static_cast<std::int64_t>(i.query_pos) -
-                                     static_cast<std::int64_t>(j.query_pos);
+    const std::int64_t delta_query =
+        static_cast<std::int64_t>(i.query_pos) - static_cast<std::int64_t>(j.query_pos);
 
     // Check distance constraints
     if (delta_ref < 0 || delta_query < 0) {
@@ -424,8 +420,8 @@ double DPChainClusterer::gap_cost(const Anchor& j, const Anchor& i) const {
 
     // Diagonal deviation penalty
     const std::int64_t delta_ref = i.ref_coord - j.ref_coord;
-    const std::int64_t delta_query = static_cast<std::int64_t>(i.query_pos) -
-                                     static_cast<std::int64_t>(j.query_pos);
+    const std::int64_t delta_query =
+        static_cast<std::int64_t>(i.query_pos) - static_cast<std::int64_t>(j.query_pos);
     const double diag_dev = std::abs(delta_ref - delta_query);
     cost += diag_dev * config_.diag_penalty_factor;
 
@@ -445,10 +441,8 @@ double DPChainClusterer::anchor_score(const Anchor& anchor) const {
     return static_cast<double>(anchor.length) * config_.anchor_weight;
 }
 
-std::vector<std::size_t> DPChainClusterer::backtrack_chain(
-    const std::vector<int>& pred,
-    std::size_t best_idx) const {
-
+std::vector<std::size_t> DPChainClusterer::backtrack_chain(const std::vector<int>& pred,
+                                                           std::size_t best_idx) const {
     std::vector<std::size_t> chain;
 
     // Backtrack from best_idx following predecessor pointers

@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: MIT
 
-#include "mapping/dp_chain_clusterer.hpp"
-
 #include <doctest/doctest.h>
 
 #include "mapping/anchor_expander.hpp"
+#include "mapping/dp_chain_clusterer.hpp"
 
 using namespace piru::mapping;
 using namespace piru::index;
@@ -70,9 +69,9 @@ TEST_CASE("DPChainClusterer: Single seed produces single anchor chain") {
 TEST_CASE("DPChainClusterer: Linear colinear chain selects all anchors") {
     // Three nodes in a line on same path
     std::vector<std::vector<LinearCoordinate>> coords(3);
-    coords[0] = {{0, 100}};   // Node 0 at ref 100
-    coords[1] = {{0, 200}};   // Node 1 at ref 200
-    coords[2] = {{0, 300}};   // Node 2 at ref 300
+    coords[0] = {{0, 100}};  // Node 0 at ref 100
+    coords[1] = {{0, 200}};  // Node 1 at ref 200
+    coords[2] = {{0, 300}};  // Node 2 at ref 300
 
     std::vector<std::size_t> path_lengths(100, 1000000);  // Large lengths to not filter any anchors
     PathWalkExpander expander(coords, path_lengths);
@@ -85,9 +84,9 @@ TEST_CASE("DPChainClusterer: Linear colinear chain selects all anchors") {
 
     // Three colinear seeds (diagonal: ref +100, query +100)
     std::vector<SeedHitRecord> hits = {
-        make_hit(0, 0, 50, 20),    // ref 100, query 50
-        make_hit(1, 0, 150, 20),   // ref 200, query 150 (Δr=100, Δq=100, diag=0)
-        make_hit(2, 0, 250, 20)    // ref 300, query 250 (Δr=100, Δq=100, diag=0)
+        make_hit(0, 0, 50, 20),   // ref 100, query 50
+        make_hit(1, 0, 150, 20),  // ref 200, query 150 (Δr=100, Δq=100, diag=0)
+        make_hit(2, 0, 250, 20)   // ref 300, query 250 (Δr=100, Δq=100, diag=0)
     };
     auto anchors = expander.expand(hits);
 
@@ -118,8 +117,8 @@ TEST_CASE("DPChainClusterer: Large diagonal deviation breaks chain") {
     // Two seeds with large diagonal deviation
     // Δr = 100, Δq = 200, |Δr - Δq| = 100 > max_diag_dev
     std::vector<SeedHitRecord> hits = {
-        make_hit(0, 0, 50, 20),    // ref 100, query 50
-        make_hit(1, 0, 250, 20)    // ref 200, query 250 (diagonal dev = 100)
+        make_hit(0, 0, 50, 20),  // ref 100, query 50
+        make_hit(1, 0, 250, 20)  // ref 200, query 250 (diagonal dev = 100)
     };
     auto anchors = expander.expand(hits);
 
@@ -145,10 +144,7 @@ TEST_CASE("DPChainClusterer: Distance filter prevents chaining far-apart anchors
     DPChainClusterer clusterer(config);
 
     // Two seeds far apart (Δr = 9900 > max_dist)
-    std::vector<SeedHitRecord> hits = {
-        make_hit(0, 0, 50, 20),
-        make_hit(1, 0, 9950, 20)
-    };
+    std::vector<SeedHitRecord> hits = {make_hit(0, 0, 50, 20), make_hit(1, 0, 9950, 20)};
     auto anchors = expander.expand(hits);
 
     auto summary = clusterer.cluster(anchors);
@@ -174,10 +170,7 @@ TEST_CASE("DPChainClusterer: Rejects cross-path chains") {
     DPChainClusterer clusterer(config);
 
     // Two seeds on different paths
-    std::vector<SeedHitRecord> hits = {
-        make_hit(0, 0, 50, 20),
-        make_hit(1, 0, 150, 20)
-    };
+    std::vector<SeedHitRecord> hits = {make_hit(0, 0, 50, 20), make_hit(1, 0, 150, 20)};
     auto anchors = expander.expand(hits);
 
     auto summary = clusterer.cluster(anchors);
@@ -205,9 +198,9 @@ TEST_CASE("DPChainClusterer: Prefers higher-scoring chain") {
 
     // Three seeds: 0→1 is good, 0→2 skips 1 but has larger span
     std::vector<SeedHitRecord> hits = {
-        make_hit(0, 0, 50, 20),    // Score = 20
-        make_hit(1, 0, 150, 10),   // Score = 10 (smaller)
-        make_hit(2, 0, 250, 30)    // Score = 30 (larger)
+        make_hit(0, 0, 50, 20),   // Score = 20
+        make_hit(1, 0, 150, 10),  // Score = 10 (smaller)
+        make_hit(2, 0, 250, 30)   // Score = 30 (larger)
     };
     auto anchors = expander.expand(hits);
 
@@ -260,10 +253,7 @@ TEST_CASE("DPChainClusterer: Overlapping anchors incur penalty") {
     // Two seeds that overlap in reference space
     // Seed 0: ref 100-120, query 50-70
     // Seed 1: ref 150-170, query 60-80 (overlap in query)
-    std::vector<SeedHitRecord> hits = {
-        make_hit(0, 0, 50, 20),
-        make_hit(1, 0, 60, 20)
-    };
+    std::vector<SeedHitRecord> hits = {make_hit(0, 0, 50, 20), make_hit(1, 0, 60, 20)};
     auto anchors = expander.expand(hits);
 
     auto summary = clusterer.cluster(anchors);
@@ -289,8 +279,8 @@ TEST_CASE("DPChainClusterer: Backward query positions are rejected") {
 
     // Second seed has earlier query position (backward)
     std::vector<SeedHitRecord> hits = {
-        make_hit(0, 0, 150, 20),   // query 150
-        make_hit(1, 0, 50, 20)     // query 50 (backward!)
+        make_hit(0, 0, 150, 20),  // query 150
+        make_hit(1, 0, 50, 20)    // query 50 (backward!)
     };
     auto anchors = expander.expand(hits);
 
@@ -343,11 +333,8 @@ TEST_CASE("DPChainClusterer: Chain preserves order from backtracking") {
     DPChainClusterer clusterer(config);
 
     // Seeds in order
-    std::vector<SeedHitRecord> hits = {
-        make_hit(0, 0, 50, 20),
-        make_hit(1, 0, 150, 20),
-        make_hit(2, 0, 250, 20)
-    };
+    std::vector<SeedHitRecord> hits = {make_hit(0, 0, 50, 20), make_hit(1, 0, 150, 20),
+                                       make_hit(2, 0, 250, 20)};
     auto anchors = expander.expand(hits);
 
     auto summary = clusterer.cluster(anchors);

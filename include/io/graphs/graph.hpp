@@ -3,8 +3,8 @@
 
 #pragma once
 
-#include <string>
 #include <optional>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -26,7 +26,6 @@ struct ImportedGraphEdge {
     // Parsed overlap length when available (GFA CIGAR parsed or vg overlap length).
     std::optional<std::size_t> overlap_bases;
 };
-
 
 struct ImportedPathStep {
     std::string segment_id;

@@ -25,10 +25,9 @@ SeedBuffer KmerSeedExtractor::extract(const FuzzyQuantizedSignal& signal) const 
 
     // Guard against oversized windows (shift by >=64 is UB). Fall back to full mask.
     const bool use_shift = qbits > 0 && qbits < 64;
-    const std::uint64_t window_mask =
-        (!use_shift || k >= (64 / static_cast<std::size_t>(qbits)))
-            ? std::numeric_limits<std::uint64_t>::max()
-            : makeMask(static_cast<std::uint32_t>(k * qbits));
+    const std::uint64_t window_mask = (!use_shift || k >= (64 / static_cast<std::size_t>(qbits)))
+                                          ? std::numeric_limits<std::uint64_t>::max()
+                                          : makeMask(static_cast<std::uint32_t>(k * qbits));
 
     const std::size_t num_seeds = 1 + (tokens.size() - k) / stride;
     buffer.seeds.reserve(num_seeds);
@@ -36,7 +35,8 @@ SeedBuffer KmerSeedExtractor::extract(const FuzzyQuantizedSignal& signal) const 
     for (std::size_t start = 0; start + k <= tokens.size(); start += stride) {
         if (hasSentinel(tokens.data(), start, k)) continue;
 
-        const auto hash = hashKmer(tokens.data(), start, k, qbits, token_mask, window_mask, use_shift);
+        const auto hash =
+            hashKmer(tokens.data(), start, k, qbits, token_mask, window_mask, use_shift);
         buffer.seeds.push_back(Seed{.hash = hash, .position = start, .length = k});
     }
     return buffer;

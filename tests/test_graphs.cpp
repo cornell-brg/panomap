@@ -1,5 +1,4 @@
 #include <doctest/doctest.h>
-
 #include <filesystem>
 #include <fstream>
 
@@ -95,8 +94,7 @@ TEST_CASE("vg loader parses binary vg via libvgio") {
     pos2->set_node_id(2);
     pos2->set_is_reverse(false);
 
-    const auto tmp_path =
-        std::filesystem::temp_directory_path() / "piru_test_sample.vg";
+    const auto tmp_path = std::filesystem::temp_directory_path() / "piru_test_sample.vg";
     std::ofstream out(tmp_path, std::ios::binary);
     vg::io::write<vg::Graph>(out, 1, [&proto_graph](std::size_t) { return proto_graph; }, false);
     vg::io::finish(out, false);

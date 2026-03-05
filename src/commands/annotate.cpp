@@ -31,8 +31,7 @@ struct IntervalWalk {
 
 /// Walk a path's steps to find nodes overlapping [bed_start, bed_end).
 /// Returns the node IDs, start/end offsets into boundary nodes, and interval length.
-IntervalWalk walkInterval(const piru::index::AlnGraph& graph,
-                          const piru::index::AlnPath& path,
+IntervalWalk walkInterval(const piru::index::AlnGraph& graph, const piru::index::AlnPath& path,
                           std::int64_t bed_start, std::int64_t bed_end) {
     IntervalWalk result;
     result.interval_length = bed_end - bed_start;
@@ -66,7 +65,6 @@ IntervalWalk walkInterval(const piru::index::AlnGraph& graph,
     return result;
 }
 
-
 /// Result of the mini DP: the equivalent interval on a haplotype path.
 struct EquivalentInterval {
     std::vector<std::size_t> node_ids;  // selected node IDs in coord order
@@ -79,9 +77,8 @@ struct EquivalentInterval {
 /// on a haplotype path, with a max-gap constraint between consecutive entries.
 /// Candidates are (node_id, coord) pairs from step 2's lookup.
 EquivalentInterval findEquivalentInterval(
-        const std::vector<std::pair<std::size_t, std::int64_t>>& candidates,
-        const piru::index::AlnGraph& graph,
-        std::int64_t max_gap) {
+    const std::vector<std::pair<std::size_t, std::int64_t>>& candidates,
+    const piru::index::AlnGraph& graph, std::int64_t max_gap) {
     if (candidates.empty()) return {};
 
     // Sort by coord
@@ -90,9 +87,9 @@ EquivalentInterval findEquivalentInterval(
               [](const auto& a, const auto& b) { return a.second < b.second; });
 
     const std::size_t n = sorted.size();
-    std::vector<std::size_t> dp_len(n, 1);        // longest chain ending at i
-    std::vector<std::int64_t> dp_start(n);         // start coord of chain ending at i
-    std::vector<std::size_t> pred(n, n);           // predecessor index (n = no pred)
+    std::vector<std::size_t> dp_len(n, 1);  // longest chain ending at i
+    std::vector<std::int64_t> dp_start(n);  // start coord of chain ending at i
+    std::vector<std::size_t> pred(n, n);    // predecessor index (n = no pred)
 
     // Base case: each candidate starts its own chain
     for (std::size_t i = 0; i < n; ++i) {
@@ -149,7 +146,7 @@ EquivalentInterval findEquivalentInterval(
     std::size_t last = chain_indices.back();
     result.start_coord = sorted[first].second;
     result.end_coord = sorted[last].second +
-        static_cast<std::int64_t>(graph.node(sorted[last].first).sequence.size());
+                       static_cast<std::int64_t>(graph.node(sorted[last].first).sequence.size());
 
     return result;
 }
@@ -168,9 +165,7 @@ int handle_annotate(const std::vector<std::string>& args) {
         {'v', "verbose", false, "Enable verbose logging (DEBUG level)"},
         {0, "original-ids", false, "Output original GFA node IDs instead of AlnGraph IDs"},
     };
-    config.on_error = [](const std::string&) {
-        std::cerr << "annotate: invalid option\n";
-    };
+    config.on_error = [](const std::string&) { std::cerr << "annotate: invalid option\n"; };
 
     if (!piru::cli::parse_args(args, config, parsed)) {
         piru::cli::print_help(config, std::cerr);
@@ -296,12 +291,12 @@ int handle_annotate(const std::vector<std::string>& args) {
                  " other forward paths");
 
         // --- Step 3: Mini DP per haplotype path to find equivalent interval ---
-        std::int64_t max_gap = walk.interval_length;  // no consecutive pair further than interval length
+        std::int64_t max_gap =
+            walk.interval_length;  // no consecutive pair further than interval length
 
-        LOG_INFO("Step 3: ref interval " + rec.path_name + ":[" +
-                 std::to_string(rec.start) + ", " + std::to_string(rec.end) +
-                 ") L=" + std::to_string(walk.interval_length) +
-                 ", " + std::to_string(walk.node_ids.size()) + " ref nodes");
+        LOG_INFO("Step 3: ref interval " + rec.path_name + ":[" + std::to_string(rec.start) + ", " +
+                 std::to_string(rec.end) + ") L=" + std::to_string(walk.interval_length) + ", " +
+                 std::to_string(walk.node_ids.size()) + " ref nodes");
 
         // --- Steps 4+5: Walk equivalent intervals, union all node sets ---
         std::set<std::size_t> roi_nodes;
@@ -316,16 +311,14 @@ int handle_annotate(const std::vector<std::string>& args) {
             auto equiv = findEquivalentInterval(candidates, aln_graph, max_gap);
 
             std::int64_t span = equiv.end_coord - equiv.start_coord;
-            LOG_INFO("  " + aln_graph.paths()[pid].name +
-                     ": [" + std::to_string(equiv.start_coord) + ", " +
-                     std::to_string(equiv.end_coord) + ") span=" + std::to_string(span) +
-                     ", " + std::to_string(equiv.chain_length) + "/" +
-                     std::to_string(candidates.size()) + " candidates kept");
+            LOG_INFO("  " + aln_graph.paths()[pid].name + ": [" +
+                     std::to_string(equiv.start_coord) + ", " + std::to_string(equiv.end_coord) +
+                     ") span=" + std::to_string(span) + ", " + std::to_string(equiv.chain_length) +
+                     "/" + std::to_string(candidates.size()) + " candidates kept");
 
             // Step 4: Walk this path's equivalent interval to get full node list
             const auto& hap_path = aln_graph.paths()[pid];
-            auto hap_walk = walkInterval(aln_graph, hap_path,
-                                         equiv.start_coord, equiv.end_coord);
+            auto hap_walk = walkInterval(aln_graph, hap_path, equiv.start_coord, equiv.end_coord);
 
             // Step 5: Add to union
             for (std::size_t nid : hap_walk.node_ids) {
@@ -345,8 +338,8 @@ int handle_annotate(const std::vector<std::string>& args) {
             }
         }
 
-        LOG_INFO("Step 4+5: ROI union = " + std::to_string(roi_nodes.size()) +
-                 " fwd nodes (" + std::to_string(ref_count) + " from ref, " +
+        LOG_INFO("Step 4+5: ROI union = " + std::to_string(roi_nodes.size()) + " fwd nodes (" +
+                 std::to_string(ref_count) + " from ref, " +
                  std::to_string(roi_nodes.size() - ref_count) + " from haplotypes), " +
                  std::to_string(roi_nodes_with_rev.size()) + " total with +/-rev");
 

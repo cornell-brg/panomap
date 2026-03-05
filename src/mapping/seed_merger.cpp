@@ -35,16 +35,15 @@ bool can_merge(const SeedHitRecord& a, const SeedHitRecord& b, std::size_t toler
     const std::size_t a_query_end = a.read_pos + a.span;
     const std::size_t a_ref_end = a.target.offset + a.target.length;
 
-    const std::int64_t query_gap_signed = static_cast<std::int64_t>(b.read_pos) -
-                                          static_cast<std::int64_t>(a_query_end);
-    const std::int64_t ref_gap_signed = static_cast<std::int64_t>(b.target.offset) -
-                                        static_cast<std::int64_t>(a_ref_end);
+    const std::int64_t query_gap_signed =
+        static_cast<std::int64_t>(b.read_pos) - static_cast<std::int64_t>(a_query_end);
+    const std::int64_t ref_gap_signed =
+        static_cast<std::int64_t>(b.target.offset) - static_cast<std::int64_t>(a_ref_end);
 
     // Gap is 0 if there's overlap (negative gap)
-    const std::size_t query_gap = (query_gap_signed > 0) ?
-                                  static_cast<std::size_t>(query_gap_signed) : 0;
-    const std::size_t ref_gap = (ref_gap_signed > 0) ?
-                                static_cast<std::size_t>(ref_gap_signed) : 0;
+    const std::size_t query_gap =
+        (query_gap_signed > 0) ? static_cast<std::size_t>(query_gap_signed) : 0;
+    const std::size_t ref_gap = (ref_gap_signed > 0) ? static_cast<std::size_t>(ref_gap_signed) : 0;
 
     // Allow merging if gaps are within tolerance
     return query_gap <= tolerance && ref_gap <= tolerance;
@@ -70,10 +69,8 @@ void merge_into(SeedHitRecord& a, const SeedHitRecord& b) {
 
 }  // namespace
 
-std::vector<SeedHitRecord> SeedMerger::merge(
-    const std::vector<SeedHitRecord>& hits,
-    const SeedMergerConfig& config) {
-
+std::vector<SeedHitRecord> SeedMerger::merge(const std::vector<SeedHitRecord>& hits,
+                                             const SeedMergerConfig& config) {
     if (hits.empty()) {
         return {};
     }

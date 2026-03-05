@@ -52,8 +52,8 @@ std::vector<std::string> Slow5Provider::collect_input_files(const std::string& p
         std::vector<std::string> files;
         fs::directory_options options = fs::directory_options::skip_permission_denied;
         std::error_code dir_ec;
-        for (fs::recursive_directory_iterator it(input, options, dir_ec), end;
-             it != end; it.increment(dir_ec)) {
+        for (fs::recursive_directory_iterator it(input, options, dir_ec), end; it != end;
+             it.increment(dir_ec)) {
             if (dir_ec) {
                 LOG_WARN("Skipping entry while scanning " + path + ": " + dir_ec.message());
                 dir_ec.clear();

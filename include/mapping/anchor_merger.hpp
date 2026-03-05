@@ -32,9 +32,8 @@ class AnchorMerger {
 public:
     // Merge anchors according to configuration.
     // Returns new vector with merged anchors (input order may not be preserved).
-    static std::vector<Anchor> merge(
-        const std::vector<Anchor>& anchors,
-        const AnchorMergerConfig& config = AnchorMergerConfig{});
+    static std::vector<Anchor> merge(const std::vector<Anchor>& anchors,
+                                     const AnchorMergerConfig& config = AnchorMergerConfig{});
 };
 
 }  // namespace piru::mapping

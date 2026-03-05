@@ -1,15 +1,14 @@
 // SPDX-License-Identifier: MIT
 // Factory for seed clustering/chaining backends.
 
-#include "mapping/seed_clusterer.hpp"
-
+#include <cmath>
 #include <cstdint>
 #include <limits>
-#include <cmath>
 #include <unordered_map>
 
 #include "mapping/anchor.hpp"
 #include "mapping/dp_chain_clusterer.hpp"
+#include "mapping/seed_clusterer.hpp"
 #include "util/logging.hpp"
 
 namespace piru::mapping {
@@ -23,14 +22,13 @@ std::vector<const Anchor*> select_top_anchors_per_position(
 
     // Sort by query_pos ascending (deterministic by ref_coord for ties)
     std::vector<const Anchor*> sorted = anchors;
-    std::sort(sorted.begin(), sorted.end(),
-              [](const Anchor* a, const Anchor* b) {
-                  if (a->query_pos == b->query_pos) {
-                      // Tie-break by ref_coord for determinism
-                      return a->ref_coord < b->ref_coord;
-                  }
-                  return a->query_pos < b->query_pos;
-              });
+    std::sort(sorted.begin(), sorted.end(), [](const Anchor* a, const Anchor* b) {
+        if (a->query_pos == b->query_pos) {
+            // Tie-break by ref_coord for determinism
+            return a->ref_coord < b->ref_coord;
+        }
+        return a->query_pos < b->query_pos;
+    });
 
     std::vector<const Anchor*> top;
     top.reserve(sorted.size());
@@ -54,16 +52,13 @@ std::size_t compute_probe_stride(std::size_t query_length, std::size_t max_probe
 }
 
 // Helper: sample probe anchors with stride
-std::vector<const Anchor*> sample_probe_anchors(
-    const std::vector<const Anchor*>& anchors,
-    std::size_t query_length,
-    std::size_t max_probes,
-    std::size_t stride_override) {
+std::vector<const Anchor*> sample_probe_anchors(const std::vector<const Anchor*>& anchors,
+                                                std::size_t query_length, std::size_t max_probes,
+                                                std::size_t stride_override) {
     if (anchors.empty() || max_probes == 0) return {};
 
-    const std::size_t stride = (stride_override > 0)
-                                   ? stride_override
-                                   : compute_probe_stride(query_length, max_probes);
+    const std::size_t stride =
+        (stride_override > 0) ? stride_override : compute_probe_stride(query_length, max_probes);
 
     // Reduce to top anchor per query position
     auto top_per_pos = select_top_anchors_per_position(anchors);
@@ -150,10 +145,8 @@ struct ScoredCluster {
 };
 
 // Shared clustering logic (used by both FSE and Probe)
-std::vector<ScoredCluster> cluster_and_score_anchors(
-    const std::vector<Anchor>& anchors,
-    const SeedClustererConfig& config) {
-
+std::vector<ScoredCluster> cluster_and_score_anchors(const std::vector<Anchor>& anchors,
+                                                     const SeedClustererConfig& config) {
     if (anchors.empty()) return {};
 
     // 1. Group anchors by path_id
@@ -168,13 +161,12 @@ std::vector<ScoredCluster> cluster_and_score_anchors(
 
     for (auto& [path_id, path_anchors] : by_path) {
         // Sort by diagonal (GA-style: ref_coord - query_pos)
-        std::sort(path_anchors.begin(), path_anchors.end(),
-                  [](const Anchor* a, const Anchor* b) {
-                      const std::int64_t da = a->ref_coord - static_cast<std::int64_t>(a->query_pos);
-                      const std::int64_t db = b->ref_coord - static_cast<std::int64_t>(b->query_pos);
-                      if (da == db) return a->query_pos < b->query_pos;  // Tie-break
-                      return da < db;
-                  });
+        std::sort(path_anchors.begin(), path_anchors.end(), [](const Anchor* a, const Anchor* b) {
+            const std::int64_t da = a->ref_coord - static_cast<std::int64_t>(a->query_pos);
+            const std::int64_t db = b->ref_coord - static_cast<std::int64_t>(b->query_pos);
+            if (da == db) return a->query_pos < b->query_pos;  // Tie-break
+            return da < db;
+        });
 
         // Split clusters when diagonal gap > cutoff
         std::vector<const Anchor*> current;
@@ -222,11 +214,9 @@ std::vector<ScoredCluster> cluster_and_score_anchors(
         const auto* best_anchor = cluster_anchors.front();
 
         SeedAnchor seed_anchor{
-            .target = index::SeedHit{
-                .node_id = best_anchor->node_id,
-                .offset = best_anchor->node_offset,
-                .length = best_anchor->length
-            },
+            .target = index::SeedHit{.node_id = best_anchor->node_id,
+                                     .offset = best_anchor->node_offset,
+                                     .length = best_anchor->length},
             .read_pos = best_anchor->query_pos,
             .score = score,
             .cluster_id = 0,  // Will be set later after sorting
@@ -299,11 +289,9 @@ public:
         summary.anchors.reserve(anchors.size());
         for (const auto& a : anchors) {
             summary.anchors.push_back(SeedAnchor{
-                .target = index::SeedHit{
-                    .node_id = a.node_id,
-                    .offset = a.node_offset,
-                    .length = a.length
-                },
+                .target =
+                    index::SeedHit{
+                        .node_id = a.node_id, .offset = a.node_offset, .length = a.length},
                 .read_pos = a.query_pos,
                 .score = 0.0,
             });
@@ -340,11 +328,9 @@ public:
 
         for (const auto& scored_cluster : scored_clusters) {
             // Sample probe anchors from this cluster
-            auto probes = sample_probe_anchors(
-                scored_cluster.anchors,
-                query_length,
-                config_.max_probes_per_cluster,
-                config_.probe_stride);
+            auto probes =
+                sample_probe_anchors(scored_cluster.anchors, query_length,
+                                     config_.max_probes_per_cluster, config_.probe_stride);
 
             if (probes.empty()) continue;
 
@@ -355,11 +341,9 @@ public:
 
             for (const auto* probe : probes) {
                 group.anchors.push_back(SeedAnchor{
-                    .target = index::SeedHit{
-                        .node_id = probe->node_id,
-                        .offset = probe->node_offset,
-                        .length = probe->length
-                    },
+                    .target = index::SeedHit{.node_id = probe->node_id,
+                                             .offset = probe->node_offset,
+                                             .length = probe->length},
                     .read_pos = probe->query_pos,
                     .score = scored_cluster.top_anchor_score,  // Use cluster score
                     .cluster_id = scored_cluster.top_anchor.cluster_id,
@@ -376,8 +360,8 @@ public:
 
         // Also populate flat anchors list for compatibility (all probes from all clusters)
         for (const auto& group : summary.clusters) {
-            summary.anchors.insert(summary.anchors.end(),
-                                   group.anchors.begin(), group.anchors.end());
+            summary.anchors.insert(summary.anchors.end(), group.anchors.begin(),
+                                   group.anchors.end());
         }
 
         return summary;
@@ -391,10 +375,8 @@ private:
 
 }  // namespace
 
-AnchorClustererPtr make_anchor_clusterer(
-    const SeedClustererConfig& config,
-    const index::GraphStore* graph_store) {
-
+AnchorClustererPtr make_anchor_clusterer(const SeedClustererConfig& config,
+                                         const index::GraphStore* graph_store) {
     // Suppress unused parameter warning (kept for potential future use)
     (void)graph_store;
 

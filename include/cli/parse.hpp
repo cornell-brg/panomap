@@ -1,9 +1,8 @@
 #pragma once
 
-#include <getopt.h>
-
 #include <cstdlib>
 #include <functional>
+#include <getopt.h>
 #include <iostream>
 #include <map>
 #include <string>

@@ -29,7 +29,7 @@ struct PathWalkIndexConfig {
     // Seed extraction parameters
     std::size_t seed_k{6};
     std::size_t seed_stride{1};
-    double seed_freq_cutoff{0.5};   // threshold percentile (above this → subsample)
+    double seed_freq_cutoff{0.5};  // threshold percentile (above this → subsample)
     double seed_freq_cap{0.55};    // subsample cap percentile (target for subsampled seeds)
 
     // Debug: dump per-path normalization stats to file (empty = disabled)
@@ -53,9 +53,9 @@ struct PathWalkIndexResult {
     std::vector<std::size_t> path_lengths;
 
     // Stats
-    std::size_t total_path_length{0};      // Total signal samples across all paths
-    std::size_t seeds_extracted{0};        // Before dedup
-    std::size_t seeds_unique{0};           // After dedup
+    std::size_t total_path_length{0};  // Total signal samples across all paths
+    std::size_t seeds_extracted{0};    // Before dedup
+    std::size_t seeds_unique{0};       // After dedup
 };
 
 /**
@@ -76,11 +76,9 @@ struct PathWalkIndexResult {
  *
  * @note No SignalStore output - the simple pipeline doesn't store per-node signals.
  */
-PathWalkIndexResult pathWalkIndex(
-    const AlnGraph& graph,
-    const io::KmerModel& model,
-    const signal::FuzzyQuantizer& fuzzy_quantizer,
-    const signal::SeedExtractor& extractor,
-    const PathWalkIndexConfig& config = {});
+PathWalkIndexResult pathWalkIndex(const AlnGraph& graph, const io::KmerModel& model,
+                                  const signal::FuzzyQuantizer& fuzzy_quantizer,
+                                  const signal::SeedExtractor& extractor,
+                                  const PathWalkIndexConfig& config = {});
 
 }  // namespace piru::index
