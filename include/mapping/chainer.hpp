@@ -5,17 +5,12 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <iosfwd>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "cli/parse.hpp"
 #include "index/seed_store.hpp"
-
-namespace piru::index {
-class GraphStore;
-}
 
 namespace piru::mapping {
 
@@ -69,33 +64,16 @@ struct ChainResult {
 };
 
 // Abstract interface for chaining backends.
-// Chainers select an optimal subset of seeds/anchors for alignment extension.
-// The mapper treats this as a blackbox -- all backend-specific config and
-// logic stays internal.
+// Backends receive NodeAnchors (graph-space) and decide internally how to
+// transform and chain them (e.g. expand to linear space, chain in graph space).
 class Chainer {
 public:
     virtual ~Chainer() = default;
 
-    virtual ChainResult chain(const std::vector<PathAnchor>& anchors) const = 0;
+    virtual ChainResult chain(const std::vector<NodeAnchor>& hits) const = 0;
     virtual std::string name() const = 0;
-
-    // Debug: dump per-path chain diagnostics. Default no-op.
-    virtual void dump_path_chains(const char* /*filename*/, const std::string& /*read_id*/,
-                                  std::size_t /*read_length*/,
-                                  const std::vector<PathAnchor>& /*anchors*/,
-                                  const index::GraphStore* /*graph_store*/) const {}
-
-    // Debug: dump per-anchor detail with chain membership. Default no-op.
-    virtual void dump_anchor_detail(const char* /*filename*/, const std::string& /*read_id*/,
-                                    std::size_t /*read_length*/,
-                                    const std::vector<PathAnchor>& /*anchors*/,
-                                    const index::GraphStore* /*graph_store*/) const {}
 };
 
 using ChainerPtr = std::unique_ptr<Chainer>;
-
-// Factory: create a chainer from backend name + raw CLI args.
-// Each backend parses what it needs from the CLI args.
-ChainerPtr make_chainer(const std::string& backend, const cli::Parsed& parsed);
 
 }  // namespace piru::mapping

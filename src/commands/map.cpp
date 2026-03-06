@@ -84,11 +84,7 @@ int handle_map(const std::vector<std::string>& args) {
         {'\0', "event-t2", true, "Event detection threshold2 (default: backend-specific)"},
         {'\0', "event-peak", true, "Event detection peak height (default: backend-specific)"},
         {'\0', "", false, "\nDebug Options:"},
-        {'\0', "dump-anchors", true, "Dump anchors to directory (one file per read)"},
-        {'\0', "dump-chains", true, "Dump chains to directory (one file per read)"},
-        {'\0', "dump-hit-stats", true, "Dump seed hit statistics to directory (one file per read)"},
         {'\0', "dump-seed-store", true, "Dump full seed store hash table to TSV file"},
-        {'\0', "dump-read-seeds", true, "Dump all read seeds (including no-hit) to directory"},
         {'\0', "no-anchor-merge", false, "Disable anchor merging (for heatmap debugging)"},
         {'\0', "", false, "\nClassification Options:"},
         {'\0', "roi", true, "ROI annotation file (.pira from piru annotate)"},
@@ -317,7 +313,7 @@ int handle_map(const std::vector<std::string>& args) {
               ", qbits=" + std::to_string(index_seed_cfg.qbits));
     map_config.seed_config = index_seed_cfg;
 
-    // Configure chainer: forward CLI args to factory
+    // Configure chainer
     if (parsed.values.count("chainer")) {
         map_config.chainer_backend = parsed.values.at("chainer");
     }
@@ -401,27 +397,6 @@ int handle_map(const std::vector<std::string>& args) {
         map_config.result_writer = result_writer.get();
     }
 
-    // Configure debug dump directories
-    if (parsed.values.count("dump-anchors")) {
-        map_config.dump_anchors_dir = parsed.values.at("dump-anchors");
-        std::filesystem::create_directories(map_config.dump_anchors_dir);
-        LOG_INFO("Dumping anchors to: " + map_config.dump_anchors_dir);
-    }
-    if (parsed.values.count("dump-chains")) {
-        map_config.dump_chains_dir = parsed.values.at("dump-chains");
-        std::filesystem::create_directories(map_config.dump_chains_dir);
-        LOG_INFO("Dumping chains to: " + map_config.dump_chains_dir);
-    }
-    if (parsed.values.count("dump-hit-stats")) {
-        map_config.dump_hit_stats_dir = parsed.values.at("dump-hit-stats");
-        std::filesystem::create_directories(map_config.dump_hit_stats_dir);
-        LOG_INFO("Dumping hit stats to: " + map_config.dump_hit_stats_dir);
-    }
-    if (parsed.values.count("dump-read-seeds")) {
-        map_config.dump_read_seeds_dir = parsed.values.at("dump-read-seeds");
-        std::filesystem::create_directories(map_config.dump_read_seeds_dir);
-        LOG_INFO("Dumping read seeds to: " + map_config.dump_read_seeds_dir);
-    }
     if (parsed.values.count("no-anchor-merge")) {
         map_config.enable_anchor_merge = false;
         LOG_INFO("Anchor merging disabled");

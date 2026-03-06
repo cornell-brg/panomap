@@ -4,23 +4,69 @@
 
 #include <algorithm>
 #include <cmath>
-#include <fstream>
-#include <iomanip>
-#include <iostream>
 #include <limits>
 #include <map>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
-#include "index/aln_graph.hpp"
-#include "index/graph_store.hpp"
 #include "util/logging.hpp"
 #include "util/timing.hpp"
 
 namespace piru::mapping {
 
 namespace {
+
+/* Anchor merging -- merge overlapping PathAnchors on the same diagonal. */
+
+bool anchors_can_merge(const PathAnchor& a, const PathAnchor& b) {
+    // Must be on same diagonal (diagonal = ref_coord - query_pos)
+    const std::int64_t a_diag = a.ref_coord - static_cast<std::int64_t>(a.query_pos);
+    const std::int64_t b_diag = b.ref_coord - static_cast<std::int64_t>(b.query_pos);
+    if (a_diag != b_diag) return false;
+
+    // On same diagonal, check overlap in query
+    return b.query_pos <= a.query_pos + a.length;
+}
+
+void anchors_merge_into(PathAnchor& a, const PathAnchor& b) {
+    const std::size_t merged_end = std::max(a.query_pos + a.length, b.query_pos + b.length);
+    a.length = merged_end - a.query_pos;
+}
+
+std::vector<PathAnchor> merge_path_anchors(const std::vector<PathAnchor>& anchors) {
+    if (anchors.empty()) return {};
+
+    // Group by path_id
+    std::map<std::size_t, std::vector<PathAnchor>> by_path;
+    for (const auto& a : anchors) by_path[a.path_id].push_back(a);
+
+    std::vector<PathAnchor> merged;
+    merged.reserve(anchors.size());
+
+    for (auto& [path_id, path_anchors] : by_path) {
+        // Sort by (ref_coord, query_pos)
+        std::sort(path_anchors.begin(), path_anchors.end(),
+                  [](const PathAnchor& a, const PathAnchor& b) {
+                      return a.ref_coord != b.ref_coord ? a.ref_coord < b.ref_coord
+                                                        : a.query_pos < b.query_pos;
+                  });
+
+        PathAnchor current = path_anchors[0];
+        for (std::size_t i = 1; i < path_anchors.size(); ++i) {
+            if (anchors_can_merge(current, path_anchors[i])) {
+                anchors_merge_into(current, path_anchors[i]);
+            } else {
+                merged.push_back(current);
+                current = path_anchors[i];
+            }
+        }
+        merged.push_back(current);
+    }
+    return merged;
+}
+
+/* Chain merging -- merge overlapping chains on the same path. */
 
 // Merge overlapping chains on the same path.
 // If c1 and c2 overlap (c2 at higher positions), merge them:
@@ -173,9 +219,56 @@ struct AnchorComparator {
 
 }  // namespace
 
-DPChainer::DPChainer(DPChainerConfig config) : config_(std::move(config)) {}
+DPChainer::DPChainer(DPChainerConfig config,
+                     const std::vector<std::vector<index::LinearCoordinate>>& coords,
+                     const std::vector<std::size_t>& path_lengths)
+    : config_(std::move(config)), coords_(coords), path_lengths_(path_lengths) {}
 
-ChainResult DPChainer::chain(const std::vector<PathAnchor>& anchors) const {
+std::vector<PathAnchor> DPChainer::expand(const std::vector<NodeAnchor>& hits) const {
+    std::vector<PathAnchor> anchors;
+    anchors.reserve(hits.size() * 2);
+
+    for (const auto& hit : hits) {
+        const std::size_t node_id = hit.target.node_id;
+        if (node_id >= coords_.size()) continue;
+
+        const auto& node_coords = coords_[node_id];
+        if (node_coords.empty()) continue;
+
+        for (const auto& coord : node_coords) {
+            std::int64_t ref_coord = coord.ref_coord + static_cast<std::int64_t>(hit.target.offset);
+            std::int64_t anchor_end = ref_coord + static_cast<std::int64_t>(hit.span);
+
+            // Skip anchors that extend past path boundary
+            if (coord.path_id < path_lengths_.size()) {
+                std::int64_t path_len = static_cast<std::int64_t>(path_lengths_[coord.path_id]);
+                if (anchor_end > path_len || ref_coord < 0) continue;
+            }
+
+            anchors.push_back(PathAnchor{
+                .query_pos = hit.read_pos,
+                .ref_coord = ref_coord,
+                .length = hit.span,
+                .path_id = coord.path_id,
+                .node_id = node_id,
+                .node_offset = hit.target.offset,
+            });
+        }
+    }
+    return anchors;
+}
+
+ChainResult DPChainer::chain(const std::vector<NodeAnchor>& hits) const {
+    auto anchors = expand(hits);
+
+    if (config_.merge_anchors) {
+        anchors = merge_path_anchors(anchors);
+    }
+
+    return chain_path_anchors(anchors);
+}
+
+ChainResult DPChainer::chain_path_anchors(const std::vector<PathAnchor>& anchors) const {
     ChainResult summary;
 
     if (anchors.empty()) {
@@ -462,244 +555,6 @@ std::vector<std::size_t> DPChainer::backtrack_chain(const std::vector<int>& pred
     std::reverse(chain.begin(), chain.end());
 
     return chain;
-}
-
-// -- Debug dump methods --
-
-void DPChainer::dump_path_chains(const char* filename, const std::string& read_id,
-                                         std::size_t /*read_length*/,
-                                         const std::vector<PathAnchor>& anchors,
-                                         const index::GraphStore* graph_store) const {
-    std::ofstream out(filename);
-    if (!out.is_open()) {
-        LOG_WARN("Failed to open path chains file: " + std::string(filename));
-        return;
-    }
-
-    const auto* adj_store = dynamic_cast<const index::AdjListGraphStore*>(graph_store);
-    const std::vector<index::AlnPath>* paths = nullptr;
-    std::size_t total_paths = 0;
-    if (adj_store) {
-        paths = &adj_store->graph().paths();
-        total_paths = paths->size();
-    }
-
-    out << "read_id\tpath_id\tpath_name\tchain_score\tnum_anchors\t"
-        << "query_start\tquery_end\tquery_span\tref_start\tref_end\tref_span\n";
-
-    if (anchors.empty()) {
-        for (std::size_t pid = 0; pid < total_paths; ++pid) {
-            std::string path_name = paths ? (*paths)[pid].name : "path" + std::to_string(pid);
-            out << read_id << "\t" << pid << "\t" << path_name << "\t"
-                << "0\t0\t0\t0\t0.0\t0\t0\t0\n";
-        }
-        return;
-    }
-
-    // Sort anchors same as cluster()
-    std::vector<PathAnchor> sorted = anchors;
-    std::sort(sorted.begin(), sorted.end(), [](const PathAnchor& a, const PathAnchor& b) {
-        if (a.path_id != b.path_id) return a.path_id < b.path_id;
-        if (a.ref_coord != b.ref_coord) return a.ref_coord < b.ref_coord;
-        return a.query_pos < b.query_pos;
-    });
-
-    const std::size_t n = sorted.size();
-    std::vector<double> dp(n, 0.0);
-    std::vector<int> pred(n, -1);
-
-    // DP loop using this chainer's methods
-    for (std::size_t i = 0; i < n; ++i) {
-        dp[i] = anchor_score(sorted[i]);
-        pred[i] = -1;
-        std::size_t num_skipped = 0;
-        for (std::size_t j = i; j > 0 && num_skipped < config_.max_skip;) {
-            --j;
-            if (sorted[j].path_id != sorted[i].path_id) break;
-            if (sorted[i].ref_coord - sorted[j].ref_coord >
-                static_cast<std::int64_t>(config_.max_dist))
-                break;
-            if (!can_chain(sorted[j], sorted[i])) {
-                ++num_skipped;
-                continue;
-            }
-            num_skipped = 0;
-            double cost = gap_cost(sorted[j], sorted[i]);
-            std::int64_t dq = static_cast<std::int64_t>(sorted[i].query_pos) -
-                              static_cast<std::int64_t>(sorted[j].query_pos);
-            std::int64_t dr = sorted[i].ref_coord - sorted[j].ref_coord;
-            double match_bonus =
-                std::min({anchor_score(sorted[i]), static_cast<double>(std::max<std::int64_t>(0, dq)),
-                          static_cast<double>(std::max<std::int64_t>(0, dr))});
-            double score = dp[j] + match_bonus - cost;
-            if (score > dp[i]) {
-                dp[i] = score;
-                pred[i] = static_cast<int>(j);
-            }
-        }
-    }
-
-    // Find best chain per path
-    struct PathChainInfo {
-        double score{0.0};
-        std::vector<std::size_t> chain_indices;
-    };
-    std::unordered_map<std::size_t, PathChainInfo> best_per_path;
-    for (std::size_t i = 0; i < n; ++i) {
-        auto& info = best_per_path[sorted[i].path_id];
-        if (dp[i] > info.score) {
-            info.score = dp[i];
-            info.chain_indices.clear();
-            int cur = static_cast<int>(i);
-            while (cur != -1) {
-                info.chain_indices.push_back(static_cast<std::size_t>(cur));
-                cur = pred[cur];
-            }
-            std::reverse(info.chain_indices.begin(), info.chain_indices.end());
-        }
-    }
-
-    // Rank paths by score
-    std::vector<std::pair<double, std::size_t>> scored_paths;
-    for (std::size_t pid = 0; pid < total_paths; ++pid) {
-        auto it = best_per_path.find(pid);
-        scored_paths.emplace_back(it != best_per_path.end() ? it->second.score : 0.0, pid);
-    }
-    std::sort(scored_paths.begin(), scored_paths.end(), std::greater<>());
-
-    for (const auto& [score, path_id] : scored_paths) {
-        std::string path_name = "path" + std::to_string(path_id);
-        if (paths && path_id < paths->size()) path_name = (*paths)[path_id].name;
-
-        auto it = best_per_path.find(path_id);
-        if (it == best_per_path.end() || it->second.chain_indices.empty()) {
-            out << read_id << "\t" << path_id << "\t" << path_name
-                << "\t0\t0\t0\t0\t0.0\t0\t0\t0\n";
-            continue;
-        }
-        const auto& ci = it->second.chain_indices;
-        std::size_t qmin = sorted[ci.front()].query_pos, qmax = qmin;
-        std::int64_t rmin = sorted[ci.front()].ref_coord, rmax = rmin;
-        for (std::size_t idx : ci) {
-            qmin = std::min(qmin, sorted[idx].query_pos);
-            qmax = std::max(qmax, sorted[idx].query_pos + sorted[idx].length);
-            rmin = std::min(rmin, sorted[idx].ref_coord);
-            rmax = std::max(rmax, sorted[idx].ref_coord + static_cast<std::int64_t>(sorted[idx].length));
-        }
-        out << read_id << "\t" << path_id << "\t" << path_name << "\t" << std::fixed
-            << std::setprecision(2) << it->second.score << "\t" << ci.size() << "\t" << qmin << "\t"
-            << qmax << "\t" << (qmax - qmin) << "\t" << rmin << "\t" << rmax << "\t"
-            << (rmax - rmin) << "\n";
-    }
-}
-
-void DPChainer::dump_anchor_detail(const char* filename, const std::string& read_id,
-                                           std::size_t read_length,
-                                           const std::vector<PathAnchor>& anchors,
-                                           const index::GraphStore* graph_store) const {
-    std::ofstream out(filename);
-    if (!out.is_open()) {
-        LOG_WARN("Failed to open anchor detail file: " + std::string(filename));
-        return;
-    }
-
-    const auto* adj_store = dynamic_cast<const index::AdjListGraphStore*>(graph_store);
-    const std::vector<index::AlnPath>* paths = nullptr;
-    if (adj_store) paths = &adj_store->graph().paths();
-
-    std::vector<PathAnchor> sorted = anchors;
-    std::sort(sorted.begin(), sorted.end(), [](const PathAnchor& a, const PathAnchor& b) {
-        if (a.path_id != b.path_id) return a.path_id < b.path_id;
-        if (a.ref_coord != b.ref_coord) return a.ref_coord < b.ref_coord;
-        return a.query_pos < b.query_pos;
-    });
-
-    const std::size_t n = sorted.size();
-    if (n == 0) {
-        out << "read_id\tread_length\tpath_name\tanchor_idx\tquery_pos\tref_coord\tlength\t"
-            << "in_best_chain\tchain_rank\tdp_score\n";
-        return;
-    }
-
-    // DP
-    std::vector<double> dp(n, 0.0);
-    std::vector<int> pred(n, -1);
-    for (std::size_t i = 0; i < n; ++i) {
-        dp[i] = anchor_score(sorted[i]);
-        std::size_t num_skipped = 0;
-        for (std::size_t j = i; j > 0 && num_skipped < config_.max_skip;) {
-            --j;
-            if (sorted[j].path_id != sorted[i].path_id) break;
-            if (sorted[i].ref_coord - sorted[j].ref_coord >
-                static_cast<std::int64_t>(config_.max_dist))
-                break;
-            if (!can_chain(sorted[j], sorted[i])) {
-                ++num_skipped;
-                continue;
-            }
-            num_skipped = 0;
-            double cost = gap_cost(sorted[j], sorted[i]);
-            std::int64_t dq = static_cast<std::int64_t>(sorted[i].query_pos) -
-                              static_cast<std::int64_t>(sorted[j].query_pos);
-            std::int64_t dr = sorted[i].ref_coord - sorted[j].ref_coord;
-            double match_bonus =
-                std::min({anchor_score(sorted[i]), static_cast<double>(std::max<std::int64_t>(0, dq)),
-                          static_cast<double>(std::max<std::int64_t>(0, dr))});
-            double score = dp[j] + match_bonus - cost;
-            if (score > dp[i]) {
-                dp[i] = score;
-                pred[i] = static_cast<int>(j);
-            }
-        }
-    }
-
-    // Find best chain per path and mark membership
-    std::unordered_map<std::size_t, std::unordered_set<std::size_t>> chain_members;
-    std::unordered_map<std::size_t, double> best_score;
-    std::unordered_map<std::size_t, std::size_t> best_end;
-    for (std::size_t i = 0; i < n; ++i) {
-        std::size_t pid = sorted[i].path_id;
-        if (dp[i] > best_score[pid]) {
-            best_score[pid] = dp[i];
-            best_end[pid] = i;
-        }
-    }
-    for (auto& [pid, end_idx] : best_end) {
-        int cur = static_cast<int>(end_idx);
-        while (cur != -1) {
-            chain_members[pid].insert(static_cast<std::size_t>(cur));
-            cur = pred[cur];
-        }
-    }
-
-    // Rank paths
-    std::vector<std::pair<double, std::size_t>> scored_paths;
-    for (auto& [pid, sc] : best_score) scored_paths.emplace_back(sc, pid);
-    std::sort(scored_paths.begin(), scored_paths.end(), std::greater<>());
-    std::unordered_map<std::size_t, std::size_t> path_rank;
-    for (std::size_t r = 0; r < scored_paths.size(); ++r) path_rank[scored_paths[r].second] = r + 1;
-
-    out << "read_id\tread_length\tpath_name\tpath_rank\tanchor_idx\tquery_pos\tref_coord\t"
-        << "length\tin_best_chain\tdp_score\tnode_id\tnode_offset\n";
-
-    std::size_t current_path = sorted[0].path_id;
-    std::size_t anchor_in_path = 0;
-    for (std::size_t i = 0; i < n; ++i) {
-        const auto& a = sorted[i];
-        if (a.path_id != current_path) {
-            current_path = a.path_id;
-            anchor_in_path = 0;
-        }
-        std::string path_name = "path" + std::to_string(a.path_id);
-        if (paths && a.path_id < paths->size()) path_name = (*paths)[a.path_id].name;
-        bool in_chain = chain_members.count(a.path_id) && chain_members[a.path_id].count(i);
-        std::size_t rank = path_rank.count(a.path_id) ? path_rank[a.path_id] : 0;
-        out << read_id << "\t" << read_length << "\t" << path_name << "\t" << rank << "\t"
-            << anchor_in_path << "\t" << a.query_pos << "\t" << a.ref_coord << "\t" << a.length
-            << "\t" << (in_chain ? 1 : 0) << "\t" << std::fixed << std::setprecision(2) << dp[i]
-            << "\t" << a.node_id << "\t" << a.node_offset << "\n";
-        ++anchor_in_path;
-    }
 }
 
 // -- DPChainerConfig CLI integration --

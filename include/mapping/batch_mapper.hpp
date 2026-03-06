@@ -15,7 +15,6 @@
 #include "index/seed_store.hpp"
 #include "io/reads/read_provider.hpp"
 #include "io/results/result_writer.hpp"
-#include "mapping/anchor_expander.hpp"
 #include "mapping/map_result.hpp"
 #include "mapping/result_formatter.hpp"
 #include "mapping/chainer.hpp"
@@ -47,7 +46,7 @@ struct BatchMapperConfig {
     signal::FuzzyQuantizerConfig fuzzy_config{};
     signal::SeedExtractorConfig seed_config{};
     std::string chainer_backend{"dp-chain"};
-    cli::Parsed chainer_parsed{};  // CLI args forwarded to chainer factory
+    cli::Parsed chainer_parsed{};  // CLI args forwarded to chainer
     const index::SeedStore* seed_store{nullptr};    // non-owning pointer to loaded SeedStore
     const index::GraphStore* graph_store{nullptr};  // non-owning pointer to loaded GraphStore
     // Linearization coordinates (needed for DP chaining)
@@ -60,13 +59,7 @@ struct BatchMapperConfig {
     // Result writer for output (non-owning, optional)
     io::ResultWriter* result_writer{nullptr};
 
-    // Debug dump directories (empty = disabled)
-    std::string dump_anchors_dir{};        // Dump anchors per read
-    std::string dump_chains_dir{};         // Dump chains per read
-    std::string dump_hit_stats_dir{};      // Dump seed hit statistics per read
-    std::string dump_read_seeds_dir{};  // Dump all read seeds (including no-hit)
-
-    // Anchor merging (disable for debugging/heatmap comparison)
+    // Anchor merging (passed to chainer)
     bool enable_anchor_merge{true};
 
     // ROI classification
@@ -94,8 +87,7 @@ struct BatchBuffer {
     std::vector<signal::FuzzyQuantizedSignal> fuzzy_quantized;
     std::vector<signal::SeedBuffer> seeds;
     std::vector<std::vector<NodeAnchor>> seed_hits;
-    std::vector<std::vector<PathAnchor>> anchors;  // Debug: anchors after expansion
-    std::vector<ReadMapResult> map_results;    // Unified mapping results
+    std::vector<ReadMapResult> map_results;
     std::size_t num_reads{0};
 
     void resize(std::size_t capacity);
@@ -109,7 +101,6 @@ struct PipelineComponents {
     const index::SeedStore* seed_store{nullptr};    // non-owning; loaded index
     const index::GraphStore* graph_store{nullptr};  // non-owning; loaded index
     SeedLookup lookup{nullptr, 0};
-    AnchorExpanderPtr expander;  // Expands SeedHits to Anchors
     ChainerPtr chainer;
     std::unique_ptr<ResultFormatter> result_formatter;  // Formats map results to PAF/GAF
 };
