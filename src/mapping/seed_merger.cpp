@@ -11,7 +11,7 @@ namespace {
 
 // Comparator for sorting seed hits by (node_id, node_offset, query_pos).
 struct SeedHitComparator {
-    bool operator()(const SeedHitRecord& a, const SeedHitRecord& b) const {
+    bool operator()(const NodeAnchor& a, const NodeAnchor& b) const {
         if (a.target.node_id != b.target.node_id) {
             return a.target.node_id < b.target.node_id;
         }
@@ -23,7 +23,7 @@ struct SeedHitComparator {
 };
 
 // Check if two seed hits can be merged based on tolerance.
-bool can_merge(const SeedHitRecord& a, const SeedHitRecord& b, std::size_t tolerance) {
+bool can_merge(const NodeAnchor& a, const NodeAnchor& b, std::size_t tolerance) {
     // Must be on same node
     if (a.target.node_id != b.target.node_id) {
         return false;
@@ -50,7 +50,7 @@ bool can_merge(const SeedHitRecord& a, const SeedHitRecord& b, std::size_t toler
 }
 
 // Merge hit b into hit a (updates a's span to cover both).
-void merge_into(SeedHitRecord& a, const SeedHitRecord& b) {
+void merge_into(NodeAnchor& a, const NodeAnchor& b) {
     // Calculate the end positions
     const std::size_t a_end = a.read_pos + a.span;
     const std::size_t b_end = b.read_pos + b.span;
@@ -69,21 +69,21 @@ void merge_into(SeedHitRecord& a, const SeedHitRecord& b) {
 
 }  // namespace
 
-std::vector<SeedHitRecord> SeedMerger::merge(const std::vector<SeedHitRecord>& hits,
+std::vector<NodeAnchor> SeedMerger::merge(const std::vector<NodeAnchor>& hits,
                                              const SeedMergerConfig& config) {
     if (hits.empty()) {
         return {};
     }
 
     // Sort hits by (node_id, node_offset, query_pos)
-    std::vector<SeedHitRecord> sorted_hits = hits;
+    std::vector<NodeAnchor> sorted_hits = hits;
     std::sort(sorted_hits.begin(), sorted_hits.end(), SeedHitComparator{});
 
-    std::vector<SeedHitRecord> merged;
+    std::vector<NodeAnchor> merged;
     merged.reserve(sorted_hits.size());
 
     // Start with the first hit as the current accumulator
-    SeedHitRecord current = sorted_hits[0];
+    NodeAnchor current = sorted_hits[0];
 
     for (std::size_t i = 1; i < sorted_hits.size(); ++i) {
         const auto& next = sorted_hits[i];

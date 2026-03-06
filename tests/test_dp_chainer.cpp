@@ -10,10 +10,10 @@ using namespace piru::index;
 
 namespace {
 
-// Helper to create a SeedHitRecord for testing
-SeedHitRecord make_hit(std::size_t node_id, std::size_t offset, std::size_t query_pos,
+// Helper to create a NodeAnchor for testing
+NodeAnchor make_hit(std::size_t node_id, std::size_t offset, std::size_t query_pos,
                        std::size_t span) {
-    SeedHitRecord hit;
+    NodeAnchor hit;
     hit.target.node_id = node_id;
     hit.target.offset = offset;
     hit.target.length = span;
@@ -56,7 +56,7 @@ TEST_CASE("DPChainer: Single seed produces single anchor chain") {
     DPChainer chainer(config);
 
     // Single seed hit
-    std::vector<SeedHitRecord> hits = {make_hit(0, 0, 50, 20)};
+    std::vector<NodeAnchor> hits = {make_hit(0, 0, 50, 20)};
     auto anchors = expander.expand(hits);
 
     auto summary = chainer.chain(anchors);
@@ -83,7 +83,7 @@ TEST_CASE("DPChainer: Linear colinear chain selects all anchors") {
     DPChainer chainer(config);
 
     // Three colinear seeds (diagonal: ref +100, query +100)
-    std::vector<SeedHitRecord> hits = {
+    std::vector<NodeAnchor> hits = {
         make_hit(0, 0, 50, 20),   // ref 100, query 50
         make_hit(1, 0, 150, 20),  // ref 200, query 150 (Δr=100, Δq=100, diag=0)
         make_hit(2, 0, 250, 20)   // ref 300, query 250 (Δr=100, Δq=100, diag=0)
@@ -116,7 +116,7 @@ TEST_CASE("DPChainer: Large diagonal deviation breaks chain") {
 
     // Two seeds with large diagonal deviation
     // Δr = 100, Δq = 200, |Δr - Δq| = 100 > max_diag_dev
-    std::vector<SeedHitRecord> hits = {
+    std::vector<NodeAnchor> hits = {
         make_hit(0, 0, 50, 20),  // ref 100, query 50
         make_hit(1, 0, 250, 20)  // ref 200, query 250 (diagonal dev = 100)
     };
@@ -144,7 +144,7 @@ TEST_CASE("DPChainer: Distance filter prevents chaining far-apart anchors") {
     DPChainer chainer(config);
 
     // Two seeds far apart (Δr = 9900 > max_dist)
-    std::vector<SeedHitRecord> hits = {make_hit(0, 0, 50, 20), make_hit(1, 0, 9950, 20)};
+    std::vector<NodeAnchor> hits = {make_hit(0, 0, 50, 20), make_hit(1, 0, 9950, 20)};
     auto anchors = expander.expand(hits);
 
     auto summary = chainer.chain(anchors);
@@ -170,7 +170,7 @@ TEST_CASE("DPChainer: Rejects cross-path chains") {
     DPChainer chainer(config);
 
     // Two seeds on different paths
-    std::vector<SeedHitRecord> hits = {make_hit(0, 0, 50, 20), make_hit(1, 0, 150, 20)};
+    std::vector<NodeAnchor> hits = {make_hit(0, 0, 50, 20), make_hit(1, 0, 150, 20)};
     auto anchors = expander.expand(hits);
 
     auto summary = chainer.chain(anchors);
@@ -197,7 +197,7 @@ TEST_CASE("DPChainer: Prefers higher-scoring chain") {
     DPChainer chainer(config);
 
     // Three seeds: 0→1 is good, 0→2 skips 1 but has larger span
-    std::vector<SeedHitRecord> hits = {
+    std::vector<NodeAnchor> hits = {
         make_hit(0, 0, 50, 20),   // Score = 20
         make_hit(1, 0, 150, 10),  // Score = 10 (smaller)
         make_hit(2, 0, 250, 30)   // Score = 30 (larger)
@@ -225,7 +225,7 @@ TEST_CASE("DPChainer: Min chain score threshold filters weak chains") {
     DPChainer chainer(config);
 
     // Single small seed (score = 20 < threshold)
-    std::vector<SeedHitRecord> hits = {make_hit(0, 0, 50, 20)};
+    std::vector<NodeAnchor> hits = {make_hit(0, 0, 50, 20)};
     auto anchors = expander.expand(hits);
 
     auto summary = chainer.chain(anchors);
@@ -253,7 +253,7 @@ TEST_CASE("DPChainer: Overlapping anchors incur penalty") {
     // Two seeds that overlap in reference space
     // Seed 0: ref 100-120, query 50-70
     // Seed 1: ref 150-170, query 60-80 (overlap in query)
-    std::vector<SeedHitRecord> hits = {make_hit(0, 0, 50, 20), make_hit(1, 0, 60, 20)};
+    std::vector<NodeAnchor> hits = {make_hit(0, 0, 50, 20), make_hit(1, 0, 60, 20)};
     auto anchors = expander.expand(hits);
 
     auto summary = chainer.chain(anchors);
@@ -278,7 +278,7 @@ TEST_CASE("DPChainer: Backward query positions are rejected") {
     DPChainer chainer(config);
 
     // Second seed has earlier query position (backward)
-    std::vector<SeedHitRecord> hits = {
+    std::vector<NodeAnchor> hits = {
         make_hit(0, 0, 150, 20),  // query 150
         make_hit(1, 0, 50, 20)    // query 50 (backward!)
     };
@@ -306,7 +306,7 @@ TEST_CASE("DPChainer: Node appearing on multiple paths expands correctly") {
     DPChainer chainer(config);
 
     // Single seed hit (expands to 2 anchors on different paths)
-    std::vector<SeedHitRecord> hits = {make_hit(0, 0, 50, 20)};
+    std::vector<NodeAnchor> hits = {make_hit(0, 0, 50, 20)};
     auto anchors = expander.expand(hits);
 
     auto summary = chainer.chain(anchors);
@@ -333,7 +333,7 @@ TEST_CASE("DPChainer: Chain preserves order from backtracking") {
     DPChainer chainer(config);
 
     // Seeds in order
-    std::vector<SeedHitRecord> hits = {make_hit(0, 0, 50, 20), make_hit(1, 0, 150, 20),
+    std::vector<NodeAnchor> hits = {make_hit(0, 0, 50, 20), make_hit(1, 0, 150, 20),
                                        make_hit(2, 0, 250, 20)};
     auto anchors = expander.expand(hits);
 

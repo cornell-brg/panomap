@@ -33,7 +33,7 @@ public:
                std::size_t freq_threshold)
         : store_(store), graph_store_(graph_store), freq_threshold_(freq_threshold) {}
 
-    void lookup(const signal::SeedBuffer& seeds, std::vector<SeedHitRecord>& out_hits) const;
+    void lookup(const signal::SeedBuffer& seeds, std::vector<NodeAnchor>& out_hits) const;
 
 private:
     const index::SeedStore* store_{nullptr};         // non-owning
@@ -96,8 +96,8 @@ struct BatchBuffer {
     std::vector<signal::NormalizedSignal> normalized;
     std::vector<signal::FuzzyQuantizedSignal> fuzzy_quantized;
     std::vector<signal::SeedBuffer> seeds;
-    std::vector<std::vector<SeedHitRecord>> seed_hits;
-    std::vector<std::vector<Anchor>> anchors;  // Debug: anchors after expansion
+    std::vector<std::vector<NodeAnchor>> seed_hits;
+    std::vector<std::vector<PathAnchor>> anchors;  // Debug: anchors after expansion
     std::vector<ReadMapResult> map_results;    // Unified mapping results
     std::size_t num_reads{0};
 
@@ -129,7 +129,7 @@ private:
     BatchMapperStats output_batch(const BatchBuffer& batch) const;
     void process_read(BatchBuffer& batch, std::size_t index) const;
     void lookup_seed_hits(const signal::SeedBuffer& seeds,
-                          std::vector<SeedHitRecord>& hits_out) const;
+                          std::vector<NodeAnchor>& hits_out) const;
     PipelineComponents create_components() const;
 
     BatchMapperConfig config_;

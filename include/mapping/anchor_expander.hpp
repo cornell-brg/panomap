@@ -32,7 +32,7 @@ public:
 
     // Expand seed hits to anchors.
     // Returns vector of anchors (may be larger than input if nodes appear on multiple paths).
-    virtual std::vector<Anchor> expand(const std::vector<SeedHitRecord>& hits) const = 0;
+    virtual std::vector<PathAnchor> expand(const std::vector<NodeAnchor>& hits) const = 0;
 
     // Backend name for logging and debugging.
     virtual std::string name() const = 0;
@@ -57,7 +57,7 @@ public:
     PathWalkExpander(const std::vector<std::vector<index::LinearCoordinate>>& coords,
                      const std::vector<std::size_t>& path_lengths);
 
-    std::vector<Anchor> expand(const std::vector<SeedHitRecord>& hits) const override;
+    std::vector<PathAnchor> expand(const std::vector<NodeAnchor>& hits) const override;
 
     std::string name() const override { return "path-walk"; }
 
@@ -79,7 +79,7 @@ public:
     // Construct expander with GraphStore containing chain_id and linear_position per node.
     explicit SuperbubbleExpander(const index::GraphStore* graph_store);
 
-    std::vector<Anchor> expand(const std::vector<SeedHitRecord>& hits) const override;
+    std::vector<PathAnchor> expand(const std::vector<NodeAnchor>& hits) const override;
 
     std::string name() const override { return "superbubble"; }
 

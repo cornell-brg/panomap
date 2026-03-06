@@ -22,7 +22,7 @@ namespace piru::mapping {
 namespace {
 
 // Dump anchors to file for visualization (first read only).
-void dumpAnchorsToFile(const char* filename, const std::vector<Anchor>& anchors,
+void dumpAnchorsToFile(const char* filename, const std::vector<PathAnchor>& anchors,
                        const std::string& read_id, const index::GraphStore* graph_store) {
     std::ofstream out(filename);
     if (!out.is_open()) {
@@ -162,7 +162,7 @@ void dumpAllReadSeedsToFile(const char* filename, const std::string& read_id,
 
 // Dump hit statistics for a read to analyze frequency distributions.
 void dumpHitStatsToFile(const char* filename, const std::string& read_id,
-                        const signal::SeedBuffer& seeds, const std::vector<SeedHitRecord>& hits,
+                        const signal::SeedBuffer& seeds, const std::vector<NodeAnchor>& hits,
                         std::size_t freq_threshold) {
     std::ofstream out(filename);
     if (!out.is_open()) {
@@ -225,7 +225,7 @@ void dumpHitStatsToFile(const char* filename, const std::string& read_id,
 }  // namespace
 
 void SeedLookup::lookup(const signal::SeedBuffer& seeds,
-                        std::vector<SeedHitRecord>& out_hits) const {
+                        std::vector<NodeAnchor>& out_hits) const {
     if (!store_) return;
     out_hits.clear();
     out_hits.reserve(seeds.seeds.size());
@@ -234,7 +234,7 @@ void SeedLookup::lookup(const signal::SeedBuffer& seeds,
         if (!hits) continue;
         if (hits->size() > freq_threshold_) continue;  // skip overly frequent seeds
         for (const auto& h : *hits) {
-            out_hits.push_back(SeedHitRecord{
+            out_hits.push_back(NodeAnchor{
                 .target = h,
                 .read_pos = seed.position,
                 .hash = seed.hash,
@@ -400,7 +400,7 @@ void BatchMapper::process_batch(BatchBuffer& batch) {
     for (std::size_t i = 0; i < batch.num_reads; ++i) {
         total_hits += batch.seed_hits[i].size();
     }
-    const std::size_t hits_mem_mb = total_hits * sizeof(SeedHitRecord) / 1024 / 1024;
+    const std::size_t hits_mem_mb = total_hits * sizeof(NodeAnchor) / 1024 / 1024;
     LOG_INFO("Batch complete: total_hits=" + std::to_string(total_hits) + " (~" +
              std::to_string(hits_mem_mb) + " MB)");
 }

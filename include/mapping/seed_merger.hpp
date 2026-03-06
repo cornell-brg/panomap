@@ -30,7 +30,7 @@ class SeedMerger {
 public:
     // Merge adjacent seed hits within the configured tolerance.
     // Returns a new vector with merged hits (original vector unchanged).
-    static std::vector<SeedHitRecord> merge(const std::vector<SeedHitRecord>& hits,
+    static std::vector<NodeAnchor> merge(const std::vector<NodeAnchor>& hits,
                                             const SeedMergerConfig& config);
 };
 

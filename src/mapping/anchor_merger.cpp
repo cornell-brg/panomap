@@ -12,7 +12,7 @@ namespace {
 
 // Comparator for sorting anchors by (ref_coord, query_pos).
 struct AnchorComparator {
-    bool operator()(const Anchor& a, const Anchor& b) const {
+    bool operator()(const PathAnchor& a, const PathAnchor& b) const {
         if (a.ref_coord != b.ref_coord) {
             return a.ref_coord < b.ref_coord;
         }
@@ -24,7 +24,7 @@ struct AnchorComparator {
 // Rules:
 // 1. Must be on same diagonal (exact matches have equal query/ref spans)
 // 2. Must overlap (no gap between them)
-bool can_merge(const Anchor& a, const Anchor& b) {
+bool can_merge(const PathAnchor& a, const PathAnchor& b) {
     // Must be on same diagonal (diagonal = ref_coord - query_pos)
     const std::int64_t a_diag = a.ref_coord - static_cast<std::int64_t>(a.query_pos);
     const std::int64_t b_diag = b.ref_coord - static_cast<std::int64_t>(b.query_pos);
@@ -39,7 +39,7 @@ bool can_merge(const Anchor& a, const Anchor& b) {
 
 // Merge anchor b into anchor a (updates a's length to cover both).
 // Precondition: a and b are on the same diagonal, so query_span == ref_span.
-void merge_into(Anchor& a, const Anchor& b) {
+void merge_into(PathAnchor& a, const PathAnchor& b) {
     // Since they're on the same diagonal, we only need to track query positions
     // (ref positions will be consistent due to same diagonal)
     const std::size_t a_query_end = a.query_pos + a.length;
@@ -54,19 +54,19 @@ void merge_into(Anchor& a, const Anchor& b) {
 
 }  // namespace
 
-std::vector<Anchor> AnchorMerger::merge(const std::vector<Anchor>& anchors,
+std::vector<PathAnchor> AnchorMerger::merge(const std::vector<PathAnchor>& anchors,
                                         const AnchorMergerConfig& /*config*/) {
     if (anchors.empty()) {
         return {};
     }
 
     // Group anchors by path_id
-    std::map<std::size_t, std::vector<Anchor>> anchors_by_path;
+    std::map<std::size_t, std::vector<PathAnchor>> anchors_by_path;
     for (const auto& anchor : anchors) {
         anchors_by_path[anchor.path_id].push_back(anchor);
     }
 
-    std::vector<Anchor> merged;
+    std::vector<PathAnchor> merged;
     merged.reserve(anchors.size());  // Upper bound on output size
 
     // Process each path independently
@@ -75,7 +75,7 @@ std::vector<Anchor> AnchorMerger::merge(const std::vector<Anchor>& anchors,
         std::sort(path_anchors.begin(), path_anchors.end(), AnchorComparator{});
 
         // Merge consecutive anchors
-        Anchor current = path_anchors[0];
+        PathAnchor current = path_anchors[0];
 
         for (std::size_t i = 1; i < path_anchors.size(); ++i) {
             const auto& next = path_anchors[i];

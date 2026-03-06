@@ -195,7 +195,7 @@ PathWalkIndexResult pathWalkIndex(const AlnGraph& graph, const io::KmerModel& mo
         HashSeedStore path_seed_store;
         for (const auto& seed : seeds.seeds) {
             auto [node_id, local_offset] = signalPositionToNodeOffset(seed.position, boundaries);
-            path_seed_store.insert(seed.hash, SeedHit{node_id, local_offset, seed.length});
+            path_seed_store.insert(seed.hash, SeedEntry{node_id, local_offset, seed.length});
         }
 
         // Step 7: Per-path frequency subsampling

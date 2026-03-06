@@ -9,10 +9,10 @@ using namespace piru::index;
 
 namespace {
 
-// Helper to create a SeedHitRecord for testing
-SeedHitRecord make_hit(std::size_t node_id, std::size_t offset, std::size_t query_pos,
+// Helper to create a NodeAnchor for testing
+NodeAnchor make_hit(std::size_t node_id, std::size_t offset, std::size_t query_pos,
                        std::size_t span) {
-    SeedHitRecord hit;
+    NodeAnchor hit;
     hit.target.node_id = node_id;
     hit.target.offset = offset;
     hit.target.length = span;  // Store in target as well
@@ -33,7 +33,7 @@ TEST_CASE("SeedMerger: Empty input returns empty output") {
 
 TEST_CASE("SeedMerger: Single hit returns unchanged") {
     SeedMergerConfig config{.merge_tolerance = 0};
-    std::vector<SeedHitRecord> hits = {make_hit(1, 10, 20, 15)};
+    std::vector<NodeAnchor> hits = {make_hit(1, 10, 20, 15)};
 
     auto merged = SeedMerger::merge(hits, config);
 
@@ -50,7 +50,7 @@ TEST_CASE("SeedMerger: Gap with tolerance=0 keeps seeds separate") {
     // Two seeds on same node with gap=5 in both query and reference
     // Seed 1: query 100-120, ref 10-30
     // Seed 2: query 125-145, ref 35-55 (gap=5 in both)
-    std::vector<SeedHitRecord> hits = {
+    std::vector<NodeAnchor> hits = {
         make_hit(1, 10, 100, 20),  // Ends at query=120, ref=30
         make_hit(1, 35, 125, 20)   // Starts at query=125, ref=35 (gap=5 > tolerance=0)
     };
@@ -65,7 +65,7 @@ TEST_CASE("SeedMerger: Perfect overlap merges with tolerance=0") {
     SeedMergerConfig config{.merge_tolerance = 0};
 
     // Two identical seeds (perfect overlap)
-    std::vector<SeedHitRecord> hits = {make_hit(1, 10, 100, 20), make_hit(1, 10, 100, 20)};
+    std::vector<NodeAnchor> hits = {make_hit(1, 10, 100, 20), make_hit(1, 10, 100, 20)};
 
     auto merged = SeedMerger::merge(hits, config);
 
@@ -81,7 +81,7 @@ TEST_CASE("SeedMerger: Gap within tolerance merges seeds") {
     SeedMergerConfig config{.merge_tolerance = 10};
 
     // Two seeds with gap=5 in both query and reference
-    std::vector<SeedHitRecord> hits = {
+    std::vector<NodeAnchor> hits = {
         make_hit(1, 10, 100, 20),  // Ends at query=120, ref=30
         make_hit(1, 15, 105, 20)   // Starts at query=105, ref=15 (gap=5 in both)
     };
@@ -102,7 +102,7 @@ TEST_CASE("SeedMerger: Gap exceeds tolerance keeps seeds separate") {
     // Two seeds with gap=10 in query (exceeds tolerance)
     // Seed 1: query 100-120, ref 10-30
     // Seed 2: query 130-150, ref 40-60 (gap=10 in query, ref)
-    std::vector<SeedHitRecord> hits = {
+    std::vector<NodeAnchor> hits = {
         make_hit(1, 10, 100, 20),  // Ends at query=120, ref=30
         make_hit(1, 40, 130, 20)   // Starts at query=130, ref=40 (gap=10 > tolerance=5)
     };
@@ -117,7 +117,7 @@ TEST_CASE("SeedMerger: Different nodes do not merge") {
     SeedMergerConfig config{.merge_tolerance = 100};  // Large tolerance
 
     // Two seeds on different nodes (but close in query positions)
-    std::vector<SeedHitRecord> hits = {
+    std::vector<NodeAnchor> hits = {
         make_hit(1, 10, 100, 20), make_hit(2, 10, 105, 20)  // Different node_id
     };
 
@@ -133,7 +133,7 @@ TEST_CASE("SeedMerger: Merges multiple adjacent seeds (A+B+C)") {
     SeedMergerConfig config{.merge_tolerance = 5};
 
     // Three seeds that can all be merged
-    std::vector<SeedHitRecord> hits = {
+    std::vector<NodeAnchor> hits = {
         make_hit(1, 10, 100, 10),  // Ends at query=110, ref=20
         make_hit(1, 12, 105, 10),  // Gap=5, ends at query=115, ref=22
         make_hit(1, 14, 108, 10)   // Gap=3 (from previous), ends at query=118, ref=24
@@ -153,7 +153,7 @@ TEST_CASE("SeedMerger: Handles unsorted input correctly") {
     SeedMergerConfig config{.merge_tolerance = 5};
 
     // Provide hits in unsorted order
-    std::vector<SeedHitRecord> hits = {
+    std::vector<NodeAnchor> hits = {
         make_hit(2, 20, 200, 10), make_hit(1, 10, 100, 10),
         make_hit(1, 12, 105, 10)  // Should merge with previous seed on node 1
     };
@@ -179,7 +179,7 @@ TEST_CASE("SeedMerger: Overlapping seeds merge correctly") {
     // Two seeds with significant overlap
     // Seed 1: query 100-120 (span=20)
     // Seed 2: query 110-130 (span=20, overlap=10)
-    std::vector<SeedHitRecord> hits = {make_hit(1, 10, 100, 20), make_hit(1, 15, 110, 20)};
+    std::vector<NodeAnchor> hits = {make_hit(1, 10, 100, 20), make_hit(1, 15, 110, 20)};
 
     auto merged = SeedMerger::merge(hits, config);
 
@@ -193,7 +193,7 @@ TEST_CASE("SeedMerger: Multiple clusters remain separate") {
     SeedMergerConfig config{.merge_tolerance = 5};
 
     // Two clusters of mergeable seeds with large gap between clusters
-    std::vector<SeedHitRecord> hits = {// Cluster 1 on node 1
+    std::vector<NodeAnchor> hits = {// Cluster 1 on node 1
                                        make_hit(1, 10, 100, 10), make_hit(1, 12, 105, 10),
 
                                        // Cluster 2 on node 1 (far away in query space)

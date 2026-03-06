@@ -12,7 +12,7 @@ namespace piru::mapping {
 //
 // Anchors are produced by expanding seed hits using linearization coordinates.
 // One seed hit may expand to multiple anchors (one per path occurrence of the node).
-struct Anchor {
+struct PathAnchor {
     std::size_t query_pos{0};   // Position in query/read
     std::int64_t ref_coord{0};  // Linear position along reference path
     std::size_t length{0};      // Coverage length (from seed span)

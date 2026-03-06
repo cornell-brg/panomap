@@ -11,10 +11,10 @@ using namespace piru::index;
 
 namespace {
 
-// Helper to create a SeedHitRecord for testing
-SeedHitRecord make_hit(std::size_t node_id, std::size_t offset, std::size_t query_pos,
+// Helper to create a NodeAnchor for testing
+NodeAnchor make_hit(std::size_t node_id, std::size_t offset, std::size_t query_pos,
                        std::size_t span) {
-    SeedHitRecord hit;
+    NodeAnchor hit;
     hit.target.node_id = node_id;
     hit.target.offset = offset;
     hit.target.length = span;
@@ -89,7 +89,7 @@ TEST_CASE("PathWalkExpander: Single seed on single path produces one anchor") {
     PathWalkExpander expander(coords, path_lengths);
 
     // Seed hit at node 0, offset 10, query position 50, span 20
-    std::vector<SeedHitRecord> hits = {make_hit(0, 10, 50, 20)};
+    std::vector<NodeAnchor> hits = {make_hit(0, 10, 50, 20)};
 
     auto anchors = expander.expand(hits);
 
@@ -114,7 +114,7 @@ TEST_CASE("PathWalkExpander: Single seed on multiple paths produces multiple anc
     PathWalkExpander expander(coords, path_lengths);
 
     // Seed hit at node 1, offset 5, query position 100, span 15
-    std::vector<SeedHitRecord> hits = {make_hit(1, 5, 100, 15)};
+    std::vector<NodeAnchor> hits = {make_hit(1, 5, 100, 15)};
 
     auto anchors = expander.expand(hits);
 
@@ -147,7 +147,7 @@ TEST_CASE("PathWalkExpander: Seed with no coordinates produces no anchors") {
     PathWalkExpander expander(coords, path_lengths);
 
     // Seed hit at node 1 (no coordinates)
-    std::vector<SeedHitRecord> hits = {make_hit(1, 0, 50, 20)};
+    std::vector<NodeAnchor> hits = {make_hit(1, 0, 50, 20)};
 
     auto anchors = expander.expand(hits);
 
@@ -164,7 +164,7 @@ TEST_CASE("PathWalkExpander: Offset handling adds to ref_coord") {
     PathWalkExpander expander(coords, path_lengths);
 
     // Seed at offset 50
-    std::vector<SeedHitRecord> hits = {make_hit(0, 50, 100, 20)};
+    std::vector<NodeAnchor> hits = {make_hit(0, 50, 100, 20)};
 
     auto anchors = expander.expand(hits);
 
@@ -181,7 +181,7 @@ TEST_CASE("PathWalkExpander: Zero offset produces ref_coord equal to node start"
     PathWalkExpander expander(coords, path_lengths);
 
     // Seed at offset 0
-    std::vector<SeedHitRecord> hits = {make_hit(0, 0, 100, 20)};
+    std::vector<NodeAnchor> hits = {make_hit(0, 0, 100, 20)};
 
     auto anchors = expander.expand(hits);
 
@@ -198,7 +198,7 @@ TEST_CASE("PathWalkExpander: Multiple seeds produce multiple anchors") {
     std::vector<std::size_t> path_lengths(100, 1000000);  // Large lengths to not filter any anchors
     PathWalkExpander expander(coords, path_lengths);
 
-    std::vector<SeedHitRecord> hits = {
+    std::vector<NodeAnchor> hits = {
         make_hit(0, 10, 50, 20),  // First seed on node 0
         make_hit(1, 5, 70, 15)    // Second seed on node 1
     };
@@ -228,7 +228,7 @@ TEST_CASE(
     PathWalkExpander expander(coords, path_lengths);
 
     // Single seed hit at node 0
-    std::vector<SeedHitRecord> hits = {make_hit(0, 10, 50, 20)};
+    std::vector<NodeAnchor> hits = {make_hit(0, 10, 50, 20)};
 
     auto anchors = expander.expand(hits);
 
@@ -254,7 +254,7 @@ TEST_CASE("PathWalkExpander: Invalid node_id is skipped") {
     PathWalkExpander expander(coords, path_lengths);
 
     // Seed hit at node 5 (out of bounds)
-    std::vector<SeedHitRecord> hits = {make_hit(5, 0, 50, 20)};
+    std::vector<NodeAnchor> hits = {make_hit(5, 0, 50, 20)};
 
     auto anchors = expander.expand(hits);
 
@@ -270,7 +270,7 @@ TEST_CASE("PathWalkExpander: Mix of valid and invalid nodes") {
     std::vector<std::size_t> path_lengths(100, 1000000);  // Large lengths to not filter any anchors
     PathWalkExpander expander(coords, path_lengths);
 
-    std::vector<SeedHitRecord> hits = {
+    std::vector<NodeAnchor> hits = {
         make_hit(0, 10, 50, 20),  // Valid (has coords)
         make_hit(1, 5, 70, 15),   // Invalid (no coords)
         make_hit(5, 0, 90, 10)    // Invalid (out of bounds)
@@ -293,7 +293,7 @@ TEST_CASE("PathWalkExpander: Seed length propagates to anchor") {
     PathWalkExpander expander(coords, path_lengths);
 
     // Seed with specific length (e.g., after merging)
-    std::vector<SeedHitRecord> hits = {make_hit(0, 0, 100, 50)};
+    std::vector<NodeAnchor> hits = {make_hit(0, 0, 100, 50)};
 
     auto anchors = expander.expand(hits);
 
@@ -320,7 +320,7 @@ TEST_CASE("SuperbubbleExpander: 1:1 mapping preserves all fields") {
     SuperbubbleExpander expander(&graph_store);
 
     // Seed hit at node 0, offset 10, query position 50, span 20
-    std::vector<SeedHitRecord> hits = {make_hit(0, 10, 50, 20)};
+    std::vector<NodeAnchor> hits = {make_hit(0, 10, 50, 20)};
 
     auto anchors = expander.expand(hits);
 
@@ -340,7 +340,7 @@ TEST_CASE("SuperbubbleExpander: Skips nodes without chain_id") {
 
     SuperbubbleExpander expander(&graph_store);
 
-    std::vector<SeedHitRecord> hits = {
+    std::vector<NodeAnchor> hits = {
         make_hit(0, 10, 50, 20),  // Valid
         make_hit(1, 5, 70, 15)    // No linearization
     };
@@ -359,7 +359,7 @@ TEST_CASE("SuperbubbleExpander: Offset handling adds to ref_coord") {
     SuperbubbleExpander expander(&graph_store);
 
     // Seed at offset 75
-    std::vector<SeedHitRecord> hits = {make_hit(0, 75, 100, 20)};
+    std::vector<NodeAnchor> hits = {make_hit(0, 75, 100, 20)};
 
     auto anchors = expander.expand(hits);
 
@@ -374,7 +374,7 @@ TEST_CASE("SuperbubbleExpander: Zero offset produces ref_coord equal to linear_p
     SuperbubbleExpander expander(&graph_store);
 
     // Seed at offset 0
-    std::vector<SeedHitRecord> hits = {make_hit(0, 0, 100, 20)};
+    std::vector<NodeAnchor> hits = {make_hit(0, 0, 100, 20)};
 
     auto anchors = expander.expand(hits);
 
@@ -389,7 +389,7 @@ TEST_CASE("SuperbubbleExpander: Multiple seeds on different chains") {
 
     SuperbubbleExpander expander(&graph_store);
 
-    std::vector<SeedHitRecord> hits = {make_hit(0, 10, 50, 20), make_hit(1, 5, 70, 15)};
+    std::vector<NodeAnchor> hits = {make_hit(0, 10, 50, 20), make_hit(1, 5, 70, 15)};
 
     auto anchors = expander.expand(hits);
 
@@ -413,7 +413,7 @@ TEST_CASE("SuperbubbleExpander: Seed length propagates to anchor") {
     SuperbubbleExpander expander(&graph_store);
 
     // Seed with specific length
-    std::vector<SeedHitRecord> hits = {make_hit(0, 0, 100, 50)};
+    std::vector<NodeAnchor> hits = {make_hit(0, 0, 100, 50)};
 
     auto anchors = expander.expand(hits);
 

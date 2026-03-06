@@ -32,7 +32,7 @@ class AnchorMerger {
 public:
     // Merge anchors according to configuration.
     // Returns new vector with merged anchors (input order may not be preserved).
-    static std::vector<Anchor> merge(const std::vector<Anchor>& anchors,
+    static std::vector<PathAnchor> merge(const std::vector<PathAnchor>& anchors,
                                      const AnchorMergerConfig& config = AnchorMergerConfig{});
 };
 

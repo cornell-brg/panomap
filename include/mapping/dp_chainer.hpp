@@ -31,28 +31,28 @@ public:
     // Construct with config (no longer needs linearization_coords).
     explicit DPChainer(DPChainerConfig config);
 
-    ChainResult chain(const std::vector<Anchor>& anchors) const override;
+    ChainResult chain(const std::vector<PathAnchor>& anchors) const override;
     std::string name() const override { return "dp-chain"; }
 
     void dump_path_chains(const char* filename, const std::string& read_id,
-                          std::size_t read_length, const std::vector<Anchor>& anchors,
+                          std::size_t read_length, const std::vector<PathAnchor>& anchors,
                           const index::GraphStore* graph_store) const override;
 
     void dump_anchor_detail(const char* filename, const std::string& read_id,
-                            std::size_t read_length, const std::vector<Anchor>& anchors,
+                            std::size_t read_length, const std::vector<PathAnchor>& anchors,
                             const index::GraphStore* graph_store) const override;
 
 private:
     DPChainerConfig config_;
 
     // Check if anchor j can chain to anchor i.
-    bool can_chain(const Anchor& j, const Anchor& i) const;
+    bool can_chain(const PathAnchor& j, const PathAnchor& i) const;
 
     // Compute gap cost for chaining anchor j to anchor i.
-    double gap_cost(const Anchor& j, const Anchor& i) const;
+    double gap_cost(const PathAnchor& j, const PathAnchor& i) const;
 
     // Compute anchor score (based on length).
-    double anchor_score(const Anchor& anchor) const;
+    double anchor_score(const PathAnchor& anchor) const;
 
     // Extract chain by backtracking from given anchor index.
     std::vector<std::size_t> backtrack_chain(const std::vector<int>& pred,

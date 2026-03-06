@@ -14,17 +14,17 @@
 
 namespace piru::index {
 
-struct SeedHit {
+struct SeedEntry {
     std::size_t node_id{0};
     std::size_t offset{0};
     std::size_t length{0};  // Seed coverage length (from Seed.length)
 
     // For sorting and deduplication (ignore length for uniqueness)
-    bool operator<(const SeedHit& other) const {
+    bool operator<(const SeedEntry& other) const {
         if (node_id != other.node_id) return node_id < other.node_id;
         return offset < other.offset;
     }
-    bool operator==(const SeedHit& other) const {
+    bool operator==(const SeedEntry& other) const {
         return node_id == other.node_id && offset == other.offset;
     }
 };
@@ -33,8 +33,8 @@ class SeedStore {
 public:
     virtual ~SeedStore() = default;
 
-    virtual void insert(std::uint64_t hash, SeedHit hit) = 0;
-    virtual const std::vector<SeedHit>* lookup(std::uint64_t hash) const = 0;
+    virtual void insert(std::uint64_t hash, SeedEntry hit) = 0;
+    virtual const std::vector<SeedEntry>* lookup(std::uint64_t hash) const = 0;
     virtual std::size_t size() const = 0;
     virtual std::size_t max_hash_frequency() const = 0;
     virtual std::size_t frequency_threshold() const = 0;
@@ -45,11 +45,11 @@ public:
 
 class HashSeedStore : public SeedStore {
 public:
-    void insert(std::uint64_t hash, SeedHit hit) override {
+    void insert(std::uint64_t hash, SeedEntry hit) override {
         store_[hash].push_back(std::move(hit));
     }
 
-    const std::vector<SeedHit>* lookup(std::uint64_t hash) const override {
+    const std::vector<SeedEntry>* lookup(std::uint64_t hash) const override {
         const auto it = store_.find(hash);
         if (it == store_.end()) return nullptr;
         return &it->second;
@@ -86,8 +86,8 @@ public:
     void set_extractor_name(std::string name) { extractor_name_ = std::move(name); }
     void set_params(std::map<std::string, std::string> p) { params_ = std::move(p); }
 
-    const std::unordered_map<std::uint64_t, std::vector<SeedHit>>& data() const { return store_; }
-    std::unordered_map<std::uint64_t, std::vector<SeedHit>>& mutableData() { return store_; }
+    const std::unordered_map<std::uint64_t, std::vector<SeedEntry>>& data() const { return store_; }
+    std::unordered_map<std::uint64_t, std::vector<SeedEntry>>& mutableData() { return store_; }
 
     // Merge another HashSeedStore into this one.
     // Used for combining thread-local stores after parallel indexing.
@@ -109,7 +109,7 @@ public:
     }
 
 private:
-    std::unordered_map<std::uint64_t, std::vector<SeedHit>> store_;
+    std::unordered_map<std::uint64_t, std::vector<SeedEntry>> store_;
     std::size_t max_hash_frequency_{0};
     std::size_t frequency_threshold_{0};
     double filter_fraction_{0.0};

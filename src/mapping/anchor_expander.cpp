@@ -12,8 +12,8 @@ PathWalkExpander::PathWalkExpander(const std::vector<std::vector<index::LinearCo
                                    const std::vector<std::size_t>& path_lengths)
     : coords_(coords), path_lengths_(path_lengths) {}
 
-std::vector<Anchor> PathWalkExpander::expand(const std::vector<SeedHitRecord>& hits) const {
-    std::vector<Anchor> anchors;
+std::vector<PathAnchor> PathWalkExpander::expand(const std::vector<NodeAnchor>& hits) const {
+    std::vector<PathAnchor> anchors;
 
     // Pre-allocate approximate space (assume average 1-2 anchors per hit)
     anchors.reserve(hits.size() * 2);
@@ -46,7 +46,7 @@ std::vector<Anchor> PathWalkExpander::expand(const std::vector<SeedHitRecord>& h
                 }
             }
 
-            Anchor anchor;
+            PathAnchor anchor;
             anchor.query_pos = hit.read_pos;
             anchor.ref_coord = ref_coord;
             anchor.length = hit.span;
@@ -68,8 +68,8 @@ std::vector<Anchor> PathWalkExpander::expand(const std::vector<SeedHitRecord>& h
 SuperbubbleExpander::SuperbubbleExpander(const index::GraphStore* graph_store)
     : graph_store_(graph_store) {}
 
-std::vector<Anchor> SuperbubbleExpander::expand(const std::vector<SeedHitRecord>& hits) const {
-    std::vector<Anchor> anchors;
+std::vector<PathAnchor> SuperbubbleExpander::expand(const std::vector<NodeAnchor>& hits) const {
+    std::vector<PathAnchor> anchors;
 
     // 1:1 mapping for superbubble (no multi-path expansion)
     anchors.reserve(hits.size());
@@ -87,7 +87,7 @@ std::vector<Anchor> SuperbubbleExpander::expand(const std::vector<SeedHitRecord>
         }
 
         // Trivial 1:1 mapping to anchor
-        Anchor anchor;
+        PathAnchor anchor;
         anchor.query_pos = hit.read_pos;
         anchor.ref_coord = linear_pos.value() + static_cast<std::int64_t>(hit.target.offset);
         anchor.length = hit.span;

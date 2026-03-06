@@ -160,7 +160,7 @@ bool isInCoveredInterval(std::int64_t coord,
 
 // Comparator for sorting anchors by (path_id, ref_coord, query_pos).
 struct AnchorComparator {
-    bool operator()(const Anchor& a, const Anchor& b) const {
+    bool operator()(const PathAnchor& a, const PathAnchor& b) const {
         if (a.path_id != b.path_id) {
             return a.path_id < b.path_id;
         }
@@ -175,7 +175,7 @@ struct AnchorComparator {
 
 DPChainer::DPChainer(DPChainerConfig config) : config_(std::move(config)) {}
 
-ChainResult DPChainer::chain(const std::vector<Anchor>& anchors) const {
+ChainResult DPChainer::chain(const std::vector<PathAnchor>& anchors) const {
     ChainResult summary;
 
     if (anchors.empty()) {
@@ -188,7 +188,7 @@ ChainResult DPChainer::chain(const std::vector<Anchor>& anchors) const {
 
     // Step 2: Sort anchors by (path_id, ref_coord, query_pos)
     // Make a mutable copy since we need to sort
-    std::vector<Anchor> sorted_anchors = anchors;
+    std::vector<PathAnchor> sorted_anchors = anchors;
     std::sort(sorted_anchors.begin(), sorted_anchors.end(), AnchorComparator{});
 
     const std::size_t n = sorted_anchors.size();
@@ -370,7 +370,7 @@ ChainResult DPChainer::chain(const std::vector<Anchor>& anchors) const {
     return summary;
 }
 
-bool DPChainer::can_chain(const Anchor& j, const Anchor& i) const {
+bool DPChainer::can_chain(const PathAnchor& j, const PathAnchor& i) const {
     // Check order: j must come before i in sorted order (already guaranteed by DP loop)
     // Query positions must strictly increase - equal positions are alternatives, not a chain
     if (i.query_pos <= j.query_pos) {
@@ -406,7 +406,7 @@ bool DPChainer::can_chain(const Anchor& j, const Anchor& i) const {
     return true;
 }
 
-double DPChainer::gap_cost(const Anchor& j, const Anchor& i) const {
+double DPChainer::gap_cost(const PathAnchor& j, const PathAnchor& i) const {
     // Compute gap between end of j and start of i
     const std::int64_t j_ref_end = j.ref_coord + static_cast<std::int64_t>(j.length);
     const std::int64_t j_query_end = static_cast<std::int64_t>(j.query_pos + j.length);
@@ -442,7 +442,7 @@ double DPChainer::gap_cost(const Anchor& j, const Anchor& i) const {
     return cost;
 }
 
-double DPChainer::anchor_score(const Anchor& anchor) const {
+double DPChainer::anchor_score(const PathAnchor& anchor) const {
     // Score based on anchor length (coverage)
     return static_cast<double>(anchor.length) * config_.anchor_weight;
 }
@@ -468,7 +468,7 @@ std::vector<std::size_t> DPChainer::backtrack_chain(const std::vector<int>& pred
 
 void DPChainer::dump_path_chains(const char* filename, const std::string& read_id,
                                          std::size_t /*read_length*/,
-                                         const std::vector<Anchor>& anchors,
+                                         const std::vector<PathAnchor>& anchors,
                                          const index::GraphStore* graph_store) const {
     std::ofstream out(filename);
     if (!out.is_open()) {
@@ -497,8 +497,8 @@ void DPChainer::dump_path_chains(const char* filename, const std::string& read_i
     }
 
     // Sort anchors same as cluster()
-    std::vector<Anchor> sorted = anchors;
-    std::sort(sorted.begin(), sorted.end(), [](const Anchor& a, const Anchor& b) {
+    std::vector<PathAnchor> sorted = anchors;
+    std::sort(sorted.begin(), sorted.end(), [](const PathAnchor& a, const PathAnchor& b) {
         if (a.path_id != b.path_id) return a.path_id < b.path_id;
         if (a.ref_coord != b.ref_coord) return a.ref_coord < b.ref_coord;
         return a.query_pos < b.query_pos;
@@ -595,7 +595,7 @@ void DPChainer::dump_path_chains(const char* filename, const std::string& read_i
 
 void DPChainer::dump_anchor_detail(const char* filename, const std::string& read_id,
                                            std::size_t read_length,
-                                           const std::vector<Anchor>& anchors,
+                                           const std::vector<PathAnchor>& anchors,
                                            const index::GraphStore* graph_store) const {
     std::ofstream out(filename);
     if (!out.is_open()) {
@@ -607,8 +607,8 @@ void DPChainer::dump_anchor_detail(const char* filename, const std::string& read
     const std::vector<index::AlnPath>* paths = nullptr;
     if (adj_store) paths = &adj_store->graph().paths();
 
-    std::vector<Anchor> sorted = anchors;
-    std::sort(sorted.begin(), sorted.end(), [](const Anchor& a, const Anchor& b) {
+    std::vector<PathAnchor> sorted = anchors;
+    std::sort(sorted.begin(), sorted.end(), [](const PathAnchor& a, const PathAnchor& b) {
         if (a.path_id != b.path_id) return a.path_id < b.path_id;
         if (a.ref_coord != b.ref_coord) return a.ref_coord < b.ref_coord;
         return a.query_pos < b.query_pos;

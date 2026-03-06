@@ -310,7 +310,7 @@ LoadedIndex load_index(const std::string& path) {
             read_pod(in, node_id);
             read_pod(in, offset);
             read_pod(in, length);
-            seeds->insert(hash, piru::index::SeedHit{node_id, offset, length});
+            seeds->insert(hash, piru::index::SeedEntry{node_id, offset, length});
         }
     }
 
