@@ -10,14 +10,14 @@ namespace piru::signal {
 
 class MinimizerSeedExtractor : public SeedExtractor {
 public:
-    explicit MinimizerSeedExtractor(SeedExtractorConfig config);
+  explicit MinimizerSeedExtractor(SeedExtractorConfig config);
 
-    SeedBuffer extract(const FuzzyQuantizedSignal& signal) const override;
-    const SeedExtractorConfig& config() const override;
-    std::string name() const override;
+  SeedBuffer extract(const FuzzyQuantizedSignal& signal) const override;
+  const SeedExtractorConfig& config() const override;
+  std::string name() const override;
 
 private:
-    SeedExtractorConfig config_;
+  SeedExtractorConfig config_;
 };
 
 }  // namespace piru::signal

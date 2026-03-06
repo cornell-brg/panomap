@@ -14,11 +14,11 @@ void report(std::ostream& os);
 
 }  // namespace piru::timing
 
-#define PIRU_PROFILE_START(enabled, label)       \
-    do {                                         \
-        if (enabled) piru::timing::start(label); \
-    } while (0)
-#define PIRU_PROFILE_STOP(enabled, label)       \
-    do {                                        \
-        if (enabled) piru::timing::stop(label); \
-    } while (0)
+#define PIRU_PROFILE_START(enabled, label)   \
+  do {                                       \
+    if (enabled) piru::timing::start(label); \
+  } while (0)
+#define PIRU_PROFILE_STOP(enabled, label)   \
+  do {                                      \
+    if (enabled) piru::timing::stop(label); \
+  } while (0)

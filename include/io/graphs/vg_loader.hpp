@@ -12,15 +12,15 @@ namespace piru::io {
 
 class VgLoader : public GraphLoader {
 public:
-    explicit VgLoader(std::string path);
-    ~VgLoader() override = default;
+  explicit VgLoader(std::string path);
+  ~VgLoader() override = default;
 
-    bool load(ImportedGraph& graph) override;
-    std::string get_format_name() const override;
+  bool load(ImportedGraph& graph) override;
+  std::string get_format_name() const override;
 
 private:
-    std::string path_;
-    bool warned_{false};
+  std::string path_;
+  bool warned_{false};
 };
 
 using VgLoaderPtr = std::unique_ptr<VgLoader>;

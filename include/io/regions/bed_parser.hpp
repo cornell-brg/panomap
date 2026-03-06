@@ -9,9 +9,9 @@
 namespace piru::io {
 
 struct BedRecord {
-    std::string path_name;  // full GFA path name, e.g. SGDref#1#chrI
-    std::int64_t start;     // 0-based inclusive
-    std::int64_t end;       // 0-based exclusive
+  std::string path_name;  // full GFA path name, e.g. SGDref#1#chrI
+  std::int64_t start;     // 0-based inclusive
+  std::int64_t end;       // 0-based exclusive
 };
 
 /// Parse a BED file. Each line: path_name<TAB>start<TAB>end [optional columns ignored].

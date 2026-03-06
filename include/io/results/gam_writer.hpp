@@ -13,17 +13,17 @@ namespace piru::io {
 
 class GamWriter : public ResultWriter {
 public:
-    explicit GamWriter(const std::string& path);
-    ~GamWriter() override = default;
+  explicit GamWriter(const std::string& path);
+  ~GamWriter() override = default;
 
-    bool write(const AlignmentResult& result) override;
+  bool write(const AlignmentResult& result) override;
 
 private:
-    std::string path_;
+  std::string path_;
 #ifdef PIRU_HAS_LIBVGIO
-    std::unique_ptr<vg::io::AlignmentEmitter> emitter_;
+  std::unique_ptr<vg::io::AlignmentEmitter> emitter_;
 #endif
-    bool warned_{false};
+  bool warned_{false};
 };
 
 using GamWriterPtr = std::unique_ptr<GamWriter>;

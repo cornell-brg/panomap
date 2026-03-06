@@ -12,13 +12,13 @@ namespace piru::io {
 
 class PafWriter : public ResultWriter {
 public:
-    explicit PafWriter(const std::string& path);
-    ~PafWriter() override;
+  explicit PafWriter(const std::string& path);
+  ~PafWriter() override;
 
-    bool write(const AlignmentResult& result) override;
+  bool write(const AlignmentResult& result) override;
 
 private:
-    std::ofstream out_;
+  std::ofstream out_;
 };
 
 using PafWriterPtr = std::unique_ptr<PafWriter>;

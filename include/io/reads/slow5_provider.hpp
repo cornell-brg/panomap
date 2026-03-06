@@ -18,24 +18,24 @@ namespace piru::io {
 
 class Slow5Provider : public ReadProvider {
 public:
-    explicit Slow5Provider(std::string filename);
-    ~Slow5Provider() override;
+  explicit Slow5Provider(std::string filename);
+  ~Slow5Provider() override;
 
-    bool get_next(RawRead& read) override;
-    void reset() override;
-    std::string get_format_name() const override { return "slow5"; }
+  bool get_next(RawRead& read) override;
+  void reset() override;
+  std::string get_format_name() const override { return "slow5"; }
 
 private:
-    void open();
-    void close();
-    bool advance_to_next_file();
+  void open();
+  void close();
+  bool advance_to_next_file();
 
-    static std::vector<std::string> collect_input_files(const std::string& path);
+  static std::vector<std::string> collect_input_files(const std::string& path);
 
-    std::string input_source_;
-    std::vector<std::string> filenames_;
-    std::size_t current_file_index_{0};
-    slow5_file_t* fp_{nullptr};
+  std::string input_source_;
+  std::vector<std::string> filenames_;
+  std::size_t current_file_index_{0};
+  slow5_file_t* fp_{nullptr};
 };
 
 }  // namespace piru::io

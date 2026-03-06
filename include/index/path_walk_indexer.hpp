@@ -26,36 +26,36 @@
 namespace piru::index {
 
 struct PathWalkIndexConfig {
-    // Seed extraction parameters
-    std::size_t seed_k{6};
-    std::size_t seed_stride{1};
-    double seed_freq_cutoff{0.5};  // threshold percentile (above this -> subsample)
-    double seed_freq_cap{0.55};    // subsample cap percentile (target for subsampled seeds)
+  // Seed extraction parameters
+  std::size_t seed_k{6};
+  std::size_t seed_stride{1};
+  double seed_freq_cutoff{0.5};  // threshold percentile (above this -> subsample)
+  double seed_freq_cap{0.55};    // subsample cap percentile (target for subsampled seeds)
 
-    // Debug: dump per-path normalization stats to file (empty = disabled)
-    std::string dump_norm_stats_path;
+  // Debug: dump per-path normalization stats to file (empty = disabled)
+  std::string dump_norm_stats_path;
 
-    // Parallelization
-    // If non-null, enables parallel indexing using this executor.
-    // Caller owns the executor lifetime.
-    concurrency::Executor* executor{nullptr};
+  // Parallelization
+  // If non-null, enables parallel indexing using this executor.
+  // Caller owns the executor lifetime.
+  concurrency::Executor* executor{nullptr};
 };
 
 struct PathWalkIndexResult {
-    // Seed store populated with (node_id, offset) entries
-    std::unique_ptr<HashSeedStore> seed_store;
+  // Seed store populated with (node_id, offset) entries
+  std::unique_ptr<HashSeedStore> seed_store;
 
-    // Linear coordinates per node (indexed by node_id)
-    // Each node may have multiple coordinates if it appears on multiple paths
-    std::vector<std::vector<LinearCoordinate>> linearization_coords;
+  // Linear coordinates per node (indexed by node_id)
+  // Each node may have multiple coordinates if it appears on multiple paths
+  std::vector<std::vector<LinearCoordinate>> linearization_coords;
 
-    // Path lengths in signal samples (indexed by path_id)
-    std::vector<std::size_t> path_lengths;
+  // Path lengths in signal samples (indexed by path_id)
+  std::vector<std::size_t> path_lengths;
 
-    // Stats
-    std::size_t total_path_length{0};  // Total signal samples across all paths
-    std::size_t seeds_extracted{0};    // Before dedup
-    std::size_t seeds_unique{0};       // After dedup
+  // Stats
+  std::size_t total_path_length{0};  // Total signal samples across all paths
+  std::size_t seeds_extracted{0};    // Before dedup
+  std::size_t seeds_unique{0};       // After dedup
 };
 
 /**

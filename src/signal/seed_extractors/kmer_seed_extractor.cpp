@@ -13,33 +13,32 @@ namespace piru::signal {
 KmerSeedExtractor::KmerSeedExtractor(SeedExtractorConfig config) : config_(std::move(config)) {}
 
 SeedBuffer KmerSeedExtractor::extract(const FuzzyQuantizedSignal& signal) const {
-    SeedBuffer buffer;
-    const auto& tokens = signal.tokens;
-    const std::size_t k = config_.k;
-    const std::size_t stride = std::max<std::size_t>(config_.stride, 1);
+  SeedBuffer buffer;
+  const auto& tokens = signal.tokens;
+  const std::size_t k = config_.k;
+  const std::size_t stride = std::max<std::size_t>(config_.stride, 1);
 
-    if (k == 0 || tokens.size() < k) return buffer;
+  if (k == 0 || tokens.size() < k) return buffer;
 
-    const std::uint32_t qbits = config_.qbits;
-    const std::uint64_t token_mask = makeMask(qbits);
+  const std::uint32_t qbits = config_.qbits;
+  const std::uint64_t token_mask = makeMask(qbits);
 
-    // Guard against oversized windows (shift by >=64 is UB). Fall back to full mask.
-    const bool use_shift = qbits > 0 && qbits < 64;
-    const std::uint64_t window_mask = (!use_shift || k >= (64 / static_cast<std::size_t>(qbits)))
-                                          ? std::numeric_limits<std::uint64_t>::max()
-                                          : makeMask(static_cast<std::uint32_t>(k * qbits));
+  // Guard against oversized windows (shift by >=64 is UB). Fall back to full mask.
+  const bool use_shift = qbits > 0 && qbits < 64;
+  const std::uint64_t window_mask = (!use_shift || k >= (64 / static_cast<std::size_t>(qbits)))
+                                        ? std::numeric_limits<std::uint64_t>::max()
+                                        : makeMask(static_cast<std::uint32_t>(k * qbits));
 
-    const std::size_t num_seeds = 1 + (tokens.size() - k) / stride;
-    buffer.seeds.reserve(num_seeds);
+  const std::size_t num_seeds = 1 + (tokens.size() - k) / stride;
+  buffer.seeds.reserve(num_seeds);
 
-    for (std::size_t start = 0; start + k <= tokens.size(); start += stride) {
-        if (hasSentinel(tokens.data(), start, k)) continue;
+  for (std::size_t start = 0; start + k <= tokens.size(); start += stride) {
+    if (hasSentinel(tokens.data(), start, k)) continue;
 
-        const auto hash =
-            hashKmer(tokens.data(), start, k, qbits, token_mask, window_mask, use_shift);
-        buffer.seeds.push_back(Seed{.hash = hash, .position = start, .length = k});
-    }
-    return buffer;
+    const auto hash = hashKmer(tokens.data(), start, k, qbits, token_mask, window_mask, use_shift);
+    buffer.seeds.push_back(Seed{.hash = hash, .position = start, .length = k});
+  }
+  return buffer;
 }
 
 const SeedExtractorConfig& KmerSeedExtractor::config() const { return config_; }

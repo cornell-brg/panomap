@@ -8,14 +8,14 @@ namespace piru::signal {
 
 class Rh2FuzzyQuantizer : public FuzzyQuantizer {
 public:
-    explicit Rh2FuzzyQuantizer(FuzzyQuantizerConfig config);
+  explicit Rh2FuzzyQuantizer(FuzzyQuantizerConfig config);
 
-    FuzzyQuantizedSignal quantize(const NormalizedSignal& signal) const override;
-    const FuzzyQuantizerConfig& config() const override;
-    std::string name() const override;
+  FuzzyQuantizedSignal quantize(const NormalizedSignal& signal) const override;
+  const FuzzyQuantizerConfig& config() const override;
+  std::string name() const override;
 
 private:
-    FuzzyQuantizerConfig config_;
+  FuzzyQuantizerConfig config_;
 };
 
 }  // namespace piru::signal

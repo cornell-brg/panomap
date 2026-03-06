@@ -8,12 +8,12 @@ PassthroughFuzzyQuantizer::PassthroughFuzzyQuantizer(FuzzyQuantizerConfig config
     : config_(std::move(config)) {}
 
 FuzzyQuantizedSignal PassthroughFuzzyQuantizer::quantize(const NormalizedSignal& signal) const {
-    FuzzyQuantizedSignal quantized;
-    quantized.tokens.reserve(signal.samples.size());
-    for (const auto sample : signal.samples) {
-        quantized.tokens.push_back(static_cast<std::int16_t>(sample));
-    }
-    return quantized;
+  FuzzyQuantizedSignal quantized;
+  quantized.tokens.reserve(signal.samples.size());
+  for (const auto sample : signal.samples) {
+    quantized.tokens.push_back(static_cast<std::int16_t>(sample));
+  }
+  return quantized;
 }
 
 const FuzzyQuantizerConfig& PassthroughFuzzyQuantizer::config() const { return config_; }

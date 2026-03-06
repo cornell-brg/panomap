@@ -12,13 +12,13 @@ namespace piru::io {
 
 class GafWriter : public ResultWriter {
 public:
-    explicit GafWriter(const std::string& path);
-    ~GafWriter() override;
+  explicit GafWriter(const std::string& path);
+  ~GafWriter() override;
 
-    bool write(const AlignmentResult& result) override;
+  bool write(const AlignmentResult& result) override;
 
 private:
-    std::ofstream out_;
+  std::ofstream out_;
 };
 
 using GafWriterPtr = std::unique_ptr<GafWriter>;

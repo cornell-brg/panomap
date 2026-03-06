@@ -30,35 +30,35 @@
 namespace piru::index {
 
 struct NodeFirstIndexConfig {
-    // Seed extraction parameters
-    std::size_t seed_k{6};  // Hash window size (fuzzy samples per seed)
-    std::size_t seed_stride{1};
-    double seed_freq_cutoff{0.5};  // keep_least_frequent_fraction
+  // Seed extraction parameters
+  std::size_t seed_k{6};  // Hash window size (fuzzy samples per seed)
+  std::size_t seed_stride{1};
+  double seed_freq_cutoff{0.5};  // keep_least_frequent_fraction
 
-    // Parallelization
-    // If non-null, enables parallel indexing using this executor.
-    // Caller owns the executor lifetime.
-    concurrency::Executor* executor{nullptr};
+  // Parallelization
+  // If non-null, enables parallel indexing using this executor.
+  // Caller owns the executor lifetime.
+  concurrency::Executor* executor{nullptr};
 };
 
 struct NodeFirstIndexResult {
-    // Seed store populated with (node_id, offset) entries
-    std::unique_ptr<HashSeedStore> seed_store;
+  // Seed store populated with (node_id, offset) entries
+  std::unique_ptr<HashSeedStore> seed_store;
 
-    // Linear coordinates per node (indexed by node_id)
-    std::vector<std::vector<LinearCoordinate>> linearization_coords;
+  // Linear coordinates per node (indexed by node_id)
+  std::vector<std::vector<LinearCoordinate>> linearization_coords;
 
-    // Path lengths in signal samples (indexed by path_id)
-    std::vector<std::size_t> path_lengths;
+  // Path lengths in signal samples (indexed by path_id)
+  std::vector<std::size_t> path_lengths;
 
-    // Global normalization parameters (from pass 1)
-    float global_mean{0.0f};
-    float global_std{1.0f};
+  // Global normalization parameters (from pass 1)
+  float global_mean{0.0f};
+  float global_std{1.0f};
 
-    // Stats
-    std::size_t seeds_interior{0};  // Seeds from node interiors (pass 1)
-    std::size_t seeds_boundary{0};  // Seeds from boundary fill (pass 2)
-    std::size_t seeds_unique{0};    // After dedup
+  // Stats
+  std::size_t seeds_interior{0};  // Seeds from node interiors (pass 1)
+  std::size_t seeds_boundary{0};  // Seeds from boundary fill (pass 2)
+  std::size_t seeds_unique{0};    // After dedup
 };
 
 /**

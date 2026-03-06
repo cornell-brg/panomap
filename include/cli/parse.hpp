@@ -12,22 +12,22 @@
 namespace piru::cli {
 
 struct Option {
-    char short_opt;
-    std::string long_opt;
-    bool requires_arg;
-    std::string help;
+  char short_opt;
+  std::string long_opt;
+  bool requires_arg;
+  std::string help;
 };
 
 struct ParseConfig {
-    std::string usage;
-    std::vector<std::string> positional_help;
-    std::vector<Option> options;
-    std::function<void(const std::string&)> on_error;
+  std::string usage;
+  std::vector<std::string> positional_help;
+  std::vector<Option> options;
+  std::function<void(const std::string&)> on_error;
 };
 
 struct Parsed {
-    std::map<std::string, std::string> values;
-    std::vector<std::string> positionals;
+  std::map<std::string, std::string> values;
+  std::vector<std::string> positionals;
 };
 
 // Build optstring/long options and parse argv using getopt_long.

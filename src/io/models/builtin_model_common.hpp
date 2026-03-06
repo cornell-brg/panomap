@@ -6,8 +6,8 @@
 namespace piru::io::generated {
 
 struct ModelEntry {
-    const char* kmer;
-    double mean;
+  const char* kmer;
+  double mean;
 };
 
 }  // namespace piru::io::generated

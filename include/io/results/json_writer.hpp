@@ -15,14 +15,14 @@ namespace piru::io {
 
 class JsonWriter : public ResultWriter {
 public:
-    explicit JsonWriter(const std::string& path);
-    ~JsonWriter() override;
+  explicit JsonWriter(const std::string& path);
+  ~JsonWriter() override;
 
-    bool write(const AlignmentResult& result) override;
+  bool write(const AlignmentResult& result) override;
 
 private:
 #ifdef PIRU_HAS_LIBVGIO
-    std::unique_ptr<vg::io::AlignmentEmitter> emitter_;
+  std::unique_ptr<vg::io::AlignmentEmitter> emitter_;
 #endif
 };
 

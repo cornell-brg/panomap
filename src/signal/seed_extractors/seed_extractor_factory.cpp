@@ -9,13 +9,13 @@
 namespace piru::signal {
 
 SeedExtractorPtr make_seed_extractor(const SeedExtractorConfig& config) {
-    if (config.backend == "minimizer") {
-        return std::make_unique<MinimizerSeedExtractor>(config);
-    }
-    if (config.backend != "kmer") {
-        LOG_WARN("Unknown seed extractor backend '" + config.backend + "', using kmer");
-    }
-    return std::make_unique<KmerSeedExtractor>(config);
+  if (config.backend == "minimizer") {
+    return std::make_unique<MinimizerSeedExtractor>(config);
+  }
+  if (config.backend != "kmer") {
+    LOG_WARN("Unknown seed extractor backend '" + config.backend + "', using kmer");
+  }
+  return std::make_unique<KmerSeedExtractor>(config);
 }
 
 }  // namespace piru::signal

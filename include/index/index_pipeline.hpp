@@ -35,58 +35,58 @@ namespace piru::index {
  * Configuration for the indexing pipeline.
  */
 struct IndexPipelineConfig {
-    /* Indexer backend */
+  /* Indexer backend */
 
-    // "node-first" or "path-walk"
-    // - node-first: two-pass, global normalization (faster for shared nodes)
-    // - path-walk: per-path processing with per-path normalization
-    std::string indexer_backend{"path-walk"};
+  // "node-first" or "path-walk"
+  // - node-first: two-pass, global normalization (faster for shared nodes)
+  // - path-walk: per-path processing with per-path normalization
+  std::string indexer_backend{"path-walk"};
 
-    /* Signal processing */
+  /* Signal processing */
 
-    // Fuzzy quantizer: "rh2" (rawhash2) or "passthrough"
-    // Converts normalized signal to discrete tokens (4-bit = 16 values)
-    std::string fuzzy_quantizer{"rh2"};
-    float fuzzy_fine_min{-2.0f};
-    float fuzzy_fine_max{2.0f};
-    float fuzzy_fine_range{0.4f};
-    std::uint32_t fuzzy_n_bins{0};  // 0 = use 2^qbits = 16
+  // Fuzzy quantizer: "rh2" (rawhash2) or "passthrough"
+  // Converts normalized signal to discrete tokens (4-bit = 16 values)
+  std::string fuzzy_quantizer{"rh2"};
+  float fuzzy_fine_min{-2.0f};
+  float fuzzy_fine_max{2.0f};
+  float fuzzy_fine_range{0.4f};
+  std::uint32_t fuzzy_n_bins{0};  // 0 = use 2^qbits = 16
 
-    /* Seed extraction */
+  /* Seed extraction */
 
-    std::string seed_type{"minimizer"};   // "kmer" or "minimizer"
-    std::size_t minimizer_window{5};      // minimizer window (w=1 -> rolling k-mer)
-    std::size_t seed_k{6};                // tokens per seed hash
-    std::size_t seed_stride{1};           // spacing between seeds (1 = dense)
-    double seed_freq_cutoff{0.9};         // keep bottom N% by frequency (0.9 = drop top 10% to cap)
-    double seed_freq_cap{0.25};           // subsample cap for seeds above cutoff
+  std::string seed_type{"minimizer"};  // "kmer" or "minimizer"
+  std::size_t minimizer_window{5};     // minimizer window (w=1 -> rolling k-mer)
+  std::size_t seed_k{6};               // tokens per seed hash
+  std::size_t seed_stride{1};          // spacing between seeds (1 = dense)
+  double seed_freq_cutoff{0.9};        // keep bottom N% by frequency (0.9 = drop top 10% to cap)
+  double seed_freq_cap{0.25};          // subsample cap for seeds above cutoff
 
-    /* Debug */
+  /* Debug */
 
-    std::string dump_norm_stats_path;     // dump per-path norm stats (path-walk only)
+  std::string dump_norm_stats_path;  // dump per-path norm stats (path-walk only)
 
-    /* Parallelization */
+  /* Parallelization */
 
-    // If nullptr, indexing runs sequentially.
-    concurrency::Executor* executor{nullptr};
+  // If nullptr, indexing runs sequentially.
+  concurrency::Executor* executor{nullptr};
 
-    // Note: qbits hardcoded to 4 in both fuzzy_quantizer.hpp and seed extractor.
-    // Do not change without coordinating both.
-    //
-    // Pore model k: determined by model (r9.4->k=6, r10.4->k=9), not configurable.
+  // Note: qbits hardcoded to 4 in both fuzzy_quantizer.hpp and seed extractor.
+  // Do not change without coordinating both.
+  //
+  // Pore model k: determined by model (r9.4->k=6, r10.4->k=9), not configurable.
 };
 
 /**
  * Result of running the indexing pipeline (in-memory representation).
  */
 struct IndexPipelineResult {
-    std::unique_ptr<GraphStore> graph_store;
-    std::unique_ptr<SeedStore> seed_store;
-    std::vector<std::vector<LinearCoordinate>> linearization_coords;
-    std::vector<std::size_t> path_lengths;
-    std::size_t pore_k{0};
-    std::string model_name;
-    std::string fuzzy_quantizer;
+  std::unique_ptr<GraphStore> graph_store;
+  std::unique_ptr<SeedStore> seed_store;
+  std::vector<std::vector<LinearCoordinate>> linearization_coords;
+  std::vector<std::size_t> path_lengths;
+  std::size_t pore_k{0};
+  std::string model_name;
+  std::string fuzzy_quantizer;
 };
 
 /**

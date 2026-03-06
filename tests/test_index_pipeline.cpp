@@ -10,11 +10,11 @@ using namespace piru;
 
 // Placeholder - add index pipeline integration tests as needed
 TEST_CASE("AlnGraph basic construction") {
-    index::AlnGraph g;
-    g.addNode({});
-    g.addNode({});
-    g.addEdge({0, 1, 0});
+  index::AlnGraph g;
+  g.addNode({});
+  g.addNode({});
+  g.addEdge({0, 1, 0});
 
-    CHECK(g.nodeCount() == 2);
-    CHECK(g.edgeCount() == 1);
+  CHECK(g.nodeCount() == 2);
+  CHECK(g.edgeCount() == 1);
 }

@@ -15,14 +15,14 @@ namespace piru::signal {
 ///   Bins 11-15 (30%): Upper coarse (fine_max, max_val]
 class PiruFuzzyQuantizer : public FuzzyQuantizer {
 public:
-    explicit PiruFuzzyQuantizer(FuzzyQuantizerConfig config);
+  explicit PiruFuzzyQuantizer(FuzzyQuantizerConfig config);
 
-    FuzzyQuantizedSignal quantize(const NormalizedSignal& signal) const override;
-    const FuzzyQuantizerConfig& config() const override;
-    std::string name() const override;
+  FuzzyQuantizedSignal quantize(const NormalizedSignal& signal) const override;
+  const FuzzyQuantizerConfig& config() const override;
+  std::string name() const override;
 
 private:
-    FuzzyQuantizerConfig config_;
+  FuzzyQuantizerConfig config_;
 };
 
 }  // namespace piru::signal

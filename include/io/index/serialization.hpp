@@ -23,16 +23,16 @@
 namespace piru::io::index {
 
 struct IndexMetadata {
-    std::string model_name;
-    uint32_t pore_k{0};
-    std::string fuzzy_quantizer;
+  std::string model_name;
+  uint32_t pore_k{0};
+  std::string fuzzy_quantizer;
 };
 
 struct LoadedIndex {
-    IndexMetadata metadata;
-    std::unique_ptr<piru::index::AdjListGraphStore> graph;
-    std::unique_ptr<piru::index::HashSeedStore> seeds;
-    std::vector<std::vector<piru::index::LinearCoordinate>> linearization_coords;
+  IndexMetadata metadata;
+  std::unique_ptr<piru::index::AdjListGraphStore> graph;
+  std::unique_ptr<piru::index::HashSeedStore> seeds;
+  std::vector<std::vector<piru::index::LinearCoordinate>> linearization_coords;
 };
 
 /** Save an index to a single .pirx file. */

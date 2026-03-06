@@ -11,10 +11,10 @@ namespace piru::io {
 
 class ResultWriter {
 public:
-    virtual ~ResultWriter() = default;
+  virtual ~ResultWriter() = default;
 
-    // Write a single result. Returns false on failure.
-    virtual bool write(const AlignmentResult& result) = 0;
+  // Write a single result. Returns false on failure.
+  virtual bool write(const AlignmentResult& result) = 0;
 };
 
 using ResultWriterPtr = std::unique_ptr<ResultWriter>;

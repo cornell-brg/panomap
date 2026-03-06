@@ -12,12 +12,12 @@ namespace piru::mapping {
 
 // Configuration for seed merging behavior.
 struct SeedMergerConfig {
-    // Maximum gap (in samples) to allow merging between adjacent seeds.
-    // Seeds are considered mergeable if:
-    // - Same node_id
-    // - Gap in query_pos <= merge_tolerance
-    // - Gap in node_offset <= merge_tolerance
-    std::size_t merge_tolerance{0};
+  // Maximum gap (in samples) to allow merging between adjacent seeds.
+  // Seeds are considered mergeable if:
+  // - Same node_id
+  // - Gap in query_pos <= merge_tolerance
+  // - Gap in node_offset <= merge_tolerance
+  std::size_t merge_tolerance{0};
 };
 
 // Merges adjacent/overlapping seed hits to reduce redundancy.
@@ -28,10 +28,10 @@ struct SeedMergerConfig {
 // 3. Update span field to cover merged region
 class SeedMerger {
 public:
-    // Merge adjacent seed hits within the configured tolerance.
-    // Returns a new vector with merged hits (original vector unchanged).
-    static std::vector<NodeAnchor> merge(const std::vector<NodeAnchor>& hits,
-                                            const SeedMergerConfig& config);
+  // Merge adjacent seed hits within the configured tolerance.
+  // Returns a new vector with merged hits (original vector unchanged).
+  static std::vector<NodeAnchor> merge(const std::vector<NodeAnchor>& hits,
+                                       const SeedMergerConfig& config);
 };
 
 }  // namespace piru::mapping

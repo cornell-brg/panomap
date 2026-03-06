@@ -12,14 +12,14 @@ namespace piru::io {
 
 class GfaLoader : public GraphLoader {
 public:
-    explicit GfaLoader(std::string path);
-    ~GfaLoader() override = default;
+  explicit GfaLoader(std::string path);
+  ~GfaLoader() override = default;
 
-    bool load(ImportedGraph& graph) override;
-    std::string get_format_name() const override;
+  bool load(ImportedGraph& graph) override;
+  std::string get_format_name() const override;
 
 private:
-    std::string path_;
+  std::string path_;
 };
 
 using GfaLoaderPtr = std::unique_ptr<GfaLoader>;
