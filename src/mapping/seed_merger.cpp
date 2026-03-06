@@ -64,7 +64,7 @@ void merge_into(NodeAnchor& a, const NodeAnchor& b) {
     a.span = merged_end - merged_start;
 
     // Use the earlier node offset (from a, which is already sorted first)
-    // Keep other fields from a (hash, chain_id, linear_pos, frequency, score)
+    // Keep other fields from a (hash, frequency, score)
 }
 
 }  // namespace

@@ -7,7 +7,7 @@
 #include <optional>
 #include <vector>
 
-#include "mapping/chainer.hpp"  // SeedAnchor
+#include "mapping/chainer.hpp"  // ChainedAnchor
 
 namespace piru::mapping {
 
@@ -17,7 +17,7 @@ namespace piru::mapping {
 /// After alignment (if enabled): alignment fields are populated.
 struct Mapping {
     // Always present (from DP chaining)
-    std::vector<SeedAnchor> anchors;
+    std::vector<ChainedAnchor> anchors;
     double chain_score{0.0};
 
     // Optional alignment scores (reserved for future use)

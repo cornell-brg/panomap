@@ -40,7 +40,7 @@ private:
                                       std::size_t read_length, bool is_primary) const;
 
     /// Build GAF-style path string from anchors (">node1>node2>node3").
-    std::string buildPathString(const std::vector<SeedAnchor>& anchors) const;
+    std::string buildPathString(const std::vector<ChainedAnchor>& anchors) const;
 
     /// Get path name from path_id.
     const std::string& getPathName(std::size_t path_id) const;

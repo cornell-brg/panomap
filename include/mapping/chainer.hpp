@@ -4,9 +4,9 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <iosfwd>
 #include <memory>
-#include <optional>
 #include <string>
 #include <vector>
 
@@ -19,7 +19,19 @@ class GraphStore;
 
 namespace piru::mapping {
 
-struct PathAnchor;  // Forward declaration (defined in anchor.hpp)
+// Anchor in linear path coordinate space.
+// Produced by expanding NodeAnchors using linearization coordinates.
+// One NodeAnchor may expand to multiple PathAnchors (one per path occurrence).
+struct PathAnchor {
+    std::size_t query_pos{0};   // Position in query/read
+    std::int64_t ref_coord{0};  // Linear position along reference path
+    std::size_t length{0};      // Coverage length (from seed span)
+    std::size_t path_id{0};     // Which reference path this anchor belongs to
+
+    // Back-references for debugging and alignment construction
+    std::size_t node_id{0};      // Graph node this anchor came from
+    std::size_t node_offset{0};  // Offset within the node
+};
 
 // Minimal hit record used for clustering/chaining.
 struct NodeAnchor {
@@ -27,14 +39,12 @@ struct NodeAnchor {
     std::size_t read_pos{0};  // seed position in the read
     std::uint64_t hash{0};    // seed hash (for debugging/uniqueness)
     std::size_t span{0};      // coverage length on query (from Seed.length, may be merged)
-    std::optional<std::int64_t> chain_id;
-    std::optional<std::int64_t> linear_pos;
     std::size_t frequency{0};   // occurrences of this hash in the index
     mutable double score{0.0};  // Computed during clustering (mutable for legacy compatibility)
 };
 
 // Anchor candidate produced by clustering/chaining.
-struct SeedAnchor {
+struct ChainedAnchor {
     index::SeedEntry target;      // node_id + offset in graph
     std::size_t read_pos{0};    // position in read
     double score{0.0};          // backend-specific score
@@ -48,12 +58,12 @@ struct SeedAnchor {
 // A single chain: scored group of anchors.
 struct Chain {
     double score{0.0};
-    std::vector<SeedAnchor> anchors;
+    std::vector<ChainedAnchor> anchors;
 };
 
 struct ChainResult {
     double score{0.0};
-    std::vector<SeedAnchor> anchors;       // flat list from best chain
+    std::vector<ChainedAnchor> anchors;       // flat list from best chain
     std::vector<Chain> chains;             // all extracted chains
     std::size_t expanded_anchor_count{0};  // total anchors before chaining
 };

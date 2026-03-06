@@ -28,7 +28,7 @@
 #include "io/regions/pira_parser.hpp"
 #include "io/results/result_writer_factory.hpp"
 #include "mapping/batch_mapper.hpp"
-#include "mapping/dp_chainer_config.hpp"
+#include "mapping/dp_chainer.hpp"
 #include "util/logging.hpp"
 #include "util/timing.hpp"
 #include "version.hpp"

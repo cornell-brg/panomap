@@ -6,7 +6,7 @@
 #include <cstddef>
 #include <vector>
 
-#include "mapping/anchor.hpp"
+#include "mapping/chainer.hpp"
 
 namespace piru::mapping {
 

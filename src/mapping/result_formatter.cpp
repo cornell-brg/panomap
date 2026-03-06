@@ -184,7 +184,7 @@ io::AlignmentResult ResultFormatter::formatMapping(const Mapping& mapping,
     return result;
 }
 
-std::string ResultFormatter::buildPathString(const std::vector<SeedAnchor>& anchors) const {
+std::string ResultFormatter::buildPathString(const std::vector<ChainedAnchor>& anchors) const {
     if (anchors.empty()) {
         return "*";
     }

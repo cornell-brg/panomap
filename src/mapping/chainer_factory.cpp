@@ -3,7 +3,6 @@
 
 #include "mapping/chainer.hpp"
 #include "mapping/dp_chainer.hpp"
-#include "mapping/dp_chainer_config.hpp"
 #include "util/logging.hpp"
 
 namespace piru::mapping {

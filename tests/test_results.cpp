@@ -179,21 +179,21 @@ TEST_CASE("ResultFormatter formats single mapping") {
     mapping.chain_score = 100.0;
 
     // Add anchors spanning nodes 0, 1, 2
-    piru::mapping::SeedAnchor a0;
+    piru::mapping::ChainedAnchor a0;
     a0.target = {0, 2, 4};  // node_id=0, offset=2, length=4
     a0.read_pos = 10;
     a0.path_id = 0;
     a0.ref_coord = 2;
     mapping.anchors.push_back(a0);
 
-    piru::mapping::SeedAnchor a1;
+    piru::mapping::ChainedAnchor a1;
     a1.target = {1, 0, 4};  // node_id=1, offset=0, length=4
     a1.read_pos = 14;
     a1.path_id = 0;
     a1.ref_coord = 6;
     mapping.anchors.push_back(a1);
 
-    piru::mapping::SeedAnchor a2;
+    piru::mapping::ChainedAnchor a2;
     a2.target = {2, 0, 4};  // node_id=2, offset=0, length=4
     a2.read_pos = 18;
     a2.path_id = 0;
@@ -226,21 +226,21 @@ TEST_CASE("ResultFormatter builds GAF path string") {
     mapping.chain_score = 50.0;
 
     // Anchors on nodes 0, 1, 2
-    piru::mapping::SeedAnchor a0;
+    piru::mapping::ChainedAnchor a0;
     a0.target = {0, 0, 4};
     a0.read_pos = 0;
     a0.path_id = 0;
     a0.ref_coord = 0;
     mapping.anchors.push_back(a0);
 
-    piru::mapping::SeedAnchor a1;
+    piru::mapping::ChainedAnchor a1;
     a1.target = {1, 0, 4};
     a1.read_pos = 4;
     a1.path_id = 0;
     a1.ref_coord = 4;
     mapping.anchors.push_back(a1);
 
-    piru::mapping::SeedAnchor a2;
+    piru::mapping::ChainedAnchor a2;
     a2.target = {2, 0, 4};
     a2.read_pos = 8;
     a2.path_id = 0;
@@ -265,7 +265,7 @@ TEST_CASE("ResultFormatter handles primary and secondary mappings") {
     // Primary mapping (higher score)
     piru::mapping::Mapping primary;
     primary.chain_score = 100.0;
-    piru::mapping::SeedAnchor a0;
+    piru::mapping::ChainedAnchor a0;
     a0.target = {0, 0, 4};
     a0.read_pos = 0;
     a0.path_id = 0;
@@ -276,7 +276,7 @@ TEST_CASE("ResultFormatter handles primary and secondary mappings") {
     // Secondary mapping (score >= 70% of primary to pass filter)
     piru::mapping::Mapping secondary;
     secondary.chain_score = 80.0;  // 80% of primary, passes 70% filter
-    piru::mapping::SeedAnchor a1;
+    piru::mapping::ChainedAnchor a1;
     a1.target = {1, 0, 4};
     a1.read_pos = 0;
     a1.path_id = 0;
@@ -316,7 +316,7 @@ TEST_CASE("ResultFormatter respects primary_only config") {
     // Add two mappings
     piru::mapping::Mapping m1;
     m1.chain_score = 100.0;
-    piru::mapping::SeedAnchor a0;
+    piru::mapping::ChainedAnchor a0;
     a0.target = {0, 0, 4};
     a0.read_pos = 0;
     a0.path_id = 0;
@@ -326,7 +326,7 @@ TEST_CASE("ResultFormatter respects primary_only config") {
 
     piru::mapping::Mapping m2;
     m2.chain_score = 50.0;
-    piru::mapping::SeedAnchor a1;
+    piru::mapping::ChainedAnchor a1;
     a1.target = {1, 0, 4};
     a1.read_pos = 0;
     a1.path_id = 0;
@@ -363,7 +363,7 @@ TEST_CASE("ResultFormatter filters low-scoring secondaries") {
     // Primary mapping
     piru::mapping::Mapping primary;
     primary.chain_score = 100.0;
-    piru::mapping::SeedAnchor a0;
+    piru::mapping::ChainedAnchor a0;
     a0.target = {0, 0, 4};
     a0.read_pos = 0;
     a0.path_id = 0;
@@ -374,7 +374,7 @@ TEST_CASE("ResultFormatter filters low-scoring secondaries") {
     // Secondary that passes filter (70% of primary = 70)
     piru::mapping::Mapping secondary_good;
     secondary_good.chain_score = 75.0;  // Above threshold
-    piru::mapping::SeedAnchor a1;
+    piru::mapping::ChainedAnchor a1;
     a1.target = {1, 0, 4};
     a1.read_pos = 0;
     a1.path_id = 0;
@@ -385,7 +385,7 @@ TEST_CASE("ResultFormatter filters low-scoring secondaries") {
     // Secondary that fails filter
     piru::mapping::Mapping secondary_bad;
     secondary_bad.chain_score = 50.0;  // Below threshold
-    piru::mapping::SeedAnchor a2;
+    piru::mapping::ChainedAnchor a2;
     a2.target = {2, 0, 4};
     a2.read_pos = 0;
     a2.path_id = 0;

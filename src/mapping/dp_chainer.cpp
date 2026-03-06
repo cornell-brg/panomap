@@ -99,21 +99,21 @@ void merge_overlapping_chains(std::vector<Chain>& chains, double /*anchor_weight
                                       c2_only_length * c2_density;
 
                 // Combine and sort anchors
-                std::vector<SeedAnchor> merged_anchors;
+                std::vector<ChainedAnchor> merged_anchors;
                 merged_anchors.reserve(c1.anchors.size() + c2.anchors.size());
                 merged_anchors.insert(merged_anchors.end(), c1.anchors.begin(), c1.anchors.end());
                 merged_anchors.insert(merged_anchors.end(), c2.anchors.begin(), c2.anchors.end());
 
                 // Sort by ref_coord
                 std::sort(merged_anchors.begin(), merged_anchors.end(),
-                          [](const SeedAnchor& a, const SeedAnchor& b) {
+                          [](const ChainedAnchor& a, const ChainedAnchor& b) {
                               return a.ref_coord < b.ref_coord;
                           });
 
                 // Remove duplicates (same ref_coord and read_pos)
                 auto last =
                     std::unique(merged_anchors.begin(), merged_anchors.end(),
-                                [](const SeedAnchor& a, const SeedAnchor& b) {
+                                [](const ChainedAnchor& a, const ChainedAnchor& b) {
                                     return a.ref_coord == b.ref_coord && a.read_pos == b.read_pos;
                                 });
                 merged_anchors.erase(last, merged_anchors.end());
@@ -333,7 +333,7 @@ ChainResult DPChainer::chain(const std::vector<PathAnchor>& anchors) const {
 
         for (std::size_t idx : chain_indices) {
             const auto& anchor = sorted_anchors[idx];
-            SeedAnchor seed_anchor;
+            ChainedAnchor seed_anchor;
             seed_anchor.target.node_id = anchor.node_id;
             seed_anchor.target.offset = anchor.node_offset;
             seed_anchor.target.length = anchor.length;

@@ -15,7 +15,6 @@
 #include "index/seed_store.hpp"
 #include "io/reads/read_provider.hpp"
 #include "io/results/result_writer.hpp"
-#include "mapping/anchor.hpp"
 #include "mapping/anchor_expander.hpp"
 #include "mapping/map_result.hpp"
 #include "mapping/result_formatter.hpp"
@@ -29,15 +28,13 @@ namespace piru::mapping {
 
 class SeedLookup {
 public:
-    SeedLookup(const index::SeedStore* store, const index::GraphStore* graph_store,
-               std::size_t freq_threshold)
-        : store_(store), graph_store_(graph_store), freq_threshold_(freq_threshold) {}
+    SeedLookup(const index::SeedStore* store, std::size_t freq_threshold)
+        : store_(store), freq_threshold_(freq_threshold) {}
 
     void lookup(const signal::SeedBuffer& seeds, std::vector<NodeAnchor>& out_hits) const;
 
 private:
-    const index::SeedStore* store_{nullptr};         // non-owning
-    const index::GraphStore* graph_store_{nullptr};  // non-owning
+    const index::SeedStore* store_{nullptr};  // non-owning
     std::size_t freq_threshold_{0};
 };
 
@@ -111,7 +108,7 @@ struct PipelineComponents {
     signal::SeedExtractorPtr seed_extractor;
     const index::SeedStore* seed_store{nullptr};    // non-owning; loaded index
     const index::GraphStore* graph_store{nullptr};  // non-owning; loaded index
-    SeedLookup lookup{nullptr, nullptr, 0};
+    SeedLookup lookup{nullptr, 0};
     AnchorExpanderPtr expander;  // Expands SeedHits to Anchors
     ChainerPtr chainer;
     std::unique_ptr<ResultFormatter> result_formatter;  // Formats map results to PAF/GAF

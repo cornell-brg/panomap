@@ -20,8 +20,6 @@ public:
     virtual const std::string& sequence(std::size_t node_id) const = 0;
     virtual const std::vector<std::size_t>& outgoing(std::size_t node_id) const = 0;
     virtual const std::vector<std::size_t>& incoming(std::size_t node_id) const = 0;
-    virtual std::optional<std::int64_t> chainId(std::size_t node_id) const = 0;
-    virtual std::optional<std::int64_t> linearPosition(std::size_t node_id) const = 0;
 };
 
 class AdjListGraphStore : public GraphStore {
@@ -42,13 +40,6 @@ public:
     const std::vector<std::size_t>& incoming(std::size_t node_id) const override {
         return graph_.incoming(node_id);
     }
-    std::optional<std::int64_t> chainId(std::size_t node_id) const override {
-        return graph_.node(node_id).chain_id;
-    }
-    std::optional<std::int64_t> linearPosition(std::size_t node_id) const override {
-        return graph_.node(node_id).linear_position;
-    }
-
 private:
     AlnGraph graph_;
 };

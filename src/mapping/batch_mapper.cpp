@@ -238,11 +238,7 @@ void SeedLookup::lookup(const signal::SeedBuffer& seeds,
                 .target = h,
                 .read_pos = seed.position,
                 .hash = seed.hash,
-                .span = seed.length,  // Use length (may differ from span after merging)
-                .chain_id =
-                    graph_store_ ? graph_store_->chainId(h.node_id) : std::optional<std::int64_t>{},
-                .linear_pos = graph_store_ ? graph_store_->linearPosition(h.node_id)
-                                           : std::optional<std::int64_t>{},
+                .span = seed.length,
                 .frequency = hits->size(),
             });
         }
@@ -294,26 +290,20 @@ PipelineComponents BatchMapper::create_components() const {
         throw std::runtime_error("BatchMapper requires a SeedStore for lookup");
     }
 
-    // Create AnchorExpander based on linearization type
-    if (config_.linearization_coords) {
-        // Path-walk linearization -> PathWalkExpander
-        if (!config_.path_lengths) {
-            throw std::runtime_error("PathWalkExpander requires path_lengths for bounds checking");
-        }
-        comps.expander = std::make_unique<PathWalkExpander>(*config_.linearization_coords,
-                                                            *config_.path_lengths);
-    } else {
-        // Superbubble linearization -> SuperbubbleExpander
-        if (!config_.graph_store) {
-            throw std::runtime_error("BatchMapper requires GraphStore for superbubble expansion");
-        }
-        comps.expander = std::make_unique<SuperbubbleExpander>(config_.graph_store);
+    // Create AnchorExpander (path-walk linearization)
+    if (!config_.linearization_coords) {
+        throw std::runtime_error("BatchMapper requires linearization_coords");
     }
+    if (!config_.path_lengths) {
+        throw std::runtime_error("PathWalkExpander requires path_lengths for bounds checking");
+    }
+    comps.expander = std::make_unique<PathWalkExpander>(*config_.linearization_coords,
+                                                        *config_.path_lengths);
 
     comps.chainer = make_chainer(config_.chainer_backend, config_.chainer_parsed);
     const std::size_t freq_threshold = comps.seed_store->frequency_threshold();
     // Limit the lookup helper to what the SeedStore exposes.
-    comps.lookup = SeedLookup(comps.seed_store, comps.graph_store, freq_threshold);
+    comps.lookup = SeedLookup(comps.seed_store, freq_threshold);
 
     // Log pipeline configuration
     LOG_DEBUG("Pipeline: " + comps.expander->name() + " expansion + " + comps.chainer->name() +

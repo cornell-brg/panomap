@@ -7,9 +7,7 @@
 #include <string>
 #include <vector>
 
-#include "index/graph_store.hpp"
 #include "index/linearizer.hpp"
-#include "mapping/anchor.hpp"
 #include "mapping/chainer.hpp"
 
 namespace piru::mapping {
@@ -19,13 +17,7 @@ namespace piru::mapping {
 // This is the key transformation stage that converts graph-based coordinates (node_id, offset)
 // into linear reference coordinates (path_id, ref_coord) to enable efficient clustering/chaining.
 //
-// Different implementations handle different linearization strategies:
-// - SuperbubbleExpander: Trivial 1:1 mapping using GraphStore chain_id (superbubble pipeline)
-// - PathWalkExpander: 1:N mapping via path occurrence coordinates (path-walk pipeline)
-//
-// When to use:
-// - Superbubble: Simple variation graphs, local coordinates within bubbles, fast O(n) clustering
-// - Path-walk: Complex graphs with cycles, haplotype-aware mapping, colinear chaining
+// PathWalkExpander: 1:N mapping via path occurrence coordinates (path-walk pipeline)
 class AnchorExpander {
 public:
     virtual ~AnchorExpander() = default;
@@ -64,27 +56,6 @@ public:
 private:
     const std::vector<std::vector<index::LinearCoordinate>>& coords_;
     const std::vector<std::size_t>& path_lengths_;
-};
-
-// Superbubble expansion: uses GraphStore chain_id and linear_position.
-//
-// For each seed hit:
-// - Lookup chain_id and linear_position from GraphStore
-// - Create anchor with path_id = chain_id, ref_coord = linear_position + offset
-//
-// Multiplicity: 1 hit -> 1 anchor (trivial mapping)
-// Seeds without chain_id (unmapped nodes) are skipped.
-class SuperbubbleExpander : public AnchorExpander {
-public:
-    // Construct expander with GraphStore containing chain_id and linear_position per node.
-    explicit SuperbubbleExpander(const index::GraphStore* graph_store);
-
-    std::vector<PathAnchor> expand(const std::vector<NodeAnchor>& hits) const override;
-
-    std::string name() const override { return "superbubble"; }
-
-private:
-    const index::GraphStore* graph_store_;
 };
 
 }  // namespace piru::mapping
