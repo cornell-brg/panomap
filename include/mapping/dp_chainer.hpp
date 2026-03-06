@@ -34,17 +34,19 @@ struct DPChainerConfig {
   static DPChainerConfig from_parsed(const cli::Parsed& parsed);
 };
 
+// Grouped PathAnchors by path_id. path_id is implicit (the vector index).
+using PathAnchorGroups = std::vector<std::vector<PathAnchor>>;
+
 // DP-based colinear chainer.
 //
-// Internally: expand NodeAnchors to PathAnchors (linear space), optionally
-// merge adjacent anchors, then DP chain.
+// Internally: expand NodeAnchors to PathAnchors grouped by path_id,
+// optionally merge adjacent anchors, then DP chain per path.
 //
 // Algorithm:
-// 1. Expand NodeAnchors -> PathAnchors using linearization coordinates
-// 2. Merge adjacent/overlapping PathAnchors (optional)
-// 3. Sort by (path_id, ref_coord, query_pos)
-// 4. DP: dp[i] = max_j(dp[j] + score(i) - gap_cost(j, i))
-// 5. Backtrack to extract chain(s)
+// 1. Expand NodeAnchors -> PathAnchorGroups (grouped by path_id)
+// 2. Merge adjacent/overlapping PathAnchors per path (optional)
+// 3. Per path: sort by (ref_coord, query_pos), DP chain
+// 4. Collect best chains across all paths, rank by score
 class DPChainer : public Chainer {
 public:
   // coords[node_id] = linearization coordinates for that node (non-owning)
@@ -60,11 +62,14 @@ private:
   const std::vector<std::vector<index::LinearCoordinate>>& coords_;
   const std::vector<std::size_t>& path_lengths_;
 
-  // Expand NodeAnchors to PathAnchors using linearization coordinates
-  std::vector<PathAnchor> expand(const std::vector<NodeAnchor>& hits) const;
+  // Expand NodeAnchors to PathAnchors grouped by path_id
+  PathAnchorGroups expand(const std::vector<NodeAnchor>& hits) const;
 
-  // DP internals (operate on PathAnchors after expansion)
-  ChainResult chain_path_anchors(const std::vector<PathAnchor>& anchors) const;
+  // DP internals (operate on per-path PathAnchors)
+  // hits passed for back-reference via src_idx during chain extraction
+  ChainResult chain_grouped(const PathAnchorGroups& groups, const std::vector<NodeAnchor>& hits) const;
+  std::vector<Chain> chain_one_path(const std::vector<PathAnchor>& anchors, std::size_t path_id,
+                                    const std::vector<NodeAnchor>& hits) const;
   bool can_chain(const PathAnchor& j, const PathAnchor& i) const;
   double gap_cost(const PathAnchor& j, const PathAnchor& i) const;
   double anchor_score(const PathAnchor& anchor) const;

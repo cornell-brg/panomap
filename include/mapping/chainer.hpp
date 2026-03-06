@@ -14,18 +14,17 @@
 
 namespace piru::mapping {
 
-// Anchor in linear path coordinate space.
+// Compact anchor in linear path coordinate space (16 bytes).
 // Produced by expanding NodeAnchors using linearization coordinates.
 // One NodeAnchor may expand to multiple PathAnchors (one per path occurrence).
+// Back-references to graph space are recovered via src_idx into the NodeAnchor
+// input array -- keeps this struct small for cache efficiency in the DP loop.
 struct PathAnchor {
-  std::size_t query_pos{0};   // Position in query/read
-  std::int64_t ref_coord{0};  // Linear position along reference path
-  std::size_t length{0};      // Coverage length (from seed span)
-  std::size_t path_id{0};     // Which reference path this anchor belongs to
-
-  // Back-references for debugging and alignment construction
-  std::size_t node_id{0};      // Graph node this anchor came from
-  std::size_t node_offset{0};  // Offset within the node
+  std::uint32_t ref_coord{0};  // Linear position along reference path
+  std::uint32_t query_pos{0};  // Position in query/read
+  std::uint16_t length{0};     // Coverage length (from seed span)
+  std::uint16_t _pad{0};       // Reserved
+  std::uint32_t src_idx{0};    // Index into NodeAnchor input array
 };
 
 // Minimal hit record used for clustering/chaining.
