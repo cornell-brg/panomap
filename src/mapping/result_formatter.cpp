@@ -101,8 +101,8 @@ io::AlignmentResult ResultFormatter::formatMapping(const Mapping& mapping,
   std::size_t min_query = mapping.anchors.front().read_pos;
   std::size_t max_query = mapping.anchors.front().read_pos;
   for (const auto& anchor : mapping.anchors) {
-    min_query = std::min(min_query, anchor.read_pos);
-    max_query = std::max(max_query, anchor.read_pos + anchor.target.length);
+    min_query = std::min(min_query, static_cast<std::size_t>(anchor.read_pos));
+    max_query = std::max(max_query, static_cast<std::size_t>(anchor.read_pos) + anchor.length);
   }
   result.query_start = min_query;
   result.query_end = max_query;
@@ -119,7 +119,7 @@ io::AlignmentResult ResultFormatter::formatMapping(const Mapping& mapping,
   std::int64_t max_ref = mapping.anchors.front().ref_coord;
   for (const auto& anchor : mapping.anchors) {
     min_ref = std::min(min_ref, std::max(std::int64_t{0}, anchor.ref_coord));
-    std::int64_t anchor_end = anchor.ref_coord + static_cast<std::int64_t>(anchor.target.length);
+    std::int64_t anchor_end = anchor.ref_coord + static_cast<std::int64_t>(anchor.length);
     max_ref = std::max(max_ref, std::min(anchor_end, path_len));
   }
 
@@ -155,7 +155,7 @@ io::AlignmentResult ResultFormatter::formatMapping(const Mapping& mapping,
   // matches = sum of anchor lengths (approximate)
   std::uint64_t total_anchor_length = 0;
   for (const auto& anchor : mapping.anchors) {
-    total_anchor_length += anchor.target.length;
+    total_anchor_length += anchor.length;
   }
   result.matches = total_anchor_length;
   result.alignment_block_length = result.target_end - result.target_start;
@@ -164,8 +164,8 @@ io::AlignmentResult ResultFormatter::formatMapping(const Mapping& mapping,
   result.mappings.reserve(mapping.anchors.size());
   for (const auto& anchor : mapping.anchors) {
     io::AlignmentResult::Mapping m;
-    m.node_id = anchor.target.node_id;
-    m.offset = static_cast<std::uint32_t>(anchor.target.offset);
+    m.node_id = anchor.node_id;
+    m.offset = static_cast<std::uint32_t>(anchor.offset);
     m.is_reverse = false;  // TODO: determine from path step direction
     // No edits for chain-only mode
     result.mappings.push_back(std::move(m));
@@ -192,12 +192,12 @@ std::string ResultFormatter::buildPathString(const std::vector<ChainedAnchor>& a
 
   for (const auto& anchor : anchors) {
     // Skip consecutive anchors on the same node
-    if (anchor.target.node_id == last_node_id) {
+    if (anchor.node_id == last_node_id) {
       continue;
     }
 
     // Get original node ID from AlnGraph
-    const auto& node = graph_.node(anchor.target.node_id);
+    const auto& node = graph_.node(anchor.node_id);
     const std::string& original_id = node.original_id.empty() ? node.label : node.original_id;
 
     // Determine direction (> for forward, < for reverse)
@@ -206,7 +206,7 @@ std::string ResultFormatter::buildPathString(const std::vector<ChainedAnchor>& a
     path += direction;
     path += original_id;
 
-    last_node_id = anchor.target.node_id;
+    last_node_id = anchor.node_id;
   }
 
   return path.empty() ? "*" : path;

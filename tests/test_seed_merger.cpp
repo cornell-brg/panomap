@@ -5,7 +5,6 @@
 #include "mapping/seed_merger.hpp"
 
 using namespace piru::mapping;
-using namespace piru::index;
 
 namespace {
 
@@ -13,13 +12,11 @@ namespace {
 NodeAnchor make_hit(std::size_t node_id, std::size_t offset, std::size_t query_pos,
                     std::size_t span) {
   NodeAnchor hit;
-  hit.target.node_id = node_id;
-  hit.target.offset = offset;
-  hit.target.length = span;  // Store in target as well
-  hit.read_pos = query_pos;
-  hit.span = span;
-  hit.hash = 0;  // Not used for merging
-  hit.frequency = 1;
+  hit.node_id = static_cast<std::uint32_t>(node_id);
+  hit.offset = static_cast<std::uint32_t>(offset);
+  hit.read_pos = static_cast<std::uint32_t>(query_pos);
+  hit.span = static_cast<std::uint16_t>(span);
+  hit.length = static_cast<std::uint16_t>(span);
   return hit;
 }
 
@@ -38,8 +35,8 @@ TEST_CASE("SeedMerger: Single hit returns unchanged") {
   auto merged = SeedMerger::merge(hits, config);
 
   REQUIRE(merged.size() == 1);
-  CHECK(merged[0].target.node_id == 1);
-  CHECK(merged[0].target.offset == 10);
+  CHECK(merged[0].node_id == 1);
+  CHECK(merged[0].offset == 10);
   CHECK(merged[0].read_pos == 20);
   CHECK(merged[0].span == 15);
 }
@@ -71,8 +68,8 @@ TEST_CASE("SeedMerger: Perfect overlap merges with tolerance=0") {
 
   // Should merge (gap = 0)
   REQUIRE(merged.size() == 1);
-  CHECK(merged[0].target.node_id == 1);
-  CHECK(merged[0].target.offset == 10);
+  CHECK(merged[0].node_id == 1);
+  CHECK(merged[0].offset == 10);
   CHECK(merged[0].read_pos == 100);
   CHECK(merged[0].span == 20);  // Unchanged since they overlap perfectly
 }
@@ -90,8 +87,8 @@ TEST_CASE("SeedMerger: Gap within tolerance merges seeds") {
 
   // Should merge (gap=5 <= tolerance=10)
   REQUIRE(merged.size() == 1);
-  CHECK(merged[0].target.node_id == 1);
-  CHECK(merged[0].target.offset == 10);  // Use earlier offset
+  CHECK(merged[0].node_id == 1);
+  CHECK(merged[0].offset == 10);  // Use earlier offset
   CHECK(merged[0].read_pos == 100);      // Use earlier query pos
   CHECK(merged[0].span == 25);           // Covers 100 to 125 (105+20)
 }
@@ -125,8 +122,8 @@ TEST_CASE("SeedMerger: Different nodes do not merge") {
 
   // Should NOT merge (different nodes)
   REQUIRE(merged.size() == 2);
-  CHECK(merged[0].target.node_id == 1);
-  CHECK(merged[1].target.node_id == 2);
+  CHECK(merged[0].node_id == 1);
+  CHECK(merged[1].node_id == 2);
 }
 
 TEST_CASE("SeedMerger: Merges multiple adjacent seeds (A+B+C)") {
@@ -143,8 +140,8 @@ TEST_CASE("SeedMerger: Merges multiple adjacent seeds (A+B+C)") {
 
   // All three should merge into one
   REQUIRE(merged.size() == 1);
-  CHECK(merged[0].target.node_id == 1);
-  CHECK(merged[0].target.offset == 10);  // Earliest offset
+  CHECK(merged[0].node_id == 1);
+  CHECK(merged[0].offset == 10);  // Earliest offset
   CHECK(merged[0].read_pos == 100);      // Earliest query pos
   CHECK(merged[0].span == 18);           // Covers 100 to 118
 }
@@ -164,12 +161,12 @@ TEST_CASE("SeedMerger: Handles unsorted input correctly") {
   REQUIRE(merged.size() == 2);
 
   // First result should be merged node 1 seeds (sorted by node_id)
-  CHECK(merged[0].target.node_id == 1);
+  CHECK(merged[0].node_id == 1);
   CHECK(merged[0].read_pos == 100);
   CHECK(merged[0].span == 15);  // Covers 100 to 115
 
   // Second result should be node 2 seed
-  CHECK(merged[1].target.node_id == 2);
+  CHECK(merged[1].node_id == 2);
   CHECK(merged[1].read_pos == 200);
 }
 
@@ -208,17 +205,17 @@ TEST_CASE("SeedMerger: Multiple clusters remain separate") {
   REQUIRE(merged.size() == 3);
 
   // Check cluster 1 (node 1, query ~100)
-  CHECK(merged[0].target.node_id == 1);
+  CHECK(merged[0].node_id == 1);
   CHECK(merged[0].read_pos == 100);
   CHECK(merged[0].span == 15);
 
   // Check cluster 2 (node 1, query ~500)
-  CHECK(merged[1].target.node_id == 1);
+  CHECK(merged[1].node_id == 1);
   CHECK(merged[1].read_pos == 500);
   CHECK(merged[1].span == 15);
 
   // Check cluster 3 (node 2, query ~100)
-  CHECK(merged[2].target.node_id == 2);
+  CHECK(merged[2].node_id == 2);
   CHECK(merged[2].read_pos == 100);
   CHECK(merged[2].span == 15);
 }

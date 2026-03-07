@@ -13,12 +13,11 @@ namespace {
 NodeAnchor make_hit(std::size_t node_id, std::size_t offset, std::size_t query_pos,
                     std::size_t span) {
   NodeAnchor hit;
-  hit.target.node_id = node_id;
-  hit.target.offset = offset;
-  hit.target.length = span;
-  hit.read_pos = query_pos;
-  hit.span = span;
-  hit.hash = 0;
+  hit.node_id = static_cast<std::uint32_t>(node_id);
+  hit.offset = static_cast<std::uint32_t>(offset);
+  hit.read_pos = static_cast<std::uint32_t>(query_pos);
+  hit.span = static_cast<std::uint16_t>(span);
+  hit.length = static_cast<std::uint16_t>(span);
   return hit;
 }
 

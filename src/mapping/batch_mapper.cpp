@@ -21,11 +21,11 @@ void SeedLookup::lookup(const signal::SeedBuffer& seeds, std::vector<NodeAnchor>
     if (hits->size() > freq_threshold_) continue;  // skip overly frequent seeds
     for (const auto& h : *hits) {
       out_hits.push_back(NodeAnchor{
-          .target = h,
-          .read_pos = seed.position,
-          .hash = seed.hash,
-          .span = seed.length,
-          .frequency = hits->size(),
+          .node_id = static_cast<std::uint32_t>(h.node_id),
+          .offset = static_cast<std::uint32_t>(h.offset),
+          .read_pos = static_cast<std::uint32_t>(seed.position),
+          .span = static_cast<std::uint16_t>(std::min(seed.length, std::size_t{0xFFFF})),
+          .length = static_cast<std::uint16_t>(std::min(h.length, std::size_t{0xFFFF})),
       });
     }
   }
@@ -229,8 +229,8 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
       double segment_len = static_cast<double>(anchors[i + 1].read_pos - anchors[i].read_pos);
       total_bases += segment_len;
 
-      bool cur_in_roi = roi.count(anchors[i].target.node_id) > 0;
-      bool next_in_roi = roi.count(anchors[i + 1].target.node_id) > 0;
+      bool cur_in_roi = roi.count(anchors[i].node_id) > 0;
+      bool next_in_roi = roi.count(anchors[i + 1].node_id) > 0;
       if (cur_in_roi && next_in_roi) {
         roi_bases += segment_len;
       }

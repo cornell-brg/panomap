@@ -10,7 +10,6 @@
 #include <vector>
 
 #include "cli/parse.hpp"
-#include "index/seed_store.hpp"
 
 namespace piru::mapping {
 
@@ -27,26 +26,27 @@ struct PathAnchor {
   std::uint32_t src_idx{0};    // Index into NodeAnchor input array
 };
 
-// Minimal hit record used for clustering/chaining.
+// Minimal hit record: graph-space seed hit (16 bytes).
+// Produced by SeedLookup, consumed by chainer and seed merger.
 struct NodeAnchor {
-  index::SeedEntry target;    // node_id + offset in graph
-  std::size_t read_pos{0};    // seed position in the read
-  std::uint64_t hash{0};      // seed hash (for debugging/uniqueness)
-  std::size_t span{0};        // coverage length on query (from Seed.length, may be merged)
-  std::size_t frequency{0};   // occurrences of this hash in the index
-  mutable double score{0.0};  // Computed during clustering (mutable for legacy compatibility)
+  std::uint32_t node_id{0};   // Graph node ID
+  std::uint32_t offset{0};    // Offset within node
+  std::uint32_t read_pos{0};  // Seed position in the read
+  std::uint16_t span{0};      // Coverage length on query
+  std::uint16_t length{0};    // Coverage length on reference (may differ after merge)
 };
 
-// Anchor candidate produced by clustering/chaining.
+// Anchor candidate produced by chaining.
 struct ChainedAnchor {
-  index::SeedEntry target;  // node_id + offset in graph
-  std::size_t read_pos{0};  // position in read
-  double score{0.0};        // backend-specific score
-  std::size_t chain_id{0};  // which chain this anchor belongs to
-
-  // Optional: linear coordinates (for path-walk pipeline debugging)
-  std::size_t path_id{0};     // reference path ID
-  std::int64_t ref_coord{0};  // linear position on reference path
+  std::uint32_t node_id{0};   // Graph node ID
+  std::uint32_t offset{0};    // Offset within node
+  std::uint32_t read_pos{0};  // Position in read
+  std::uint16_t length{0};    // Coverage length
+  std::uint16_t _pad{0};      // Reserved
+  double score{0.0};          // Backend-specific score
+  std::size_t chain_id{0};    // Which chain this anchor belongs to
+  std::size_t path_id{0};     // Reference path ID
+  std::int64_t ref_coord{0};  // Linear position on reference path
 };
 
 // A single chain: scored group of anchors.

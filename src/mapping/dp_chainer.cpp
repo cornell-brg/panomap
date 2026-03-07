@@ -76,18 +76,14 @@ PathAnchorGroups DPChainer::expand(const std::vector<NodeAnchor>& hits) const {
 
   for (std::size_t hit_idx = 0; hit_idx < hits.size(); ++hit_idx) {
     const auto& hit = hits[hit_idx];
-    const std::size_t node_id = hit.target.node_id;
-    if (node_id >= coords_.size()) continue;
+    if (hit.node_id >= coords_.size()) continue;
 
-    const auto& node_coords = coords_[node_id];
+    const auto& node_coords = coords_[hit.node_id];
     if (node_coords.empty()) continue;
 
-    // Clamp span to uint16_t
-    auto span = static_cast<std::uint16_t>(std::min(hit.span, static_cast<std::size_t>(0xFFFF)));
-
     for (const auto& coord : node_coords) {
-      std::int64_t ref = coord.ref_coord + static_cast<std::int64_t>(hit.target.offset);
-      std::int64_t anchor_end = ref + static_cast<std::int64_t>(span);
+      std::int64_t ref = coord.ref_coord + static_cast<std::int64_t>(hit.offset);
+      std::int64_t anchor_end = ref + static_cast<std::int64_t>(hit.span);
 
       // Skip anchors that extend past path boundary
       if (coord.path_id < path_lengths_.size()) {
@@ -103,7 +99,7 @@ PathAnchorGroups DPChainer::expand(const std::vector<NodeAnchor>& hits) const {
       groups[coord.path_id].push_back(PathAnchor{
           .ref_coord = static_cast<std::uint32_t>(ref),
           .query_pos = static_cast<std::uint32_t>(hit.read_pos),
-          .length = span,
+          .length = hit.span,
           ._pad = 0,
           .src_idx = static_cast<std::uint32_t>(hit_idx),
       });
@@ -270,9 +266,9 @@ std::vector<Chain> DPChainer::chain_one_path(const std::vector<PathAnchor>& anch
       const auto& src = hits[anchor.src_idx];
 
       ChainedAnchor ca;
-      ca.target.node_id = src.target.node_id;
-      ca.target.offset = src.target.offset;
-      ca.target.length = anchor.length;
+      ca.node_id = src.node_id;
+      ca.offset = src.offset;
+      ca.length = anchor.length;
       ca.read_pos = anchor.query_pos;
       ca.score = dp[idx];
       ca.chain_id = 0;  // reassigned later across paths
