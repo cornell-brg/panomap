@@ -99,7 +99,7 @@ add_executable(piru
     src/index/index_pipeline.cpp
     src/mapping/batch_mapper.cpp
     src/mapping/seed_merger.cpp
-    src/mapping/dp_chainer.cpp
+    src/mapping/path_chainer.cpp
     src/mapping/result_formatter.cpp
     src/util/signal_handlers.cpp
     src/util/timing.cpp

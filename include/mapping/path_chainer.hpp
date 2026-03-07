@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// DP-based colinear chainer for path-aware seed selection.
+// Path-space DP chainer: expands to per-path anchors, chains per path.
 
 #pragma once
 
@@ -12,9 +12,9 @@
 
 namespace piru::mapping {
 
-// Configuration for DP-based chaining algorithm.
+// Configuration for path-space chaining algorithm.
 // Defaults tuned for noisy nanopore signals (DEV027).
-struct DPChainerConfig {
+struct PathChainerConfig {
   std::size_t max_dist{500};        // Max query/ref distance for chaining (banding)
   std::size_t max_diag_dev{500};    // Max diagonal deviation |dr - dq|
   std::size_t min_chain_score{12};  // Min score to report a chain
@@ -31,13 +31,13 @@ struct DPChainerConfig {
 
   // CLI integration: options and parsing for --chain-* flags.
   static std::vector<cli::Option> cli_options();
-  static DPChainerConfig from_parsed(const cli::Parsed& parsed);
+  static PathChainerConfig from_parsed(const cli::Parsed& parsed);
 };
 
 // Grouped PathAnchors by path_id. path_id is implicit (the vector index).
 using PathAnchorGroups = std::vector<std::vector<PathAnchor>>;
 
-// DP-based colinear chainer.
+// Path-space colinear chainer (Method 1).
 //
 // Internally: expand NodeAnchors to PathAnchors grouped by path_id,
 // optionally merge adjacent anchors, then DP chain per path.
@@ -47,18 +47,18 @@ using PathAnchorGroups = std::vector<std::vector<PathAnchor>>;
 // 2. Merge adjacent/overlapping PathAnchors per path (optional)
 // 3. Per path: sort by (ref_coord, query_pos), DP chain
 // 4. Collect best chains across all paths, rank by score
-class DPChainer : public Chainer {
+class PathChainer : public Chainer {
 public:
   // coords[node_id] = linearization coordinates for that node (non-owning)
   // path_lengths[path_id] = length of that path for bounds checking (non-owning)
-  DPChainer(DPChainerConfig config, const std::vector<std::vector<index::LinearCoordinate>>& coords,
+  PathChainer(PathChainerConfig config, const std::vector<std::vector<index::LinearCoordinate>>& coords,
             const std::vector<std::size_t>& path_lengths);
 
   ChainResult chain(const std::vector<NodeAnchor>& hits) const override;
-  std::string name() const override { return "dp-chain"; }
+  std::string name() const override { return "path-chain"; }
 
 private:
-  DPChainerConfig config_;
+  PathChainerConfig config_;
   const std::vector<std::vector<index::LinearCoordinate>>& coords_;
   const std::vector<std::size_t>& path_lengths_;
 

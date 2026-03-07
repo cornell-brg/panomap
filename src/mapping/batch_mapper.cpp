@@ -6,7 +6,7 @@
 #include <string>
 #include <utility>
 
-#include "mapping/dp_chainer.hpp"
+#include "mapping/path_chainer.hpp"
 #include "util/logging.hpp"
 
 namespace piru::mapping {
@@ -75,17 +75,17 @@ PipelineComponents BatchMapper::create_components() const {
   }
 
   // Create chainer backend
-  if (config_.chainer_backend == "dp-chain") {
+  if (config_.chainer_backend == "path-chain") {
     if (!config_.linearization_coords) {
-      throw std::runtime_error("DPChainer requires linearization_coords");
+      throw std::runtime_error("PathChainer requires linearization_coords");
     }
     if (!config_.path_lengths) {
-      throw std::runtime_error("DPChainer requires path_lengths for bounds checking");
+      throw std::runtime_error("PathChainer requires path_lengths for bounds checking");
     }
-    auto dp_config = DPChainerConfig::from_parsed(config_.chainer_parsed);
-    dp_config.merge_anchors = config_.enable_anchor_merge;
-    comps.chainer = std::make_unique<DPChainer>(dp_config, *config_.linearization_coords,
-                                                *config_.path_lengths);
+    auto path_config = PathChainerConfig::from_parsed(config_.chainer_parsed);
+    path_config.merge_anchors = config_.enable_anchor_merge;
+    comps.chainer = std::make_unique<PathChainer>(path_config, *config_.linearization_coords,
+                                                  *config_.path_lengths);
   } else {
     throw std::runtime_error("Unknown chainer backend: " + config_.chainer_backend);
   }

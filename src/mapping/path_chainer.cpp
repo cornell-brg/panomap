@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-#include "mapping/dp_chainer.hpp"
+#include "mapping/path_chainer.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -66,12 +66,12 @@ struct AnchorComparator {
 
 }  // namespace
 
-DPChainer::DPChainer(DPChainerConfig config,
+PathChainer::PathChainer(PathChainerConfig config,
                      const std::vector<std::vector<index::LinearCoordinate>>& coords,
                      const std::vector<std::size_t>& path_lengths)
     : config_(std::move(config)), coords_(coords), path_lengths_(path_lengths) {}
 
-PathAnchorGroups DPChainer::expand(const std::vector<NodeAnchor>& hits) const {
+PathAnchorGroups PathChainer::expand(const std::vector<NodeAnchor>& hits) const {
   PathAnchorGroups groups;
 
   for (std::size_t hit_idx = 0; hit_idx < hits.size(); ++hit_idx) {
@@ -108,7 +108,7 @@ PathAnchorGroups DPChainer::expand(const std::vector<NodeAnchor>& hits) const {
   return groups;
 }
 
-ChainResult DPChainer::chain(const std::vector<NodeAnchor>& hits) const {
+ChainResult PathChainer::chain(const std::vector<NodeAnchor>& hits) const {
   auto groups = expand(hits);
 
   // Count total expanded anchors
@@ -125,7 +125,7 @@ ChainResult DPChainer::chain(const std::vector<NodeAnchor>& hits) const {
   return result;
 }
 
-ChainResult DPChainer::chain_grouped(const PathAnchorGroups& groups,
+ChainResult PathChainer::chain_grouped(const PathAnchorGroups& groups,
                                      const std::vector<NodeAnchor>& hits) const {
   // Run DP per path, collect all chains
   std::vector<Chain> all_chains;
@@ -168,7 +168,7 @@ ChainResult DPChainer::chain_grouped(const PathAnchorGroups& groups,
   return result;
 }
 
-std::vector<Chain> DPChainer::chain_one_path(const std::vector<PathAnchor>& anchors,
+std::vector<Chain> PathChainer::chain_one_path(const std::vector<PathAnchor>& anchors,
                                              std::size_t path_id,
                                              const std::vector<NodeAnchor>& hits) const {
   /* Sort anchors by (ref_coord, query_pos) */
@@ -284,7 +284,7 @@ std::vector<Chain> DPChainer::chain_one_path(const std::vector<PathAnchor>& anch
   return chains;
 }
 
-bool DPChainer::can_chain(const PathAnchor& j, const PathAnchor& i) const {
+bool PathChainer::can_chain(const PathAnchor& j, const PathAnchor& i) const {
   // Query positions must strictly increase
   if (i.query_pos <= j.query_pos) return false;
 
@@ -308,7 +308,7 @@ bool DPChainer::can_chain(const PathAnchor& j, const PathAnchor& i) const {
   return true;
 }
 
-double DPChainer::gap_cost(const PathAnchor& j, const PathAnchor& i) const {
+double PathChainer::gap_cost(const PathAnchor& j, const PathAnchor& i) const {
   auto j_ref_end = static_cast<std::int64_t>(j.ref_coord) + static_cast<std::int64_t>(j.length);
   auto j_query_end = static_cast<std::int64_t>(j.query_pos + j.length);
 
@@ -340,11 +340,11 @@ double DPChainer::gap_cost(const PathAnchor& j, const PathAnchor& i) const {
   return cost;
 }
 
-double DPChainer::anchor_score(const PathAnchor& anchor) const {
+double PathChainer::anchor_score(const PathAnchor& anchor) const {
   return static_cast<double>(anchor.length) * config_.anchor_weight;
 }
 
-std::vector<std::size_t> DPChainer::backtrack_chain(const std::vector<int>& pred,
+std::vector<std::size_t> PathChainer::backtrack_chain(const std::vector<int>& pred,
                                                     std::size_t best_idx) const {
   std::vector<std::size_t> chain;
   int current = static_cast<int>(best_idx);
@@ -356,9 +356,9 @@ std::vector<std::size_t> DPChainer::backtrack_chain(const std::vector<int>& pred
   return chain;
 }
 
-// -- DPChainerConfig CLI integration --
+// -- PathChainerConfig CLI integration --
 
-std::vector<cli::Option> DPChainerConfig::cli_options() {
+std::vector<cli::Option> PathChainerConfig::cli_options() {
   return {
       {'\0', "chain-max-dist", true,
        "DP chain: max query/ref distance for chaining (default: 500)"},
@@ -374,8 +374,8 @@ std::vector<cli::Option> DPChainerConfig::cli_options() {
   };
 }
 
-DPChainerConfig DPChainerConfig::from_parsed(const cli::Parsed& parsed) {
-  DPChainerConfig cfg;
+PathChainerConfig PathChainerConfig::from_parsed(const cli::Parsed& parsed) {
+  PathChainerConfig cfg;
   if (parsed.values.count("chain-max-dist"))
     cfg.max_dist = std::stoull(parsed.values.at("chain-max-dist"));
   if (parsed.values.count("chain-max-diag-dev"))

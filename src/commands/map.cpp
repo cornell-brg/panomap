@@ -28,7 +28,7 @@
 #include "io/regions/pira_parser.hpp"
 #include "io/results/result_writer_factory.hpp"
 #include "mapping/batch_mapper.hpp"
-#include "mapping/dp_chainer.hpp"
+#include "mapping/path_chainer.hpp"
 #include "util/logging.hpp"
 #include "util/timing.hpp"
 #include "version.hpp"
@@ -74,7 +74,7 @@ int handle_map(const std::vector<std::string>& args) {
       {'\0', "", false, "\nMapping Options:"},
       {'\0', "seed-freq-cap", true,
        "Skip seeds above this frequency percentile at lookup (0.0-1.0, default: none)"},
-      {'\0', "chainer", true, "Chainer backend (default: dp-chain)"},
+      {'\0', "chainer", true, "Chainer backend (default: path-chain)"},
       {'\0', "", false, "\nSignal Processing Options:"},
       {'\0', "event-pipeline", true,
        "Event pipeline backend: rawhash (default), scrappie, passthrough"},
@@ -99,7 +99,7 @@ int handle_map(const std::vector<std::string>& args) {
        "Min chain score ratio vs primary for secondaries (default: 0.4)"},
   };
   // Append backend-specific CLI options
-  auto chain_opts = piru::mapping::DPChainerConfig::cli_options();
+  auto chain_opts = piru::mapping::PathChainerConfig::cli_options();
   config.options.insert(config.options.end(), chain_opts.begin(), chain_opts.end());
 
   config.on_error = [](const std::string&) { std::cerr << "map: invalid option\n"; };

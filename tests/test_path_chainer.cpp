@@ -2,7 +2,7 @@
 
 #include <doctest/doctest.h>
 
-#include "mapping/dp_chainer.hpp"
+#include "mapping/path_chainer.hpp"
 
 using namespace piru::mapping;
 using namespace piru::index;
@@ -21,15 +21,15 @@ NodeAnchor make_hit(std::size_t node_id, std::size_t offset, std::size_t query_p
   return hit;
 }
 
-// Helper to create a DPChainer with linearization data.
-DPChainer make_chainer(const std::vector<std::vector<LinearCoordinate>>& coords,
-                       const std::vector<std::size_t>& path_lengths, DPChainerConfig config = {}) {
-  return DPChainer(std::move(config), coords, path_lengths);
+// Helper to create a PathChainer with linearization data.
+PathChainer make_chainer(const std::vector<std::vector<LinearCoordinate>>& coords,
+                       const std::vector<std::size_t>& path_lengths, PathChainerConfig config = {}) {
+  return PathChainer(std::move(config), coords, path_lengths);
 }
 
 }  // namespace
 
-TEST_CASE("DPChainer: Empty input returns empty output") {
+TEST_CASE("PathChainer: Empty input returns empty output") {
   std::vector<std::vector<LinearCoordinate>> coords(1);
   coords[0] = {{0, 100}};
   std::vector<std::size_t> path_lengths(100, 1000000);
@@ -41,12 +41,12 @@ TEST_CASE("DPChainer: Empty input returns empty output") {
   CHECK(summary.score == 0.0);
 }
 
-TEST_CASE("DPChainer: Single seed produces single anchor chain") {
+TEST_CASE("PathChainer: Single seed produces single anchor chain") {
   std::vector<std::vector<LinearCoordinate>> coords(1);
   coords[0] = {{0, 100}};
   std::vector<std::size_t> path_lengths(100, 1000000);
 
-  DPChainerConfig config;
+  PathChainerConfig config;
   config.min_chain_score = 10;
   auto chainer = make_chainer(coords, path_lengths, config);
 
@@ -58,14 +58,14 @@ TEST_CASE("DPChainer: Single seed produces single anchor chain") {
   CHECK(summary.score > 0.0);
 }
 
-TEST_CASE("DPChainer: Linear colinear chain selects all anchors") {
+TEST_CASE("PathChainer: Linear colinear chain selects all anchors") {
   std::vector<std::vector<LinearCoordinate>> coords(3);
   coords[0] = {{0, 100}};
   coords[1] = {{0, 200}};
   coords[2] = {{0, 300}};
   std::vector<std::size_t> path_lengths(100, 1000000);
 
-  DPChainerConfig config;
+  PathChainerConfig config;
   config.max_dist = 5000;
   config.max_diag_dev = 500;
   config.min_chain_score = 10;
@@ -81,13 +81,13 @@ TEST_CASE("DPChainer: Linear colinear chain selects all anchors") {
   CHECK(summary.anchors[2].read_pos == 250);
 }
 
-TEST_CASE("DPChainer: Large diagonal deviation breaks chain") {
+TEST_CASE("PathChainer: Large diagonal deviation breaks chain") {
   std::vector<std::vector<LinearCoordinate>> coords(2);
   coords[0] = {{0, 100}};
   coords[1] = {{0, 200}};
   std::vector<std::size_t> path_lengths(100, 1000000);
 
-  DPChainerConfig config;
+  PathChainerConfig config;
   config.max_dist = 5000;
   config.max_diag_dev = 50;
   config.min_chain_score = 10;
@@ -100,13 +100,13 @@ TEST_CASE("DPChainer: Large diagonal deviation breaks chain") {
   CHECK(summary.anchors.size() == 1);
 }
 
-TEST_CASE("DPChainer: Distance filter prevents chaining far-apart anchors") {
+TEST_CASE("PathChainer: Distance filter prevents chaining far-apart anchors") {
   std::vector<std::vector<LinearCoordinate>> coords(2);
   coords[0] = {{0, 100}};
   coords[1] = {{0, 10000}};
   std::vector<std::size_t> path_lengths(100, 1000000);
 
-  DPChainerConfig config;
+  PathChainerConfig config;
   config.max_dist = 1000;
   config.max_diag_dev = 500;
   config.min_chain_score = 10;
@@ -118,13 +118,13 @@ TEST_CASE("DPChainer: Distance filter prevents chaining far-apart anchors") {
   CHECK(summary.anchors.size() == 1);
 }
 
-TEST_CASE("DPChainer: Rejects cross-path chains") {
+TEST_CASE("PathChainer: Rejects cross-path chains") {
   std::vector<std::vector<LinearCoordinate>> coords(2);
   coords[0] = {{0, 100}};
   coords[1] = {{1, 200}};
   std::vector<std::size_t> path_lengths(100, 1000000);
 
-  DPChainerConfig config;
+  PathChainerConfig config;
   config.max_dist = 5000;
   config.max_diag_dev = 500;
   config.min_chain_score = 10;
@@ -136,14 +136,14 @@ TEST_CASE("DPChainer: Rejects cross-path chains") {
   CHECK(summary.anchors.size() == 1);
 }
 
-TEST_CASE("DPChainer: Prefers higher-scoring chain") {
+TEST_CASE("PathChainer: Prefers higher-scoring chain") {
   std::vector<std::vector<LinearCoordinate>> coords(3);
   coords[0] = {{0, 100}};
   coords[1] = {{0, 200}};
   coords[2] = {{0, 300}};
   std::vector<std::size_t> path_lengths(100, 1000000);
 
-  DPChainerConfig config;
+  PathChainerConfig config;
   config.max_dist = 5000;
   config.max_diag_dev = 500;
   config.min_chain_score = 10;
@@ -157,12 +157,12 @@ TEST_CASE("DPChainer: Prefers higher-scoring chain") {
   CHECK(summary.anchors.size() >= 2);
 }
 
-TEST_CASE("DPChainer: Min chain score threshold filters weak chains") {
+TEST_CASE("PathChainer: Min chain score threshold filters weak chains") {
   std::vector<std::vector<LinearCoordinate>> coords(1);
   coords[0] = {{0, 100}};
   std::vector<std::size_t> path_lengths(100, 1000000);
 
-  DPChainerConfig config;
+  PathChainerConfig config;
   config.min_chain_score = 1000;
   config.anchor_weight = 1.0;
   auto chainer = make_chainer(coords, path_lengths, config);
@@ -173,13 +173,13 @@ TEST_CASE("DPChainer: Min chain score threshold filters weak chains") {
   CHECK(summary.anchors.empty());
 }
 
-TEST_CASE("DPChainer: Overlapping anchors incur penalty") {
+TEST_CASE("PathChainer: Overlapping anchors incur penalty") {
   std::vector<std::vector<LinearCoordinate>> coords(2);
   coords[0] = {{0, 100}};
   coords[1] = {{0, 150}};
   std::vector<std::size_t> path_lengths(100, 1000000);
 
-  DPChainerConfig config;
+  PathChainerConfig config;
   config.max_dist = 5000;
   config.max_diag_dev = 500;
   config.overlap_penalty_factor = 2.0;
@@ -192,13 +192,13 @@ TEST_CASE("DPChainer: Overlapping anchors incur penalty") {
   CHECK(summary.anchors.size() >= 1);
 }
 
-TEST_CASE("DPChainer: Backward query positions are rejected") {
+TEST_CASE("PathChainer: Backward query positions are rejected") {
   std::vector<std::vector<LinearCoordinate>> coords(2);
   coords[0] = {{0, 100}};
   coords[1] = {{0, 200}};
   std::vector<std::size_t> path_lengths(100, 1000000);
 
-  DPChainerConfig config;
+  PathChainerConfig config;
   config.max_dist = 5000;
   config.max_diag_dev = 500;
   config.min_chain_score = 10;
@@ -210,12 +210,12 @@ TEST_CASE("DPChainer: Backward query positions are rejected") {
   CHECK(summary.anchors.size() == 1);
 }
 
-TEST_CASE("DPChainer: Node appearing on multiple paths expands correctly") {
+TEST_CASE("PathChainer: Node appearing on multiple paths expands correctly") {
   std::vector<std::vector<LinearCoordinate>> coords(1);
   coords[0] = {{0, 100}, {1, 500}};
   std::vector<std::size_t> path_lengths(100, 1000000);
 
-  DPChainerConfig config;
+  PathChainerConfig config;
   config.max_dist = 5000;
   config.max_diag_dev = 500;
   config.min_chain_score = 10;
@@ -228,14 +228,14 @@ TEST_CASE("DPChainer: Node appearing on multiple paths expands correctly") {
   CHECK(summary.score > 0.0);
 }
 
-TEST_CASE("DPChainer: Chain preserves order from backtracking") {
+TEST_CASE("PathChainer: Chain preserves order from backtracking") {
   std::vector<std::vector<LinearCoordinate>> coords(3);
   coords[0] = {{0, 100}};
   coords[1] = {{0, 200}};
   coords[2] = {{0, 300}};
   std::vector<std::size_t> path_lengths(100, 1000000);
 
-  DPChainerConfig config;
+  PathChainerConfig config;
   config.max_dist = 5000;
   config.max_diag_dev = 500;
   config.min_chain_score = 10;

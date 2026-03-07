@@ -51,7 +51,7 @@ if(DOCTEST_AVAILABLE)
         test_cli.cpp
         test_gfa_exporter.cpp
         test_seed_merger.cpp
-        test_dp_chainer.cpp
+        test_path_chainer.cpp
     )
 
     target_include_directories(piru_tests PRIVATE
@@ -91,7 +91,7 @@ if(DOCTEST_AVAILABLE)
         ${CMAKE_SOURCE_DIR}/src/index/aln_graph.cpp
         ${CMAKE_SOURCE_DIR}/src/mapping/batch_mapper.cpp
         ${CMAKE_SOURCE_DIR}/src/mapping/seed_merger.cpp
-        ${CMAKE_SOURCE_DIR}/src/mapping/dp_chainer.cpp
+        ${CMAKE_SOURCE_DIR}/src/mapping/path_chainer.cpp
         ${CMAKE_SOURCE_DIR}/src/mapping/result_formatter.cpp
         ${CMAKE_SOURCE_DIR}/src/util/timing.cpp
     )
