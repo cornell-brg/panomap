@@ -100,6 +100,8 @@ add_executable(piru
     src/mapping/batch_mapper.cpp
     src/mapping/seed_merger.cpp
     src/mapping/path_chainer.cpp
+    src/mapping/graph_chainer.cpp
+    src/mapping/graph_chainer2.cpp
     src/mapping/result_formatter.cpp
     src/util/signal_handlers.cpp
     src/util/timing.cpp

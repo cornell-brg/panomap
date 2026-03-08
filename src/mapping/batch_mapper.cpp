@@ -6,6 +6,8 @@
 #include <string>
 #include <utility>
 
+#include "mapping/graph_chainer.hpp"
+#include "mapping/graph_chainer2.hpp"
 #include "mapping/path_chainer.hpp"
 #include "util/logging.hpp"
 
@@ -86,6 +88,24 @@ PipelineComponents BatchMapper::create_components() const {
     path_config.merge_anchors = config_.enable_anchor_merge;
     comps.chainer = std::make_unique<PathChainer>(path_config, *config_.linearization_coords,
                                                   *config_.path_lengths);
+  } else if (config_.chainer_backend == "graph-chain") {
+    if (!config_.linearization_coords) {
+      throw std::runtime_error("GraphChainer requires linearization_coords");
+    }
+    if (!config_.path_lengths) {
+      throw std::runtime_error("GraphChainer requires path_lengths for bounds checking");
+    }
+    comps.chainer = std::make_unique<GraphChainer>(*config_.linearization_coords,
+                                                   *config_.path_lengths);
+  } else if (config_.chainer_backend == "graph-chain2") {
+    if (!config_.linearization_coords) {
+      throw std::runtime_error("GraphChainer2 requires linearization_coords");
+    }
+    if (!config_.path_lengths) {
+      throw std::runtime_error("GraphChainer2 requires path_lengths for bounds checking");
+    }
+    comps.chainer = std::make_unique<GraphChainer2>(*config_.linearization_coords,
+                                                    *config_.path_lengths);
   } else {
     throw std::runtime_error("Unknown chainer backend: " + config_.chainer_backend);
   }
