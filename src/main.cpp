@@ -8,7 +8,6 @@
 #include "commands/eval.hpp"
 #include "commands/index.hpp"
 #include "commands/map.hpp"
-#include "commands/mt_test.hpp"
 #include "util/metrics.hpp"
 #include "util/signal_handlers.hpp"
 #include "version.hpp"
@@ -51,7 +50,6 @@ int main(int argc, char** argv) {
       {"map", "Map reads against an index (stub).", handle_map},
       {"eval", "Evaluate mapping accuracy against ground truth.", handle_eval},
       {"annotate", "Project BED target regions onto graph node sets.", handle_annotate},
-      {"mt-test", "Spawn parallel sleep tasks to test concurrency.", handle_mt_test},
   };
 
   std::vector<std::string> args(argv + 1, argv + argc);

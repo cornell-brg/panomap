@@ -61,7 +61,6 @@ add_executable(piru
     src/commands/map.cpp
     src/commands/eval.cpp
     src/commands/annotate.cpp
-    src/commands/mt_test.cpp
     src/concurrency/executor.cpp
     src/io/graphs/graph_loader_factory.cpp
     src/io/graphs/gfa_loader.cpp
