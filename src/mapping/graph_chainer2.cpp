@@ -53,12 +53,13 @@ ChainResult GraphChainer2::chain(const std::vector<NodeAnchor>& hits) const {
   const std::size_t n = order.size();
   result.expanded_anchor_count = n;
 
-  /* Build per-path sorted lists with back-pointer to dp_idx */
+  /* Per-path sorted lists, self-contained for the inner loop */
   std::size_t num_paths = transposed_.size();
   struct PathEntry {
     std::int64_t ref_coord;
     std::uint32_t read_pos;
-    std::size_t dp_idx;
+    std::uint32_t dp_idx;
+    std::uint16_t span;
   };
   std::vector<std::vector<PathEntry>> path_lists(num_paths);
 
@@ -67,7 +68,8 @@ ChainResult GraphChainer2::chain(const std::vector<NodeAnchor>& hits) const {
     if (a.node_id >= coords_.size()) continue;
     for (const auto& lc : coords_[a.node_id]) {
       path_lists[lc.path_id].push_back(
-          {lc.ref_coord + static_cast<std::int64_t>(a.offset), a.read_pos, ii});
+          {lc.ref_coord + static_cast<std::int64_t>(a.offset), a.read_pos,
+           static_cast<std::uint32_t>(ii), static_cast<std::uint16_t>(a.span)});
     }
   }
   for (auto& plist : path_lists) {
@@ -105,8 +107,7 @@ ChainResult GraphChainer2::chain(const std::vector<NodeAnchor>& hits) const {
 
     for (std::size_t i = 0; i < plist.size(); ++i) {
       const auto& entry_i = plist[i];
-      const auto& anchor_i = hits[order[entry_i.dp_idx]];
-      double self_score = anchorScore(anchor_i);
+      double self_score = static_cast<double>(entry_i.span);
 
       std::size_t num_skipped = 0;
       std::int64_t ref_lo = entry_i.ref_coord - static_cast<std::int64_t>(max_dist_);
@@ -131,13 +132,12 @@ ChainResult GraphChainer2::chain(const std::vector<NodeAnchor>& hits) const {
         num_skipped = 0;
         ++dbg_valid;
 
-        // Gap cost
-        const auto& anchor_j = hits[order[entry_j.dp_idx]];
-        auto j_ref_end = entry_j.ref_coord + static_cast<std::int64_t>(anchor_j.span);
-        auto j_query_end = static_cast<std::int64_t>(anchor_j.read_pos + anchor_j.span);
+        // Gap cost (all fields from PathEntry -- no hits[] access needed)
+        auto j_ref_end = entry_j.ref_coord + static_cast<std::int64_t>(entry_j.span);
+        auto j_query_end = static_cast<std::int64_t>(entry_j.read_pos + entry_j.span);
 
         auto ref_gap = entry_i.ref_coord - j_ref_end;
-        auto query_gap = static_cast<std::int64_t>(anchor_i.read_pos) - j_query_end;
+        auto query_gap = static_cast<std::int64_t>(entry_i.read_pos) - j_query_end;
 
         double ref_gap_abs = std::max<std::int64_t>(0, ref_gap);
         double query_gap_abs = std::max<std::int64_t>(0, query_gap);

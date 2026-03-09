@@ -127,37 +127,35 @@ ChainResult GraphChainer::chain(const std::vector<NodeAnchor>& hits) const {
   const std::size_t n = order.size();
   result.expanded_anchor_count = n;
 
-  // Precompute which paths each anchor belongs to (path_id, ref_coord pairs)
-  struct AnchorPathInfo {
-    std::size_t path_id;
-    std::int64_t ref_coord;  // node ref_coord + offset on this path
-  };
-  std::vector<std::vector<AnchorPathInfo>> anchor_paths(n);
-  for (std::size_t ii = 0; ii < n; ++ii) {
-    const auto& a = hits[order[ii]];
-    if (a.node_id >= coords_.size()) continue;
-    for (const auto& lc : coords_[a.node_id]) {
-      anchor_paths[ii].push_back(
-          {lc.path_id, lc.ref_coord + static_cast<std::int64_t>(a.offset)});
-    }
-  }
-
-  // Pre-build per-path anchor lists sorted by ref_coord.
-  // Binary search finds the window [ref_i - max_dist, ref_i) per path.
+  // Per-path anchor lists sorted by ref_coord, self-contained for the inner
+  // loop (no random access back into hits[] needed).
   std::size_t num_paths = transposed_.size();
   struct PathEntry {
     std::int64_t ref_coord;
     std::uint32_t read_pos;
-    std::size_t dp_idx;
+    std::uint32_t dp_idx;
+    std::uint16_t span;
     bool operator<(const PathEntry& o) const { return ref_coord < o.ref_coord; }
   };
   std::vector<std::vector<PathEntry>> path_lists(num_paths);
 
-  // Populate and sort per-path lists upfront
+  // Also record which paths each anchor belongs to (for the outer DP loop)
+  struct AnchorPathInfo {
+    std::uint32_t path_id;
+    std::int64_t ref_coord;
+  };
+  std::vector<std::vector<AnchorPathInfo>> anchor_paths(n);
+
   for (std::size_t ii = 0; ii < n; ++ii) {
-    for (const auto& pi : anchor_paths[ii]) {
-      path_lists[pi.path_id].push_back(
-          {pi.ref_coord, hits[order[ii]].read_pos, ii});
+    const auto& a = hits[order[ii]];
+    if (a.node_id >= coords_.size()) continue;
+    for (const auto& lc : coords_[a.node_id]) {
+      auto ref = lc.ref_coord + static_cast<std::int64_t>(a.offset);
+      path_lists[lc.path_id].push_back(
+          {ref, a.read_pos, static_cast<std::uint32_t>(ii),
+           static_cast<std::uint16_t>(a.span)});
+      anchor_paths[ii].push_back(
+          {static_cast<std::uint32_t>(lc.path_id), ref});
     }
   }
   for (auto& plist : path_lists) {
@@ -185,7 +183,7 @@ ChainResult GraphChainer::chain(const std::vector<NodeAnchor>& hits) const {
       std::int64_t ref_lo = pi.ref_coord - static_cast<std::int64_t>(max_dist_);
 
       // Binary search for first entry >= ref_lo
-      PathEntry search_key{ref_lo, 0, 0};
+      PathEntry search_key{ref_lo, 0, 0, 0};
       auto it_lo = std::lower_bound(plist.begin(), plist.end(), search_key);
 
       // Scan from lower bound to ref_i
@@ -209,10 +207,9 @@ ChainResult GraphChainer::chain(const std::vector<NodeAnchor>& hits) const {
         num_skipped = 0;
         ++dbg_valid;
 
-        // Gap cost
-        const auto& anchor_j = hits[order[it->dp_idx]];
-        auto j_ref_end = it->ref_coord + static_cast<std::int64_t>(anchor_j.span);
-        auto j_query_end = static_cast<std::int64_t>(anchor_j.read_pos + anchor_j.span);
+        // Gap cost (all fields from PathEntry -- no hits[] access needed)
+        auto j_ref_end = it->ref_coord + static_cast<std::int64_t>(it->span);
+        auto j_query_end = static_cast<std::int64_t>(it->read_pos + it->span);
 
         auto ref_gap = pi.ref_coord - j_ref_end;
         auto query_gap = static_cast<std::int64_t>(anchor_i.read_pos) - j_query_end;
