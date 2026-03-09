@@ -61,13 +61,14 @@ class Chainer {
 };
 ```
 
-Currently one backend:
-- **DPChainer** (Method 1): expand NodeAnchors to PathAnchors (linear space),
-  merge overlapping anchors, DP colinear chain, extract top-K chains.
-
-Future backends choose their own strategy:
-- **Method 2**: seed-hit-centric chaining in query/graph space (haplotype hopping)
-- **Method 3**: ROI-only chaining (speed optimization for adaptive sampling)
+Two backends available:
+- **PathChainer** (`--chainer path-chain`, default): expand NodeAnchors to
+  per-path PathAnchors (linear space), merge overlapping anchors, DP colinear
+  chain per path, extract top-K chains. Fast, cache-friendly, but produces
+  alias chains across haplotypes.
+- **GraphChainer** (`--chainer graph-chain`): chain directly on NodeAnchors in
+  graph space. Cross-path DP with per-path binary search for predecessors.
+  True haplotype hopping, deduplicates alias chains, ~1.5x slower.
 
 ## Key Types
 
@@ -109,21 +110,18 @@ For adaptive sampling, reads are classified as keep/reject based on target regio
 
 1. `piru annotate` projects BED intervals onto the pangenome graph, capturing
    all haplotype-equivalent nodes -> .pira file
-2. `piru map --roi file.pira --mode enrich` maps reads normally, then checks
-   chain-ROI overlap in query space
-3. Overlap >= threshold -> KEEP, else REJECT (flipped for `--mode deplete`)
+2. `piru map --roi file.pira --mode enrich` classifies reads using one of two
+   mutually exclusive modes:
 
-Output tags: `ro:f:` (overlap fraction), `rd:A:K/R` (keep/reject decision).
+**`--chain-genome <overlap>`** -- whole-genome chaining, classify by ROI overlap:
+- Chain all anchors normally, then check what fraction of the chain overlaps
+  ROI nodes in query space
+- Overlap >= threshold -> KEEP, else REJECT (flipped for `--mode deplete`)
 
-## Vision
+**`--chain-target <score>`** -- ROI-only chaining, classify by chain score:
+- Filter anchors to ROI nodes before chaining (4-5x faster)
+- Classify by chain score >= threshold (overlap is meaningless since all
+  anchors are ROI nodes by definition)
+- Off-target reads produce weak noise chains below threshold -> REJECT
 
-**Current (Method 1):** Map against whole genome, DP chain in linear space,
-post-check chain overlap with ROI. 94.1% accuracy on yeast benchmark.
-
-**Next (Method 2):** Seed-hit-centric chaining in query/graph space. Each seed
-hit carries coords on all paths; consecutive pairs chain if they share any path
-with good gap cost. Eliminates alias chains, enables haplotype hopping.
-
-**Future (Method 3):** ROI-only chaining. Only chain seeds landing on ROI nodes.
-Off-target reads with zero ROI seeds are instant rejects. Speed optimization --
-may lose "negative signal" (strong off-target mapping = confident reject).
+Output tags: `ro:f:` (overlap or score), `rd:A:K/R` (keep/reject decision).

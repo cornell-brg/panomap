@@ -36,7 +36,14 @@ cd piru && mkdir build && cd build && cmake .. && make
 
 # ROI classification (adaptive sampling)
 ./piru annotate reference.gfa --bed targets.bed -o targets.pira
-./piru map --index ref.pirx --roi targets.pira --mode enrich reads.blow5 -o out.gaf
+
+# Whole-genome chaining, classify by ROI overlap
+./piru map --index ref.pirx --roi targets.pira --mode enrich \
+  --chain-genome 0.5 reads.blow5 -o out.gaf
+
+# ROI-only chaining (faster), classify by chain score
+./piru map --index ref.pirx --roi targets.pira --mode enrich \
+  --chain-target 30 reads.blow5 -o out.gaf
 ```
 
 **Optional dependencies:**

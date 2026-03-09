@@ -93,7 +93,7 @@ if(DOCTEST_AVAILABLE)
         ${CMAKE_SOURCE_DIR}/src/mapping/seed_merger.cpp
         ${CMAKE_SOURCE_DIR}/src/mapping/path_chainer.cpp
         ${CMAKE_SOURCE_DIR}/src/mapping/graph_chainer.cpp
-        ${CMAKE_SOURCE_DIR}/src/mapping/graph_chainer2.cpp
+
         ${CMAKE_SOURCE_DIR}/src/mapping/result_formatter.cpp
         ${CMAKE_SOURCE_DIR}/src/util/timing.cpp
     )

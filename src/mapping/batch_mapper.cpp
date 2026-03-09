@@ -7,7 +7,6 @@
 #include <utility>
 
 #include "mapping/graph_chainer.hpp"
-#include "mapping/graph_chainer2.hpp"
 #include "mapping/path_chainer.hpp"
 #include "util/logging.hpp"
 
@@ -97,15 +96,6 @@ PipelineComponents BatchMapper::create_components() const {
     }
     comps.chainer = std::make_unique<GraphChainer>(*config_.linearization_coords,
                                                    *config_.path_lengths);
-  } else if (config_.chainer_backend == "graph-chain2") {
-    if (!config_.linearization_coords) {
-      throw std::runtime_error("GraphChainer2 requires linearization_coords");
-    }
-    if (!config_.path_lengths) {
-      throw std::runtime_error("GraphChainer2 requires path_lengths for bounds checking");
-    }
-    comps.chainer = std::make_unique<GraphChainer2>(*config_.linearization_coords,
-                                                    *config_.path_lengths);
   } else {
     throw std::runtime_error("Unknown chainer backend: " + config_.chainer_backend);
   }
@@ -222,6 +212,17 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
   // Lookup seeds in the index and collect hits.
   components_.lookup.lookup(batch.seeds[index], batch.seed_hits[index]);
 
+  // ROI anchor filtering: keep only hits whose node_id is in the ROI set
+  if (config_.roi_filter_anchors && config_.roi_nodes) {
+    const auto& roi = *config_.roi_nodes;
+    auto& hits = batch.seed_hits[index];
+    hits.erase(std::remove_if(hits.begin(), hits.end(),
+                               [&roi](const NodeAnchor& a) {
+                                 return roi.count(a.node_id) == 0;
+                               }),
+               hits.end());
+  }
+
   // Chain: expands NodeAnchors to PathAnchors internally, then DP chains
   ChainResult chain_result = components_.chainer->chain(batch.seed_hits[index]);
 
@@ -239,26 +240,38 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
 
   // ROI classification (if --roi is active)
   if (config_.roi_nodes && !config_.classify_mode.empty() && result.mapped()) {
-    const auto& anchors = result.mappings[0].anchors;
-    const auto& roi = *config_.roi_nodes;
+    bool above_threshold;
 
-    double roi_bases = 0.0;
-    double total_bases = 0.0;
+    if (config_.roi_filter_anchors) {
+      // --chain-target: classify by chain score threshold.
+      // All anchors are ROI nodes, so overlap is meaningless.
+      double chain_score = result.mappings[0].chain_score;
+      result.roi_overlap = chain_score;  // repurpose field for output
+      above_threshold = chain_score >= config_.roi_score_threshold;
+    } else {
+      // --chain-genome: classify by ROI node overlap fraction
+      const auto& anchors = result.mappings[0].anchors;
+      const auto& roi = *config_.roi_nodes;
 
-    for (std::size_t i = 0; i + 1 < anchors.size(); ++i) {
-      double segment_len = static_cast<double>(anchors[i + 1].read_pos - anchors[i].read_pos);
-      total_bases += segment_len;
+      double roi_bases = 0.0;
+      double total_bases = 0.0;
 
-      bool cur_in_roi = roi.count(anchors[i].node_id) > 0;
-      bool next_in_roi = roi.count(anchors[i + 1].node_id) > 0;
-      if (cur_in_roi && next_in_roi) {
-        roi_bases += segment_len;
+      for (std::size_t i = 0; i + 1 < anchors.size(); ++i) {
+        double segment_len =
+            static_cast<double>(anchors[i + 1].read_pos - anchors[i].read_pos);
+        total_bases += segment_len;
+
+        bool cur_in_roi = roi.count(anchors[i].node_id) > 0;
+        bool next_in_roi = roi.count(anchors[i + 1].node_id) > 0;
+        if (cur_in_roi && next_in_roi) {
+          roi_bases += segment_len;
+        }
       }
+
+      result.roi_overlap = (total_bases > 0.0) ? roi_bases / total_bases : 0.0;
+      above_threshold = result.roi_overlap >= config_.roi_overlap_threshold;
     }
 
-    result.roi_overlap = (total_bases > 0.0) ? roi_bases / total_bases : 0.0;
-
-    bool above_threshold = result.roi_overlap >= config_.roi_threshold;
     if (config_.classify_mode == "enrich") {
       result.roi_keep = above_threshold;
     } else {  // deplete

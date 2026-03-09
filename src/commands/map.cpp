@@ -89,8 +89,10 @@ int handle_map(const std::vector<std::string>& args) {
       {'\0', "", false, "\nClassification Options:"},
       {'\0', "roi", true, "ROI annotation file (.pira from piru annotate)"},
       {'\0', "mode", true, "Classification mode: enrich or deplete (requires --roi)"},
-      {'\0', "roi-threshold", true,
-       "ROI overlap threshold for keep/reject decision (0.0-1.0, default: 0.5)"},
+      {'\0', "chain-target", true,
+       "ROI-only chaining: filter anchors to ROI nodes, classify by score >= threshold"},
+      {'\0', "chain-genome", true,
+       "Whole-genome chaining: classify by ROI overlap fraction >= threshold (default: 0.5)"},
       {'\0', "", false, "\nOutput Options:"},
       {'o', "output", true,
        "Output file path (format auto-detected from extension: .paf, .gaf, .gam, .json)"},
@@ -147,16 +149,8 @@ int handle_map(const std::vector<std::string>& args) {
   // Classification options
   const std::string roi_path = parsed.values.count("roi") ? parsed.values.at("roi") : "";
   const std::string classify_mode = parsed.values.count("mode") ? parsed.values.at("mode") : "";
-  const double roi_threshold = [&]() {
-    auto it = parsed.values.find("roi-threshold");
-    if (it == parsed.values.end()) return 0.5;
-    try {
-      return std::stod(it->second);
-    } catch (...) {
-      LOG_WARN("map: invalid --roi-threshold value '" + it->second + "', using 0.5");
-      return 0.5;
-    }
-  }();
+  const bool has_chain_target = parsed.values.count("chain-target") > 0;
+  const bool has_chain_genome = parsed.values.count("chain-genome") > 0;
 
   if (!roi_path.empty() && classify_mode.empty()) {
     LOG_ERROR("map: --roi requires --mode (enrich or deplete)");
@@ -170,6 +164,39 @@ int handle_map(const std::vector<std::string>& args) {
     LOG_ERROR("map: --mode must be 'enrich' or 'deplete', got '" + classify_mode + "'");
     return 1;
   }
+  if (has_chain_target && has_chain_genome) {
+    LOG_ERROR("map: --chain-target and --chain-genome are mutually exclusive");
+    return 1;
+  }
+  if ((has_chain_target || has_chain_genome) && roi_path.empty()) {
+    LOG_ERROR("map: --chain-target/--chain-genome require --roi <file>");
+    return 1;
+  }
+  if (!roi_path.empty() && !has_chain_target && !has_chain_genome) {
+    LOG_ERROR("map: --roi requires --chain-target <score> or --chain-genome <overlap>");
+    return 1;
+  }
+
+  // Parse classification thresholds
+  const bool roi_filter_anchors = has_chain_target;
+  const double roi_score_threshold = [&]() {
+    if (!has_chain_target) return 0.0;
+    try {
+      return std::stod(parsed.values.at("chain-target"));
+    } catch (...) {
+      LOG_WARN("map: invalid --chain-target value, using 30");
+      return 30.0;
+    }
+  }();
+  const double roi_overlap_threshold = [&]() {
+    if (!has_chain_genome) return 0.5;  // default for implicit genome mode
+    try {
+      return std::stod(parsed.values.at("chain-genome"));
+    } catch (...) {
+      LOG_WARN("map: invalid --chain-genome value, using 0.5");
+      return 0.5;
+    }
+  }();
 
   // Load ROI annotation if provided
   std::unordered_set<std::size_t> roi_nodes;
@@ -321,13 +348,21 @@ int handle_map(const std::vector<std::string>& args) {
   // ROI classification config
   if (!roi_nodes.empty()) {
     map_config.roi_nodes = &roi_nodes;
-    map_config.roi_threshold = roi_threshold;
     map_config.classify_mode = classify_mode;
+    map_config.roi_filter_anchors = roi_filter_anchors;
+    map_config.roi_score_threshold = roi_score_threshold;
+    map_config.roi_overlap_threshold = roi_overlap_threshold;
     // Force top-1 chain only -- we only need the best for classification
     map_config.chainer_parsed.values["chain-max-chains"] = "1";
-    LOG_INFO("ROI classification: mode=" + classify_mode +
-             ", threshold=" + std::to_string(roi_threshold) + ", " +
-             std::to_string(roi_nodes.size()) + " ROI nodes");
+    if (roi_filter_anchors) {
+      LOG_INFO("ROI classification: mode=" + classify_mode +
+               ", chain-target score>=" + std::to_string(roi_score_threshold) + ", " +
+               std::to_string(roi_nodes.size()) + " ROI nodes");
+    } else {
+      LOG_INFO("ROI classification: mode=" + classify_mode +
+               ", chain-genome overlap>=" + std::to_string(roi_overlap_threshold) + ", " +
+               std::to_string(roi_nodes.size()) + " ROI nodes");
+    }
   }
 
   // Configure event pipeline (unified event detection + normalization)
