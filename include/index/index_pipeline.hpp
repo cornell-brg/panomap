@@ -50,6 +50,7 @@ struct IndexPipelineConfig {
   float fuzzy_fine_min{-2.0f};
   float fuzzy_fine_max{2.0f};
   float fuzzy_fine_range{0.4f};
+  float fuzzy_diff{0.0f};          // Skip events within diff of last emitted (0 = disabled, RH2: 0.35)
   std::uint32_t fuzzy_n_bins{0};  // 0 = use 2^qbits = 16
 
   /* Seed extraction */

@@ -14,6 +14,20 @@ namespace piru::mapping {
 
 namespace {
 
+// Fast approximate log2 from minimap2/RawHash2 (lchain.c).
+// Only valid for x >= 2.
+inline float mg_log2(float x) {
+  union {
+    float f;
+    std::uint32_t i;
+  } z = {x};
+  float log_2 = ((z.i >> 23) & 255) - 128;
+  z.i &= ~(255 << 23);
+  z.i += 127 << 23;
+  log_2 += (-0.34484843f * z.f + 2.02466578f) * z.f - 0.67487759f;
+  return log_2;
+}
+
 /* Anchor merging -- merge overlapping PathAnchors on the same diagonal. */
 
 bool anchors_can_merge(const PathAnchor& a, const PathAnchor& b) {
@@ -177,79 +191,111 @@ std::vector<Chain> PathChainer::chain_one_path(const std::vector<PathAnchor>& an
 
   const std::size_t n = sorted.size();
 
-  /* DP initialization */
-  std::vector<double> dp(n, 0.0);
+  /* DP arrays (RawHash2/minimap2 style) */
+  std::vector<std::int32_t> f(n, 0);  // f[i] = best score ending at anchor i
+  std::vector<std::int32_t> v(n, 0);  // v[i] = peak score up to anchor i
   std::vector<int> pred(n, -1);
+  std::vector<int> t(n, 0);  // t[j] = last i that used p[j] as predecessor
 
-  /* DP loop */
+  /* DP loop (matches mg_lchain_dp) */
+  std::int32_t mmax_f = 0;
+  std::size_t st = 0;
+  std::int64_t max_ii = -1;
+
   for (std::size_t i = 0; i < n; ++i) {
-    const auto& anchor_i = sorted[i];
-    double best_score = anchor_score(anchor_i);
-    int best_pred = -1;
+    std::int32_t q_span = static_cast<std::int32_t>(sorted[i].length);
+    std::int32_t max_f = q_span;  // standalone anchor score
+    int max_j = -1;
+
+    // Advance start pointer: skip anchors on different targets or too far away
+    while (st < i && sorted[i].ref_coord > sorted[st].ref_coord + config_.max_dist_ref) ++st;
 
     std::size_t num_skipped = 0;
-    for (std::size_t j = i; j > 0 && num_skipped < config_.max_skip;) {
+    for (std::size_t j = i; j > st && num_skipped < config_.max_skip;) {
       --j;
-      const auto& anchor_j = sorted[j];
-
-      // Band exceeded
-      if (anchor_i.ref_coord - anchor_j.ref_coord > static_cast<std::uint32_t>(config_.max_dist)) {
-        break;
-      }
-
-      if (!can_chain(anchor_j, anchor_i)) {
+      auto sc = compute_score(sorted[j], sorted[i]);
+      if (sc == std::numeric_limits<std::int32_t>::min()) {
         ++num_skipped;
         continue;
       }
 
-      num_skipped = 0;
+      sc += f[j];
+      if (sc > max_f) {
+        max_f = sc;
+        max_j = static_cast<int>(j);
+        if (num_skipped > 0) --num_skipped;
+      } else if (t[j] == static_cast<int>(i)) {
+        if (++num_skipped > config_.max_skip) break;
+      }
+      if (pred[j] >= 0) t[pred[j]] = static_cast<int>(i);
+    }
 
-      // minimap2-style matching bonus
-      const double cost = gap_cost(anchor_j, anchor_i);
-      auto dq = static_cast<std::int64_t>(anchor_i.query_pos) -
-                static_cast<std::int64_t>(anchor_j.query_pos);
-      auto dr = static_cast<std::int64_t>(anchor_i.ref_coord) -
-                static_cast<std::int64_t>(anchor_j.ref_coord);
-      double match_bonus =
-          std::min({anchor_score(anchor_i), static_cast<double>(std::max<std::int64_t>(0, dq)),
-                    static_cast<double>(std::max<std::int64_t>(0, dr))});
-      double score = dp[j] + match_bonus - cost;
-
-      if (score > best_score) {
-        best_score = score;
-        best_pred = static_cast<int>(j);
+    // Check max_ii (best predecessor within band, may have been skipped by the loop)
+    if (max_ii < 0 ||
+        sorted[i].ref_coord > sorted[max_ii].ref_coord + config_.max_dist_ref) {
+      std::int32_t best = std::numeric_limits<std::int32_t>::min();
+      max_ii = -1;
+      for (std::size_t j = st; j < i; ++j) {
+        if (f[j] > best) {
+          best = f[j];
+          max_ii = static_cast<std::int64_t>(j);
+        }
       }
     }
 
-    dp[i] = best_score;
-    pred[i] = best_pred;
+    if (max_ii >= 0 && static_cast<std::size_t>(max_ii) < st) {
+      // max_ii fell out of range, skip
+    } else if (max_ii >= 0) {
+      auto tmp = compute_score(sorted[max_ii], sorted[i]);
+      if (tmp != std::numeric_limits<std::int32_t>::min() && max_f < tmp + f[max_ii]) {
+        max_f = tmp + f[max_ii];
+        max_j = static_cast<int>(max_ii);
+      }
+    }
+
+    f[i] = max_f;
+    pred[i] = max_j;
+    v[i] = (max_j >= 0 && v[max_j] > max_f) ? v[max_j] : max_f;
+    if (max_ii < 0 ||
+        (sorted[i].ref_coord <= sorted[max_ii].ref_coord + config_.max_dist_ref &&
+         f[max_ii] < f[i])) {
+      max_ii = static_cast<std::int64_t>(i);
+    }
+    if (mmax_f < max_f) mmax_f = max_f;
   }
 
-  /* Multi-chain extraction for this path */
+  /* Multi-chain extraction (backtrack from highest-scoring endpoints) */
   std::vector<Chain> chains;
   std::vector<bool> used(n, false);
 
   while (chains.size() < config_.max_chains) {
     // Find best unused endpoint
     std::size_t best_idx = 0;
-    double best_dp_score = -std::numeric_limits<double>::infinity();
+    std::int32_t best_f = std::numeric_limits<std::int32_t>::min();
     bool found = false;
 
     for (std::size_t i = 0; i < n; ++i) {
       if (used[i]) continue;
-      if (dp[i] > best_dp_score) {
-        best_dp_score = dp[i];
+      if (f[i] > best_f) {
+        best_f = f[i];
         best_idx = i;
         found = true;
       }
     }
 
-    if (!found || best_dp_score < static_cast<double>(config_.min_chain_score)) {
+    if (!found || best_f < static_cast<std::int32_t>(config_.min_chain_score)) {
       break;
     }
 
     // Backtrack
     auto chain_indices = backtrack_chain(pred, best_idx);
+
+    // Skip chains with too few anchors
+    if (chain_indices.size() < config_.min_chain_anchors) {
+      // Mark as used so we don't retry
+      for (std::size_t idx : chain_indices) used[idx] = true;
+      continue;
+    }
 
     // Mark used
     for (std::size_t idx : chain_indices) {
@@ -258,7 +304,7 @@ std::vector<Chain> PathChainer::chain_one_path(const std::vector<PathAnchor>& an
 
     // Build Chain with ChainedAnchors (recover node info via src_idx)
     Chain chain;
-    chain.score = best_dp_score;
+    chain.score = static_cast<double>(best_f);
     chain.anchors.reserve(chain_indices.size());
 
     for (std::size_t idx : chain_indices) {
@@ -270,7 +316,7 @@ std::vector<Chain> PathChainer::chain_one_path(const std::vector<PathAnchor>& an
       ca.offset = src.offset;
       ca.length = anchor.length;
       ca.read_pos = anchor.query_pos;
-      ca.score = dp[idx];
+      ca.score = static_cast<double>(f[idx]);
       ca.chain_id = 0;  // reassigned later across paths
       ca.path_id = path_id;
       ca.ref_coord = anchor.ref_coord;
@@ -284,64 +330,36 @@ std::vector<Chain> PathChainer::chain_one_path(const std::vector<PathAnchor>& an
   return chains;
 }
 
-bool PathChainer::can_chain(const PathAnchor& j, const PathAnchor& i) const {
-  // Query positions must strictly increase
-  if (i.query_pos <= j.query_pos) return false;
+// RawHash2/minimap2-style pairwise scoring (lchain.c:compute_score).
+// Returns INT32_MIN if the pair is unchainable.
+std::int32_t PathChainer::compute_score(const PathAnchor& j, const PathAnchor& i) const {
+  auto dq = static_cast<std::int32_t>(i.query_pos) - static_cast<std::int32_t>(j.query_pos);
+  if (dq <= 0 || dq > static_cast<std::int32_t>(config_.max_dist_query))
+    return std::numeric_limits<std::int32_t>::min();
 
-  auto delta_ref =
-      static_cast<std::int64_t>(i.ref_coord) - static_cast<std::int64_t>(j.ref_coord);
-  auto delta_query =
-      static_cast<std::int64_t>(i.query_pos) - static_cast<std::int64_t>(j.query_pos);
-
-  // Must be forward in both dimensions
-  if (delta_ref < 0 || delta_query < 0) return false;
-
-  if (static_cast<std::size_t>(delta_ref) > config_.max_dist ||
-      static_cast<std::size_t>(delta_query) > config_.max_dist) {
-    return false;
-  }
+  auto dr = static_cast<std::int32_t>(i.ref_coord) - static_cast<std::int32_t>(j.ref_coord);
+  if (dr <= 0 || dr > static_cast<std::int32_t>(config_.max_dist_ref))
+    return std::numeric_limits<std::int32_t>::min();
 
   // Diagonal deviation
-  auto diag_dev = std::abs(delta_ref - delta_query);
-  if (static_cast<std::size_t>(diag_dev) > config_.max_diag_dev) return false;
+  auto dd = dr > dq ? dr - dq : dq - dr;
+  if (dd > static_cast<std::int32_t>(config_.bw))
+    return std::numeric_limits<std::int32_t>::min();
 
-  return true;
-}
+  // Match score: min of q_span and the shorter gap
+  auto dg = dr < dq ? dr : dq;
+  std::int32_t q_span = static_cast<std::int32_t>(j.length);
+  std::int32_t sc = q_span < dg ? q_span : dg;
 
-double PathChainer::gap_cost(const PathAnchor& j, const PathAnchor& i) const {
-  auto j_ref_end = static_cast<std::int64_t>(j.ref_coord) + static_cast<std::int64_t>(j.length);
-  auto j_query_end = static_cast<std::int64_t>(j.query_pos + j.length);
-
-  auto ref_gap = static_cast<std::int64_t>(i.ref_coord) - j_ref_end;
-  auto query_gap = static_cast<std::int64_t>(i.query_pos) - j_query_end;
-
-  auto ref_gap_abs = std::max<std::int64_t>(0, ref_gap);
-  auto query_gap_abs = std::max<std::int64_t>(0, query_gap);
-
-  double avg_gap = (ref_gap_abs + query_gap_abs) / 2.0;
-  double cost = avg_gap * config_.gap_penalty_factor;
-
-  // Diagonal deviation
-  auto delta_ref =
-      static_cast<std::int64_t>(i.ref_coord) - static_cast<std::int64_t>(j.ref_coord);
-  auto delta_query =
-      static_cast<std::int64_t>(i.query_pos) - static_cast<std::int64_t>(j.query_pos);
-  double diag_dev = std::abs(delta_ref - delta_query);
-  cost += diag_dev * config_.diag_penalty_factor;
-
-  // Overlap penalty
-  if (ref_gap < 0 || query_gap < 0) {
-    double ref_overlap = std::abs(std::min<std::int64_t>(0, ref_gap));
-    double query_overlap = std::abs(std::min<std::int64_t>(0, query_gap));
-    double avg_overlap = (ref_overlap + query_overlap) / 2.0;
-    cost += avg_overlap * config_.overlap_penalty_factor;
+  // Penalty for diagonal deviation and gap
+  if (dd || dg > q_span) {
+    float lin_pen = config_.chn_pen_gap * static_cast<float>(dd)
+                  + config_.chn_pen_skip * static_cast<float>(dg);
+    float log_pen = dd >= 1 ? mg_log2(static_cast<float>(dd + 1)) : 0.0f;
+    sc -= static_cast<std::int32_t>(lin_pen + 0.5f * log_pen);
   }
 
-  return cost;
-}
-
-double PathChainer::anchor_score(const PathAnchor& anchor) const {
-  return static_cast<double>(anchor.length) * config_.anchor_weight;
+  return sc;
 }
 
 std::vector<std::size_t> PathChainer::backtrack_chain(const std::vector<int>& pred,
@@ -361,13 +379,12 @@ std::vector<std::size_t> PathChainer::backtrack_chain(const std::vector<int>& pr
 std::vector<cli::Option> PathChainerConfig::cli_options() {
   return {
       {'\0', "chain-max-dist", true,
-       "DP chain: max query/ref distance for chaining (default: 500)"},
-      {'\0', "chain-max-diag-dev", true, "DP chain: max diagonal deviation (default: 500)"},
-      {'\0', "chain-gap-penalty", true, "DP chain: gap penalty factor (default: 0.02)"},
-      {'\0', "chain-diag-penalty", true, "DP chain: diagonal penalty factor (default: 0.05)"},
-      {'\0', "chain-overlap-penalty", true, "DP chain: overlap penalty factor (default: 0.90)"},
-      {'\0', "chain-anchor-weight", true, "DP chain: anchor weight (default: 1.0)"},
-      {'\0', "chain-min-score", true, "DP chain: minimum chain score (default: 12)"},
+       "DP chain: max query/ref distance for chaining (default: 2500)"},
+      {'\0', "chain-bw", true, "DP chain: max diagonal deviation / bandwidth (default: 500)"},
+      {'\0', "chain-pen-gap", true, "DP chain: gap penalty factor (default: 0.8)"},
+      {'\0', "chain-pen-skip", true, "DP chain: skip penalty factor (default: 0.0)"},
+      {'\0', "chain-min-score", true, "DP chain: minimum chain score (default: 15)"},
+      {'\0', "chain-min-anchors", true, "DP chain: minimum anchors per chain (default: 2)"},
       {'\0', "chain-max-chains", true, "DP chain: max chains to extract (default: 10)"},
       {'\0', "chain-max-skip", true, "DP chain: stop after N consecutive skips (default: 25)"},
       {'\0', "chain-merge", true, "DP chain: merge overlapping chains (default: false)"},
@@ -376,20 +393,21 @@ std::vector<cli::Option> PathChainerConfig::cli_options() {
 
 PathChainerConfig PathChainerConfig::from_parsed(const cli::Parsed& parsed) {
   PathChainerConfig cfg;
-  if (parsed.values.count("chain-max-dist"))
-    cfg.max_dist = std::stoull(parsed.values.at("chain-max-dist"));
-  if (parsed.values.count("chain-max-diag-dev"))
-    cfg.max_diag_dev = std::stoull(parsed.values.at("chain-max-diag-dev"));
-  if (parsed.values.count("chain-gap-penalty"))
-    cfg.gap_penalty_factor = std::stod(parsed.values.at("chain-gap-penalty"));
-  if (parsed.values.count("chain-diag-penalty"))
-    cfg.diag_penalty_factor = std::stod(parsed.values.at("chain-diag-penalty"));
-  if (parsed.values.count("chain-overlap-penalty"))
-    cfg.overlap_penalty_factor = std::stod(parsed.values.at("chain-overlap-penalty"));
-  if (parsed.values.count("chain-anchor-weight"))
-    cfg.anchor_weight = std::stod(parsed.values.at("chain-anchor-weight"));
+  if (parsed.values.count("chain-max-dist")) {
+    auto val = std::stoull(parsed.values.at("chain-max-dist"));
+    cfg.max_dist_ref = val;
+    cfg.max_dist_query = val;
+  }
+  if (parsed.values.count("chain-bw"))
+    cfg.bw = std::stoull(parsed.values.at("chain-bw"));
+  if (parsed.values.count("chain-pen-gap"))
+    cfg.chn_pen_gap = std::stof(parsed.values.at("chain-pen-gap"));
+  if (parsed.values.count("chain-pen-skip"))
+    cfg.chn_pen_skip = std::stof(parsed.values.at("chain-pen-skip"));
   if (parsed.values.count("chain-min-score"))
     cfg.min_chain_score = std::stoull(parsed.values.at("chain-min-score"));
+  if (parsed.values.count("chain-min-anchors"))
+    cfg.min_chain_anchors = std::stoull(parsed.values.at("chain-min-anchors"));
   if (parsed.values.count("chain-max-chains"))
     cfg.max_chains = std::stoull(parsed.values.at("chain-max-chains"));
   if (parsed.values.count("chain-max-skip"))

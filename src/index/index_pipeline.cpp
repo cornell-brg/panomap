@@ -50,6 +50,7 @@ IndexPipelineResult run_index_pipeline(const io::ImportedGraph& imported,
   fuzzy_cfg.fine_min = config.fuzzy_fine_min;
   fuzzy_cfg.fine_max = config.fuzzy_fine_max;
   fuzzy_cfg.fine_range = config.fuzzy_fine_range;
+  fuzzy_cfg.diff = config.fuzzy_diff;
   fuzzy_cfg.n_bins = config.fuzzy_n_bins;
   auto fuzzy_quantizer = signal::make_fuzzy_quantizer(fuzzy_cfg);
   if (!fuzzy_quantizer) {

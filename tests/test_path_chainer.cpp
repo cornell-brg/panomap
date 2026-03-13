@@ -22,8 +22,10 @@ NodeAnchor make_hit(std::size_t node_id, std::size_t offset, std::size_t query_p
 }
 
 // Helper to create a PathChainer with linearization data.
+// Tests default to min_chain_anchors=1 so single-anchor chains are preserved.
 PathChainer make_chainer(const std::vector<std::vector<LinearCoordinate>>& coords,
                        const std::vector<std::size_t>& path_lengths, PathChainerConfig config = {}) {
+  config.min_chain_anchors = 1;
   return PathChainer(std::move(config), coords, path_lengths);
 }
 
@@ -66,8 +68,8 @@ TEST_CASE("PathChainer: Linear colinear chain selects all anchors") {
   std::vector<std::size_t> path_lengths(100, 1000000);
 
   PathChainerConfig config;
-  config.max_dist = 5000;
-  config.max_diag_dev = 500;
+  config.max_dist_ref = 5000;
+  config.bw = 500;
   config.min_chain_score = 10;
   auto chainer = make_chainer(coords, path_lengths, config);
 
@@ -88,8 +90,8 @@ TEST_CASE("PathChainer: Large diagonal deviation breaks chain") {
   std::vector<std::size_t> path_lengths(100, 1000000);
 
   PathChainerConfig config;
-  config.max_dist = 5000;
-  config.max_diag_dev = 50;
+  config.max_dist_ref = 5000;
+  config.bw = 50;
   config.min_chain_score = 10;
   auto chainer = make_chainer(coords, path_lengths, config);
 
@@ -107,8 +109,8 @@ TEST_CASE("PathChainer: Distance filter prevents chaining far-apart anchors") {
   std::vector<std::size_t> path_lengths(100, 1000000);
 
   PathChainerConfig config;
-  config.max_dist = 1000;
-  config.max_diag_dev = 500;
+  config.max_dist_ref = 1000;
+  config.bw = 500;
   config.min_chain_score = 10;
   auto chainer = make_chainer(coords, path_lengths, config);
 
@@ -125,8 +127,8 @@ TEST_CASE("PathChainer: Rejects cross-path chains") {
   std::vector<std::size_t> path_lengths(100, 1000000);
 
   PathChainerConfig config;
-  config.max_dist = 5000;
-  config.max_diag_dev = 500;
+  config.max_dist_ref = 5000;
+  config.bw = 500;
   config.min_chain_score = 10;
   auto chainer = make_chainer(coords, path_lengths, config);
 
@@ -144,10 +146,10 @@ TEST_CASE("PathChainer: Prefers higher-scoring chain") {
   std::vector<std::size_t> path_lengths(100, 1000000);
 
   PathChainerConfig config;
-  config.max_dist = 5000;
-  config.max_diag_dev = 500;
+  config.max_dist_ref = 5000;
+  config.bw = 500;
   config.min_chain_score = 10;
-  config.anchor_weight = 1.0;
+  // anchor_weight removed in DEV061 (implicit weight = 1)
   auto chainer = make_chainer(coords, path_lengths, config);
 
   std::vector<NodeAnchor> hits = {make_hit(0, 0, 50, 20), make_hit(1, 0, 150, 10),
@@ -164,7 +166,7 @@ TEST_CASE("PathChainer: Min chain score threshold filters weak chains") {
 
   PathChainerConfig config;
   config.min_chain_score = 1000;
-  config.anchor_weight = 1.0;
+  // anchor_weight removed in DEV061 (implicit weight = 1)
   auto chainer = make_chainer(coords, path_lengths, config);
 
   std::vector<NodeAnchor> hits = {make_hit(0, 0, 50, 20)};
@@ -173,19 +175,21 @@ TEST_CASE("PathChainer: Min chain score threshold filters weak chains") {
   CHECK(summary.anchors.empty());
 }
 
-TEST_CASE("PathChainer: Overlapping anchors incur penalty") {
+TEST_CASE("PathChainer: Overlapping anchors are not chained together") {
   std::vector<std::vector<LinearCoordinate>> coords(2);
   coords[0] = {{0, 100}};
   coords[1] = {{0, 150}};
   std::vector<std::size_t> path_lengths(100, 1000000);
 
   PathChainerConfig config;
-  config.max_dist = 5000;
-  config.max_diag_dev = 500;
-  config.overlap_penalty_factor = 2.0;
+  config.max_dist_ref = 5000;
+  config.bw = 500;
   config.min_chain_score = 10;
+  config.min_chain_anchors = 1;
   auto chainer = make_chainer(coords, path_lengths, config);
 
+  // dq = 10, span = 20, so query positions overlap -> dr must be > 0 and dq > 0
+  // ref gap = 50, query gap = 10, but both positive so it should chain
   std::vector<NodeAnchor> hits = {make_hit(0, 0, 50, 20), make_hit(1, 0, 60, 20)};
   auto summary = chainer.chain(hits);
 
@@ -199,8 +203,8 @@ TEST_CASE("PathChainer: Backward query positions are rejected") {
   std::vector<std::size_t> path_lengths(100, 1000000);
 
   PathChainerConfig config;
-  config.max_dist = 5000;
-  config.max_diag_dev = 500;
+  config.max_dist_ref = 5000;
+  config.bw = 500;
   config.min_chain_score = 10;
   auto chainer = make_chainer(coords, path_lengths, config);
 
@@ -216,8 +220,8 @@ TEST_CASE("PathChainer: Node appearing on multiple paths expands correctly") {
   std::vector<std::size_t> path_lengths(100, 1000000);
 
   PathChainerConfig config;
-  config.max_dist = 5000;
-  config.max_diag_dev = 500;
+  config.max_dist_ref = 5000;
+  config.bw = 500;
   config.min_chain_score = 10;
   auto chainer = make_chainer(coords, path_lengths, config);
 
@@ -236,8 +240,8 @@ TEST_CASE("PathChainer: Chain preserves order from backtracking") {
   std::vector<std::size_t> path_lengths(100, 1000000);
 
   PathChainerConfig config;
-  config.max_dist = 5000;
-  config.max_diag_dev = 500;
+  config.max_dist_ref = 5000;
+  config.bw = 500;
   config.min_chain_score = 10;
   auto chainer = make_chainer(coords, path_lengths, config);
 

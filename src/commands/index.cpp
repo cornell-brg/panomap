@@ -67,6 +67,8 @@ int handle_index(const std::vector<std::string>& args) {
       {'\0', "seed-freq-cutoff", true, "Seed frequency filter percentile (0.0-1.0, default: 0.9)"},
       {'\0', "seed-freq-cap", true,
        "Subsample cap percentile for filtered seeds (0.0-1.0, default: 0.25)"},
+      {'\0', "diff", true,
+       "Event diff filter: skip events within diff of last emitted (default: 0, RH2: 0.35)"},
       {'\0', "", false, "\nIndexer Options:"},
       {'\0', "indexer-backend", true, "Indexer backend: node-first, path-walk (default)"},
       {'\0', "", false, "\nDebug Options:"},
@@ -165,6 +167,9 @@ int handle_index(const std::vector<std::string>& args) {
   const double seed_freq_cap = parsed.values.count("seed-freq-cap")
                                    ? std::stod(parsed.values.at("seed-freq-cap"))
                                    : defaults.seed_freq_cap;
+  const float fuzzy_diff = parsed.values.count("diff")
+                               ? std::stof(parsed.values.at("diff"))
+                               : defaults.fuzzy_diff;
 
   std::string output_base = std::filesystem::path(graph_path).stem().string();
   if (parsed.values.count("output")) {
@@ -188,6 +193,7 @@ int handle_index(const std::vector<std::string>& args) {
   index_config.seed_stride = seed_stride;
   index_config.seed_freq_cutoff = seed_freq_cutoff;
   index_config.seed_freq_cap = seed_freq_cap;
+  index_config.fuzzy_diff = fuzzy_diff;
   index_config.fuzzy_quantizer = "rh2";
   if (parsed.values.count("indexer-backend")) {
     index_config.indexer_backend = parsed.values.at("indexer-backend");

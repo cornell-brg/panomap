@@ -29,6 +29,9 @@ void SeedLookup::lookup(const signal::SeedBuffer& seeds, std::vector<NodeAnchor>
           .length = static_cast<std::uint16_t>(std::min(h.length, std::size_t{0xFFFF})),
       });
     }
+    // Per-read hit cap: stop collecting if we already have enough hits.
+    // Prevents OOM when many seeds match high-frequency index entries.
+    if (max_total_hits_ > 0 && out_hits.size() >= max_total_hits_) break;
   }
 }
 
@@ -100,8 +103,7 @@ PipelineComponents BatchMapper::create_components() const {
     throw std::runtime_error("Unknown chainer backend: " + config_.chainer_backend);
   }
   const std::size_t freq_threshold = comps.seed_store->frequency_threshold();
-  // Limit the lookup helper to what the SeedStore exposes.
-  comps.lookup = SeedLookup(comps.seed_store, freq_threshold);
+  comps.lookup = SeedLookup(comps.seed_store, freq_threshold, config_.max_total_hits);
 
   // Log pipeline configuration
   LOG_DEBUG("Pipeline: " + comps.chainer->name() + " chaining");
@@ -225,6 +227,12 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
 
   // Chain: expands NodeAnchors to PathAnchors internally, then DP chains
   ChainResult chain_result = components_.chainer->chain(batch.seed_hits[index]);
+
+  // Free seed hits immediately -- they're not needed after chaining and can be
+  // very large (especially with kmer seeds). Without this, all reads in the
+  // batch hold their hits simultaneously, causing OOM on large batches.
+  batch.seed_hits[index].clear();
+  batch.seed_hits[index].shrink_to_fit();
 
   // Build unified map result from chain result
   ReadMapResult& result = batch.map_results[index];

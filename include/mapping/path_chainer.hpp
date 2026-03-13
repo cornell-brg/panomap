@@ -13,18 +13,18 @@
 namespace piru::mapping {
 
 // Configuration for path-space chaining algorithm.
-// Defaults tuned for noisy nanopore signals (DEV027).
+// Scoring aligned with RawHash2/minimap2 (DEV061).
 struct PathChainerConfig {
-  std::size_t max_dist{500};        // Max query/ref distance for chaining (banding)
-  std::size_t max_diag_dev{500};    // Max diagonal deviation |dr - dq|
-  std::size_t min_chain_score{12};  // Min score to report a chain
+  std::size_t max_dist_ref{2500};   // Max ref distance between anchors
+  std::size_t max_dist_query{2500}; // Max query distance between anchors
+  std::size_t bw{500};              // Max diagonal deviation |dr - dq| (bandwidth)
+  std::size_t min_chain_score{15};  // Min score to report a chain
+  std::size_t min_chain_anchors{2}; // Min anchors per chain
   std::size_t max_chains{10};       // Max number of chains to extract (multi-mapping)
   std::size_t max_skip{25};         // Stop after N consecutive failed chain attempts
 
-  double anchor_weight{1.0};            // Weight per anchor length
-  double gap_penalty_factor{0.02};      // Penalty per unit gap distance
-  double diag_penalty_factor{0.05};     // Penalty per unit diagonal deviation
-  double overlap_penalty_factor{0.90};  // Penalty per unit overlap
+  float chn_pen_gap{0.8f};   // Gap penalty factor (applied to diagonal deviation)
+  float chn_pen_skip{0.0f};  // Skip penalty factor (applied to gap distance)
 
   bool merge_chains{false};  // Merge overlapping chains on same path
   bool merge_anchors{true};  // Merge overlapping anchors before chaining
@@ -70,9 +70,9 @@ private:
   ChainResult chain_grouped(const PathAnchorGroups& groups, const std::vector<NodeAnchor>& hits) const;
   std::vector<Chain> chain_one_path(const std::vector<PathAnchor>& anchors, std::size_t path_id,
                                     const std::vector<NodeAnchor>& hits) const;
-  bool can_chain(const PathAnchor& j, const PathAnchor& i) const;
-  double gap_cost(const PathAnchor& j, const PathAnchor& i) const;
-  double anchor_score(const PathAnchor& anchor) const;
+  // RawHash2-style transition score between two anchors.
+  // Returns INT32_MIN if unchainable, otherwise the pairwise score contribution.
+  std::int32_t compute_score(const PathAnchor& j, const PathAnchor& i) const;
   std::vector<std::size_t> backtrack_chain(const std::vector<int>& pred,
                                            std::size_t best_idx) const;
 };

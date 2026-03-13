@@ -56,14 +56,27 @@ FuzzyQuantizedSignal Rh2FuzzyQuantizer::quantize(const NormalizedSignal& signal)
   FuzzyQuantizedSignal quantized;
   quantized.tokens.reserve(signal.samples.size());
   const std::int16_t sentinel = std::numeric_limits<std::int16_t>::min();
+  const float diff = config_.diff;
+
+  // Diff filter (RH2 rsketch.c behavior): skip events too similar to the
+  // last emitted. Unlike sentinels, filtered events are removed entirely so
+  // seeds are built from consecutive surviving tokens (matching RH2's
+  // compressed event stream).
+  float last_emitted = std::numeric_limits<float>::quiet_NaN();
 
   for (const auto sample : signal.samples) {
-    // Handle NaN sentinel: map to minimum int16 value
     if (std::isnan(sample)) {
       quantized.tokens.push_back(sentinel);
       continue;
     }
 
+    // Diff filter: drop events too similar to last emitted
+    if (diff > 0.0f && !std::isnan(last_emitted) &&
+        std::fabs(sample - last_emitted) < diff) {
+      continue;  // skip entirely, don't insert sentinel
+    }
+
+    last_emitted = sample;
     const auto val = dynamic_quantize(sample, config_);
     quantized.tokens.push_back(static_cast<std::int16_t>(val));
   }

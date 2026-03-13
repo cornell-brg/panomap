@@ -27,14 +27,16 @@ namespace piru::mapping {
 
 class SeedLookup {
 public:
-  SeedLookup(const index::SeedStore* store, std::size_t freq_threshold)
-      : store_(store), freq_threshold_(freq_threshold) {}
+  SeedLookup(const index::SeedStore* store, std::size_t freq_threshold,
+             std::size_t max_total_hits = 0)
+      : store_(store), freq_threshold_(freq_threshold), max_total_hits_(max_total_hits) {}
 
   void lookup(const signal::SeedBuffer& seeds, std::vector<NodeAnchor>& out_hits) const;
 
 private:
   const index::SeedStore* store_{nullptr};  // non-owning
   std::size_t freq_threshold_{0};
+  std::size_t max_total_hits_{0};  // 0 = unlimited; cap total hits per read
 };
 
 struct BatchMapperConfig {
@@ -68,6 +70,9 @@ struct BatchMapperConfig {
   bool roi_filter_anchors{false};     // --chain-target: filter anchors to ROI nodes
   double roi_score_threshold{30.0};   // --chain-target: min chain score for accept
   double roi_overlap_threshold{0.5};  // --chain-genome: min ROI overlap for accept
+
+  // Seed lookup limits
+  std::size_t max_total_hits{100000};  // Per-read hit cap (0 = unlimited, default 100k)
 
   // Result formatting configuration
   ResultFormatterConfig formatter_config{};

@@ -74,6 +74,10 @@ int handle_map(const std::vector<std::string>& args) {
       {'\0', "", false, "\nMapping Options:"},
       {'\0', "seed-freq-cap", true,
        "Skip seeds above this frequency percentile at lookup (0.0-1.0, default: none)"},
+      {'\0', "max-hits", true,
+       "Max seed hits per read before stopping lookup (default: 100000, 0 = unlimited)"},
+      {'\0', "diff", true,
+       "Event diff filter: skip events within diff of last emitted (default: 0, RH2: 0.35)"},
       {'\0', "chainer", true, "Chainer backend (default: path-chain)"},
       {'\0', "", false, "\nSignal Processing Options:"},
       {'\0', "event-pipeline", true,
@@ -318,6 +322,9 @@ int handle_map(const std::vector<std::string>& args) {
   map_config.fuzzy_config.fine_max = 2.0f;
   map_config.fuzzy_config.fine_range = 0.4f;
   map_config.fuzzy_config.n_bins = 0;
+  if (parsed.values.count("diff")) {
+    map_config.fuzzy_config.diff = std::stof(parsed.values.at("diff"));
+  }
   LOG_DEBUG("Using fuzzy quantizer: " + map_config.fuzzy_config.backend);
 
   // Configure seed extractor from seed store parameters
@@ -388,6 +395,11 @@ int handle_map(const std::vector<std::string>& args) {
   if (parsed.values.count("event-peak")) {
     map_config.event_pipeline_config.override_peak_height =
         std::stof(parsed.values.at("event-peak"));
+  }
+
+  // Per-read total hit cap
+  if (parsed.values.count("max-hits")) {
+    map_config.max_total_hits = std::stoull(parsed.values.at("max-hits"));
   }
 
   // Map-time frequency cap: recompute threshold from percentile
