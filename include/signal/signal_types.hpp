@@ -29,6 +29,9 @@ struct EventSeries {
 
 struct FuzzyQuantizedSignal {
   std::vector<std::int16_t> tokens;
+  // When diff filter compresses the event stream, this maps compressed token
+  // index -> original event index. Empty when no compression (positions = indices).
+  std::vector<std::uint32_t> original_positions;
 };
 
 enum class AlignmentQuantizationKind { kFloat32, kInt16, kInt8 };

@@ -2,7 +2,6 @@
 
 #include "mapping/batch_mapper.hpp"
 
-#include <iostream>
 #include <string>
 #include <utility>
 
@@ -88,6 +87,7 @@ PipelineComponents BatchMapper::create_components() const {
     }
     auto path_config = PathChainerConfig::from_parsed(config_.chainer_parsed);
     path_config.merge_anchors = config_.enable_anchor_merge;
+    path_config.pore_k = config_.pore_k;
     comps.chainer = std::make_unique<PathChainer>(path_config, *config_.linearization_coords,
                                                   *config_.path_lengths);
   } else if (config_.chainer_backend == "graph-chain") {
@@ -194,19 +194,10 @@ void BatchMapper::process_batch(BatchBuffer& batch) {
 }
 
 void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
-  const auto& read = batch.raw_reads[index];
-
-  // Signal processing: event detection + normalization
+  // TODO: implement proper chunked event detection (matching RH2's 4000-sample
+  // chunk size). Current whole-read processing produces slightly different event
+  // boundaries vs chunked processing. See note-260313-pipeline-debug-comparison.md.
   batch.normalized[index] = components_.event_pipeline->process(batch.raw_reads[index]);
-
-  // Debug: log raw signal size vs event count for each read
-  // Expected: events ≈ basepairs (each event ~1bp), raw_signal ≈ events * samples_per_base (~9)
-  LOG_DEBUG("read=" + read.read_id + " raw_samples=" + std::to_string(read.len_raw_signal) +
-            " events=" + std::to_string(batch.normalized[index].samples.size()) + " ratio=" +
-            std::to_string(batch.normalized[index].samples.empty()
-                               ? 0.0
-                               : static_cast<double>(read.len_raw_signal) /
-                                     batch.normalized[index].samples.size()));
 
   batch.fuzzy_quantized[index] = components_.fuzzy_quantizer->quantize(batch.normalized[index]);
   batch.seeds[index] = components_.seed_extractor->extract(batch.fuzzy_quantized[index]);

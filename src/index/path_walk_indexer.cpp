@@ -157,21 +157,12 @@ PathWalkIndexResult pathWalkIndex(const AlnGraph& graph, const io::KmerModel& mo
 
     if (count == 0) return;
 
-    // Step 3: Compute per-path normalization stats (single-pass)
-    const double path_mean = sum / static_cast<double>(count);
-    const double mean_sq = sum_sq / static_cast<double>(count);
-    const double variance = mean_sq - (path_mean * path_mean);
-    const double path_std = (variance > 0.0) ? std::sqrt(variance) : 0.0;
-
-    // Step 4: Normalize and fuzzy quantize
+    // Model values are already globally z-normalized at load time (matching RH2).
+    // Skip per-path normalization -- pass through directly.
     signal::NormalizedSignal normalized;
     normalized.samples.reserve(raw_signal.size());
     for (float val : raw_signal) {
-      if (std::isnan(val)) {
-        normalized.samples.push_back(val);
-      } else {
-        normalized.samples.push_back(safeNormalize(val, path_mean, path_std));
-      }
+      normalized.samples.push_back(val);
     }
 
     auto fuzzy = fuzzy_quantizer.quantize(normalized);

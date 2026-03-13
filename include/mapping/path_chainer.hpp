@@ -28,6 +28,7 @@ struct PathChainerConfig {
 
   bool merge_chains{false};  // Merge overlapping chains on same path
   bool merge_anchors{true};  // Merge overlapping anchors before chaining
+  std::size_t pore_k{0};     // Pore model k. When >0, scoring span = pore_k + anchor_len - 1.
 
   // CLI integration: options and parsing for --chain-* flags.
   static std::vector<cli::Option> cli_options();

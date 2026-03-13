@@ -63,6 +63,7 @@ struct BatchMapperConfig {
 
   // Anchor merging (passed to chainer)
   bool enable_anchor_merge{true};
+  std::size_t pore_k{0};  // Pore model k, passed to chainer for scoring span
 
   // ROI classification
   const std::unordered_set<std::size_t>* roi_nodes{nullptr};  // non-owning

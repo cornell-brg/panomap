@@ -36,7 +36,9 @@ SeedBuffer KmerSeedExtractor::extract(const FuzzyQuantizedSignal& signal) const 
     if (hasSentinel(tokens.data(), start, k)) continue;
 
     const auto hash = hashKmer(tokens.data(), start, k, qbits, token_mask, window_mask, use_shift);
-    buffer.seeds.push_back(Seed{.hash = hash, .position = start, .length = k});
+    const std::size_t pos =
+        signal.original_positions.empty() ? start : signal.original_positions[start];
+    buffer.seeds.push_back(Seed{.hash = hash, .position = pos, .length = k});
   }
   return buffer;
 }

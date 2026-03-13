@@ -62,7 +62,9 @@ SeedBuffer MinimizerSeedExtractor::extract(const FuzzyQuantizedSignal& signal) c
 
     // Deduplicate: don't emit the same position twice.
     if (min_idx != last_emitted) {
-      buffer.seeds.push_back(Seed{.hash = min_hash, .position = min_idx, .length = k});
+      const std::size_t pos =
+          signal.original_positions.empty() ? min_idx : signal.original_positions[min_idx];
+      buffer.seeds.push_back(Seed{.hash = min_hash, .position = pos, .length = k});
       last_emitted = min_idx;
     }
   }

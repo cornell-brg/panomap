@@ -203,7 +203,9 @@ std::vector<Chain> PathChainer::chain_one_path(const std::vector<PathAnchor>& an
   std::int64_t max_ii = -1;
 
   for (std::size_t i = 0; i < n; ++i) {
-    std::int32_t q_span = static_cast<std::int32_t>(sorted[i].length);
+    std::int32_t raw_len = static_cast<std::int32_t>(sorted[i].length);
+    std::int32_t q_span = config_.pore_k > 0
+        ? static_cast<std::int32_t>(config_.pore_k) + raw_len - 1 : raw_len;
     std::int32_t max_f = q_span;  // standalone anchor score
     int max_j = -1;
 
@@ -348,7 +350,9 @@ std::int32_t PathChainer::compute_score(const PathAnchor& j, const PathAnchor& i
 
   // Match score: min of q_span and the shorter gap
   auto dg = dr < dq ? dr : dq;
-  std::int32_t q_span = static_cast<std::int32_t>(j.length);
+  std::int32_t raw_len = static_cast<std::int32_t>(j.length);
+  std::int32_t q_span = config_.pore_k > 0
+      ? static_cast<std::int32_t>(config_.pore_k) + raw_len - 1 : raw_len;
   std::int32_t sc = q_span < dg ? q_span : dg;
 
   // Penalty for diagonal deviation and gap

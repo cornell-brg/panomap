@@ -271,6 +271,7 @@ int handle_map(const std::vector<std::string>& args) {
   auto linearization_coords = std::move(loaded.linearization_coords);
   const std::string fuzzy_quantizer_name = loaded.metadata.fuzzy_quantizer;
   const std::string pore_model_name = loaded.metadata.model_name;
+  const std::size_t loaded_pore_k = loaded.metadata.pore_k;
 
   PIRU_PROFILE_STOP(profile, "index");
 
@@ -371,6 +372,9 @@ int handle_map(const std::vector<std::string>& args) {
                std::to_string(roi_nodes.size()) + " ROI nodes");
     }
   }
+
+  // pore_k from index metadata, used for chainer scoring span
+  map_config.pore_k = loaded_pore_k;
 
   // Configure event pipeline (unified event detection + normalization)
   map_config.event_pipeline_config.pore_model = pore_model_name;

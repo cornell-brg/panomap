@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -46,10 +47,26 @@ private:
 Table make_table(const generated::ModelEntry* entries, std::size_t count) {
   Table table;
   table.reserve(count);
+
+  // First pass: collect raw values and compute global mean/stddev
+  double sum = 0.0, sum_sq = 0.0;
+  for (std::size_t i = 0; i < count; ++i) {
+    sum += entries[i].mean;
+    sum_sq += entries[i].mean * entries[i].mean;
+  }
+  const double global_mean = sum / static_cast<double>(count);
+  const double global_std =
+      std::sqrt(sum_sq / static_cast<double>(count) - global_mean * global_mean);
+
+  // Second pass: store z-normalized values (matching RH2 load_pore behavior)
   for (std::size_t i = 0; i < count; ++i) {
     const auto& entry = entries[i];
-    table.emplace(entry.kmer, entry.mean);
+    double normalized = (global_std > 1e-12) ? (entry.mean - global_mean) / global_std : 0.0;
+    table.emplace(entry.kmer, normalized);
   }
+
+  LOG_DEBUG("Model z-normalized: mean=" + std::to_string(global_mean) +
+            ", std=" + std::to_string(global_std) + ", n=" + std::to_string(count));
   return table;
 }
 

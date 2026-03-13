@@ -56,6 +56,7 @@ EventPipelineConfig apply_rawhash_defaults(EventPipelineConfig config) {
     config.threshold2 = 3.0f;
     config.peak_height = 0.4f;
     LOG_DEBUG("RawHash event pipeline: using R10 defaults (w1=4, w2=10, t1=4.0, t2=3.0, ph=0.4)");
+    // RawHash2 roptions.c defaults: w1=3, w2=9, t1=4.0, t2=3.5, ph=0.4
     // Original RawHash R10 defaults (from RawHash main.cpp preset):
     // w1=3, w2=6, t1=6.5, t2=4.0, ph=0.2
   } else {
