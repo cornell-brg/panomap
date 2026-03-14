@@ -50,8 +50,10 @@ std::vector<io::AlignmentResult> ResultFormatter::format(const ReadMapResult& ma
     // Format mapping to result
     results.push_back(formatMapping(mapping, read_id, read_length, is_primary));
 
-    // Set MAPQ based on chain score
-    results.back().mapq = estimateMapQ(mapping.chain_score, 0);
+    // Set MAPQ from best/secondary chain score ratio
+    double secondary_score = (map_result.mappings.size() > 1)
+        ? map_result.mappings[1].chain_score : 0.0;
+    results.back().mapq = estimateMapQ(mapping.chain_score, secondary_score);
 
     // Add tp:A:P (primary) or tp:A:S (secondary) tag
     results.back().optional_fields.push_back(is_primary ? "tp:A:P" : "tp:A:S");
@@ -285,10 +287,15 @@ std::size_t ResultFormatter::computePathLength(std::size_t path_id) const {
   return path_lengths_[path_id];
 }
 
-int ResultFormatter::estimateMapQ(double primary_score, double /*secondary_score*/) const {
-  // Use raw chain score as MAPQ.
-  // TODO: Refine MAPQ calculation when alignment scoring is added.
-  return std::max(0, static_cast<int>(primary_score));
+int ResultFormatter::estimateMapQ(double primary_score, double secondary_score) const {
+  // MAPQ from best/secondary chain score ratio (minimap2/RH2 style).
+  // When best >> secondary, MAPQ is high (unique mapping).
+  // When best ~ secondary, MAPQ is low (ambiguous).
+  if (primary_score <= 0.0) return 0;
+  if (secondary_score <= 0.0) return 60;  // no secondary = unique
+  double ratio = secondary_score / primary_score;
+  int mapq = static_cast<int>(40.0 * (1.0 - ratio) + 0.499);
+  return std::clamp(mapq, 0, 60);
 }
 
 }  // namespace piru::mapping

@@ -75,6 +75,15 @@ struct BatchMapperConfig {
   // Seed lookup limits
   std::size_t max_total_hits{100000};  // Per-read hit cap (0 = unlimited, default 100k)
 
+  // Mapping decision (RH2-style weighted score filter)
+  // weighted = w_bestq*(mapq/30) + w_bestmq*(1-mean_mapq/best_mapq)
+  //          + w_bestmc*(1-mean_score/best_score)
+  // If weighted < map_threshold -> unmapped
+  float map_w_bestq{0.35f};   // Weight on absolute MAPQ
+  float map_w_bestmq{0.05f};  // Weight on MAPQ standout ratio
+  float map_w_bestmc{0.60f};  // Weight on chain score standout ratio
+  float map_threshold{0.0f};  // Decision threshold (0 = disabled, RH2 default: 0.45)
+
   // Result formatting configuration
   ResultFormatterConfig formatter_config{};
 };

@@ -2,6 +2,7 @@
 
 #include "mapping/batch_mapper.hpp"
 
+#include <algorithm>
 #include <string>
 #include <utility>
 
@@ -236,6 +237,47 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
     mapping.chain_score = chain.score;
     mapping.path_id = chain.path_id;
     result.mappings.push_back(std::move(mapping));
+  }
+
+  // Mapping decision: RH2-style weighted score filter.
+  // Computes how much the best chain stands out from the average.
+  // If weighted score < threshold, declare unmapped.
+  if (config_.map_threshold > 0.0f && result.mappings.size() >= 1) {
+    double best_score = result.mappings[0].chain_score;
+
+    // Compute MAPQ from best/secondary ratio
+    double secondary_score = (result.mappings.size() > 1)
+        ? result.mappings[1].chain_score : 0.0;
+    double best_mapq = (best_score <= 0.0) ? 0.0
+        : (secondary_score <= 0.0) ? 60.0
+        : std::clamp(40.0 * (1.0 - secondary_score / best_score), 0.0, 60.0);
+
+    // Mean scores across all chains
+    double mean_score = 0.0, mean_mapq = 0.0;
+    for (const auto& m : result.mappings) {
+      mean_score += m.chain_score;
+      double sec = (&m == &result.mappings[0] && result.mappings.size() > 1)
+          ? result.mappings[1].chain_score : 0.0;
+      double mq = (m.chain_score <= 0.0) ? 0.0
+          : (sec <= 0.0) ? 60.0
+          : std::clamp(40.0 * (1.0 - sec / m.chain_score), 0.0, 60.0);
+      mean_mapq += mq;
+    }
+    mean_score /= static_cast<double>(result.mappings.size());
+    mean_mapq /= static_cast<double>(result.mappings.size());
+
+    // Weighted components
+    float r_bestq = (best_mapq > 0.0) ? static_cast<float>(best_mapq / 30.0) : 0.0f;
+    float r_bestmq = (best_mapq > 0.0) ? static_cast<float>(1.0 - mean_mapq / best_mapq) : 0.0f;
+    float r_bestmc = (best_score > 0.0) ? static_cast<float>(1.0 - mean_score / best_score) : 0.0f;
+
+    float weighted = config_.map_w_bestq * r_bestq
+                   + config_.map_w_bestmq * r_bestmq
+                   + config_.map_w_bestmc * r_bestmc;
+
+    if (weighted < config_.map_threshold) {
+      result.mappings.clear();  // unmapped
+    }
   }
 
   // ROI classification (if --roi is active)

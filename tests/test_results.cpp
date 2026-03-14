@@ -212,7 +212,7 @@ TEST_CASE("ResultFormatter formats single mapping") {
   CHECK(results[0].target_start == 2);
   CHECK(results[0].target_end == 14);  // 10 + 4 = 14
   CHECK(results[0].strand == '+');
-  CHECK(results[0].mapq == 100);  // MAPQ equals raw chain score
+  CHECK(results[0].mapq == 60);  // MAPQ = 60 (unique mapping, no secondary)
 }
 
 TEST_CASE("ResultFormatter builds GAF path string") {
@@ -284,9 +284,10 @@ TEST_CASE("ResultFormatter handles primary and secondary mappings") {
 
   REQUIRE(results.size() == 2);
 
-  // MAPQ equals raw chain score
-  CHECK(results[0].mapq == 100);
-  CHECK(results[1].mapq == 80);
+  // MAPQ from best/secondary ratio: primary=100, secondary=80
+  // primary mapq = 40*(1-80/100) = 8
+  CHECK(results[0].mapq == 8);
+  CHECK(results[1].mapq == 0);  // secondary uses same ratio -> 0
 
   // Check tp:A:P and tp:A:S tags
   bool primary_has_tag = false;
@@ -393,6 +394,6 @@ TEST_CASE("ResultFormatter filters low-scoring secondaries") {
 
   // Should only get primary + good secondary (bad secondary filtered)
   CHECK(results.size() == 2);
-  CHECK(results[0].mapq == 100);  // Primary chain score
-  CHECK(results[1].mapq == 75);   // Good secondary chain score
+  CHECK(results[0].mapq == 10);  // 40*(1-75/100) = 10
+  CHECK(results[1].mapq == 0);   // secondary uses same ratio -> 0
 }

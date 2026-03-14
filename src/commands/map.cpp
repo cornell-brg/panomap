@@ -103,6 +103,8 @@ int handle_map(const std::vector<std::string>& args) {
       {'\0', "output-format", true, "Override output format (paf, gaf, gam, json)"},
       {'\0', "min-secondary-ratio", true,
        "Min chain score ratio vs primary for secondaries (default: 0.4)"},
+      {'\0', "map-threshold", true,
+       "Weighted mapping quality threshold (0 = disabled, RH2 default: 0.45)"},
   };
   // Append backend-specific CLI options
   auto chain_opts = piru::mapping::PathChainerConfig::cli_options();
@@ -454,6 +456,12 @@ int handle_map(const std::vector<std::string>& args) {
   if (parsed.values.count("min-secondary-ratio")) {
     map_config.formatter_config.min_secondary_ratio =
         std::stod(parsed.values.at("min-secondary-ratio"));
+  }
+
+  // Configure mapping decision threshold
+  if (parsed.values.count("map-threshold")) {
+    map_config.map_threshold = std::stof(parsed.values.at("map-threshold"));
+    LOG_INFO("Mapping decision threshold: " + std::to_string(map_config.map_threshold));
   }
 
   /* Read processing */
