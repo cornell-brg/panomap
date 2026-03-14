@@ -4,7 +4,6 @@
 #pragma once
 
 #include <cstddef>
-#include <cstdint>
 #include <vector>
 
 #include "cli/parse.hpp"
@@ -36,25 +35,6 @@ struct PathChainerConfig {
   static PathChainerConfig from_parsed(const cli::Parsed& parsed);
 };
 
-// Reusable DP buffers to avoid per-path allocation.
-// SoA layout for cache-efficient DP inner loop.
-struct DPBuffers {
-  // SoA anchor data (populated from PathAnchors)
-  std::vector<std::uint32_t> ref_coord;
-  std::vector<std::uint32_t> query_pos;
-  std::vector<std::uint16_t> length;
-  std::vector<std::uint32_t> src_idx;
-  // Precomputed per-anchor
-  std::vector<std::int32_t> q_span;
-  // DP state
-  std::vector<std::int32_t> f, v;
-  std::vector<std::int32_t> pred, t;
-  // Sort permutation
-  std::vector<std::uint32_t> order;
-
-  void resize(std::size_t n);
-};
-
 // Path-space colinear chainer (Method 1).
 //
 // Internally: expand NodeAnchors to PathAnchors grouped by path_id,
@@ -79,7 +59,6 @@ private:
   PathChainerConfig config_;
   const std::vector<std::vector<index::LinearCoordinate>>& coords_;
   const std::vector<std::size_t>& path_lengths_;
-  mutable DPBuffers dp_;  // Reused across paths (chain() is const)
 };
 
 }  // namespace piru::mapping

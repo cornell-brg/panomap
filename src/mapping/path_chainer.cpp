@@ -12,7 +12,26 @@
 
 namespace piru::mapping {
 
-// -- DPBuffers --
+namespace {
+
+// SoA DP buffers -- reused across paths within a single chain() call.
+// Kept as a local variable in chain() for thread safety.
+struct DPBuffers {
+  // SoA anchor data (populated from PathAnchors)
+  std::vector<std::uint32_t> ref_coord;
+  std::vector<std::uint32_t> query_pos;
+  std::vector<std::uint16_t> length;
+  std::vector<std::uint32_t> src_idx;
+  // Precomputed per-anchor
+  std::vector<std::int32_t> q_span;
+  // DP state
+  std::vector<std::int32_t> f, v;
+  std::vector<std::int32_t> pred, t;
+  // Sort permutation
+  std::vector<std::uint32_t> order;
+
+  void resize(std::size_t n);
+};
 
 void DPBuffers::resize(std::size_t n) {
   ref_coord.resize(n);
@@ -26,8 +45,6 @@ void DPBuffers::resize(std::size_t n) {
   t.resize(n);
   order.resize(n);
 }
-
-namespace {
 
 // Fast approximate log2 from minimap2/RawHash2 (lchain.c).
 // Only valid for x >= 2.
@@ -185,6 +202,7 @@ ChainResult PathChainer::chain(const std::vector<NodeAnchor>& hits) const {
 
   // Run DP per path, collect all chains
   std::vector<Chain> all_chains;
+  DPBuffers dp;  // Reused across paths within this call
 
   for (std::size_t path_id = 0; path_id < groups.size(); ++path_id) {
     const auto& anchors = groups[path_id];
@@ -193,38 +211,38 @@ ChainResult PathChainer::chain(const std::vector<NodeAnchor>& hits) const {
     const std::size_t n = anchors.size();
 
     /* 1. Populate SoA from PathAnchors */
-    dp_.resize(n);
+    dp.resize(n);
     for (std::size_t i = 0; i < n; ++i) {
-      dp_.ref_coord[i] = anchors[i].ref_coord;
-      dp_.query_pos[i] = anchors[i].query_pos;
-      dp_.length[i] = anchors[i].length;
-      dp_.src_idx[i] = anchors[i].src_idx;
-      dp_.order[i] = static_cast<std::uint32_t>(i);
+      dp.ref_coord[i] = anchors[i].ref_coord;
+      dp.query_pos[i] = anchors[i].query_pos;
+      dp.length[i] = anchors[i].length;
+      dp.src_idx[i] = anchors[i].src_idx;
+      dp.order[i] = static_cast<std::uint32_t>(i);
     }
 
     /* 2. Sort via index permutation, then apply to all SoA arrays */
-    std::sort(dp_.order.begin(), dp_.order.begin() + n,
-              [this](std::uint32_t a, std::uint32_t b) {
-                if (dp_.ref_coord[a] != dp_.ref_coord[b])
-                  return dp_.ref_coord[a] < dp_.ref_coord[b];
-                return dp_.query_pos[a] < dp_.query_pos[b];
+    std::sort(dp.order.begin(), dp.order.begin() + n,
+              [&dp](std::uint32_t a, std::uint32_t b) {
+                if (dp.ref_coord[a] != dp.ref_coord[b])
+                  return dp.ref_coord[a] < dp.ref_coord[b];
+                return dp.query_pos[a] < dp.query_pos[b];
               });
-    apply_permutation(dp_, n);
+    apply_permutation(dp, n);
 
     /* 3. Precompute q_span per anchor */
     const bool has_pore_k = config_.pore_k > 0;
     const auto pore_k_i32 = static_cast<std::int32_t>(config_.pore_k);
     for (std::size_t i = 0; i < n; ++i) {
-      std::int32_t raw_len = static_cast<std::int32_t>(dp_.length[i]);
-      dp_.q_span[i] = has_pore_k ? pore_k_i32 + raw_len - 1 : raw_len;
+      std::int32_t raw_len = static_cast<std::int32_t>(dp.length[i]);
+      dp.q_span[i] = has_pore_k ? pore_k_i32 + raw_len - 1 : raw_len;
     }
 
     /* 4. Initialize DP state */
     for (std::size_t i = 0; i < n; ++i) {
-      dp_.f[i] = 0;
-      dp_.v[i] = 0;
-      dp_.pred[i] = -1;
-      dp_.t[i] = 0;
+      dp.f[i] = 0;
+      dp.v[i] = 0;
+      dp.pred[i] = -1;
+      dp.t[i] = 0;
     }
 
     // Cache config values for inner loop
@@ -235,13 +253,13 @@ ChainResult PathChainer::chain(const std::vector<NodeAnchor>& hits) const {
     const float chn_pen_skip = config_.chn_pen_skip;
 
     // Local pointers for SoA arrays (keeps them in registers)
-    const auto* rc = dp_.ref_coord.data();
-    const auto* qp = dp_.query_pos.data();
-    const auto* qs = dp_.q_span.data();
-    auto* f = dp_.f.data();
-    auto* v = dp_.v.data();
-    auto* pred = dp_.pred.data();
-    auto* t = dp_.t.data();
+    const auto* rc = dp.ref_coord.data();
+    const auto* qp = dp.query_pos.data();
+    const auto* qs = dp.q_span.data();
+    auto* f = dp.f.data();
+    auto* v = dp.v.data();
+    auto* pred = dp.pred.data();
+    auto* t = dp.t.data();
 
     /* 5. DP loop (matches mg_lchain_dp) */
     std::size_t st = 0;
@@ -398,14 +416,14 @@ ChainResult PathChainer::chain(const std::vector<NodeAnchor>& hits) const {
       chain.anchors.reserve(chain_indices.size());
 
       for (std::size_t idx : chain_indices) {
-        const auto& src = hits[dp_.src_idx[idx]];
+        const auto& src = hits[dp.src_idx[idx]];
 
         ChainedAnchor ca;
         ca.node_id = src.node_id;
         ca.offset = src.offset;
-        ca.length = dp_.length[idx];
-        ca.read_pos = dp_.query_pos[idx];
-        ca.ref_coord = dp_.ref_coord[idx];
+        ca.length = dp.length[idx];
+        ca.read_pos = dp.query_pos[idx];
+        ca.ref_coord = dp.ref_coord[idx];
 
         chain.anchors.push_back(ca);
       }
