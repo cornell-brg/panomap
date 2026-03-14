@@ -4,6 +4,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <vector>
 
 #include "cli/parse.hpp"
@@ -35,8 +36,24 @@ struct PathChainerConfig {
   static PathChainerConfig from_parsed(const cli::Parsed& parsed);
 };
 
-// Grouped PathAnchors by path_id. path_id is implicit (the vector index).
-using PathAnchorGroups = std::vector<std::vector<PathAnchor>>;
+// Reusable DP buffers to avoid per-path allocation.
+// SoA layout for cache-efficient DP inner loop.
+struct DPBuffers {
+  // SoA anchor data (populated from PathAnchors)
+  std::vector<std::uint32_t> ref_coord;
+  std::vector<std::uint32_t> query_pos;
+  std::vector<std::uint16_t> length;
+  std::vector<std::uint32_t> src_idx;
+  // Precomputed per-anchor
+  std::vector<std::int32_t> q_span;
+  // DP state
+  std::vector<std::int32_t> f, v;
+  std::vector<std::int32_t> pred, t;
+  // Sort permutation
+  std::vector<std::uint32_t> order;
+
+  void resize(std::size_t n);
+};
 
 // Path-space colinear chainer (Method 1).
 //
@@ -46,7 +63,7 @@ using PathAnchorGroups = std::vector<std::vector<PathAnchor>>;
 // Algorithm:
 // 1. Expand NodeAnchors -> PathAnchorGroups (grouped by path_id)
 // 2. Merge adjacent/overlapping PathAnchors per path (optional)
-// 3. Per path: sort by (ref_coord, query_pos), DP chain
+// 3. Per path: sort by (ref_coord, query_pos), DP chain (SoA layout)
 // 4. Collect best chains across all paths, rank by score
 class PathChainer : public Chainer {
 public:
@@ -62,20 +79,7 @@ private:
   PathChainerConfig config_;
   const std::vector<std::vector<index::LinearCoordinate>>& coords_;
   const std::vector<std::size_t>& path_lengths_;
-
-  // Expand NodeAnchors to PathAnchors grouped by path_id
-  PathAnchorGroups expand(const std::vector<NodeAnchor>& hits) const;
-
-  // DP internals (operate on per-path PathAnchors)
-  // hits passed for back-reference via src_idx during chain extraction
-  ChainResult chain_grouped(const PathAnchorGroups& groups, const std::vector<NodeAnchor>& hits) const;
-  std::vector<Chain> chain_one_path(const std::vector<PathAnchor>& anchors, std::size_t path_id,
-                                    const std::vector<NodeAnchor>& hits) const;
-  // RawHash2-style transition score between two anchors.
-  // Returns INT32_MIN if unchainable, otherwise the pairwise score contribution.
-  std::int32_t compute_score(const PathAnchor& j, const PathAnchor& i) const;
-  std::vector<std::size_t> backtrack_chain(const std::vector<int>& pred,
-                                           std::size_t best_idx) const;
+  mutable DPBuffers dp_;  // Reused across paths (chain() is const)
 };
 
 }  // namespace piru::mapping

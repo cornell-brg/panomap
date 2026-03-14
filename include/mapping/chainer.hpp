@@ -13,19 +13,6 @@
 
 namespace piru::mapping {
 
-// Compact anchor in linear path coordinate space (16 bytes).
-// Produced by expanding NodeAnchors using linearization coordinates.
-// One NodeAnchor may expand to multiple PathAnchors (one per path occurrence).
-// Back-references to graph space are recovered via src_idx into the NodeAnchor
-// input array -- keeps this struct small for cache efficiency in the DP loop.
-struct PathAnchor {
-  std::uint32_t ref_coord{0};  // Linear position along reference path
-  std::uint32_t query_pos{0};  // Position in query/read
-  std::uint16_t length{0};     // Coverage length (from seed span)
-  std::uint16_t _pad{0};       // Reserved
-  std::uint32_t src_idx{0};    // Index into NodeAnchor input array
-};
-
 // Minimal hit record: graph-space seed hit (16 bytes).
 // Produced by SeedLookup, consumed by chainer and seed merger.
 struct NodeAnchor {
@@ -36,29 +23,25 @@ struct NodeAnchor {
   std::uint16_t length{0};    // Coverage length on reference (may differ after merge)
 };
 
-// Anchor candidate produced by chaining.
+// Anchor candidate produced by chaining (24B).
+// score/chain_id removed (dead), path_id lifted to Chain.
 struct ChainedAnchor {
   std::uint32_t node_id{0};   // Graph node ID
   std::uint32_t offset{0};    // Offset within node
   std::uint32_t read_pos{0};  // Position in read
   std::uint16_t length{0};    // Coverage length
-  std::uint16_t _pad{0};      // Reserved
-  double score{0.0};          // Backend-specific score
-  std::size_t chain_id{0};    // Which chain this anchor belongs to
-  std::size_t path_id{0};     // Reference path ID
   std::int64_t ref_coord{0};  // Linear position on reference path
 };
 
 // A single chain: scored group of anchors.
 struct Chain {
   double score{0.0};
+  std::size_t path_id{0};  // Reference path ID (uniform within chain)
   std::vector<ChainedAnchor> anchors;
 };
 
 struct ChainResult {
-  double score{0.0};
-  std::vector<ChainedAnchor> anchors;    // flat list from best chain
-  std::vector<Chain> chains;             // all extracted chains
+  std::vector<Chain> chains;
   std::size_t expanded_anchor_count{0};  // total anchors before chaining
 };
 

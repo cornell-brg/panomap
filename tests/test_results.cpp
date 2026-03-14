@@ -182,24 +182,22 @@ TEST_CASE("ResultFormatter formats single mapping") {
   piru::mapping::ChainedAnchor a0;
   a0.node_id = 0; a0.offset = 2; a0.length = 4;
   a0.read_pos = 10;
-  a0.path_id = 0;
   a0.ref_coord = 2;
   mapping.anchors.push_back(a0);
 
   piru::mapping::ChainedAnchor a1;
   a1.node_id = 1; a1.offset = 0; a1.length = 4;
   a1.read_pos = 14;
-  a1.path_id = 0;
   a1.ref_coord = 6;
   mapping.anchors.push_back(a1);
 
   piru::mapping::ChainedAnchor a2;
   a2.node_id = 2; a2.offset = 0; a2.length = 4;
   a2.read_pos = 18;
-  a2.path_id = 0;
   a2.ref_coord = 10;
   mapping.anchors.push_back(a2);
 
+  mapping.path_id = 0;
   map_result.mappings.push_back(mapping);
 
   // Format
@@ -229,24 +227,22 @@ TEST_CASE("ResultFormatter builds GAF path string") {
   piru::mapping::ChainedAnchor a0;
   a0.node_id = 0; a0.offset = 0; a0.length = 4;
   a0.read_pos = 0;
-  a0.path_id = 0;
   a0.ref_coord = 0;
   mapping.anchors.push_back(a0);
 
   piru::mapping::ChainedAnchor a1;
   a1.node_id = 1; a1.offset = 0; a1.length = 4;
   a1.read_pos = 4;
-  a1.path_id = 0;
   a1.ref_coord = 4;
   mapping.anchors.push_back(a1);
 
   piru::mapping::ChainedAnchor a2;
   a2.node_id = 2; a2.offset = 0; a2.length = 4;
   a2.read_pos = 8;
-  a2.path_id = 0;
   a2.ref_coord = 8;
   mapping.anchors.push_back(a2);
 
+  mapping.path_id = 0;
   map_result.mappings.push_back(mapping);
 
   auto results = formatter.format(map_result, "read1", 50);
@@ -268,9 +264,9 @@ TEST_CASE("ResultFormatter handles primary and secondary mappings") {
   piru::mapping::ChainedAnchor a0;
   a0.node_id = 0; a0.offset = 0; a0.length = 4;
   a0.read_pos = 0;
-  a0.path_id = 0;
   a0.ref_coord = 0;
   primary.anchors.push_back(a0);
+  primary.path_id = 0;
   map_result.mappings.push_back(primary);
 
   // Secondary mapping (score >= 70% of primary to pass filter)
@@ -279,9 +275,9 @@ TEST_CASE("ResultFormatter handles primary and secondary mappings") {
   piru::mapping::ChainedAnchor a1;
   a1.node_id = 1; a1.offset = 0; a1.length = 4;
   a1.read_pos = 0;
-  a1.path_id = 0;
   a1.ref_coord = 4;
   secondary.anchors.push_back(a1);
+  secondary.path_id = 0;
   map_result.mappings.push_back(secondary);
 
   auto results = formatter.format(map_result, "read1", 50);
@@ -319,9 +315,9 @@ TEST_CASE("ResultFormatter respects primary_only config") {
   piru::mapping::ChainedAnchor a0;
   a0.node_id = 0; a0.offset = 0; a0.length = 4;
   a0.read_pos = 0;
-  a0.path_id = 0;
   a0.ref_coord = 0;
   m1.anchors.push_back(a0);
+  m1.path_id = 0;
   map_result.mappings.push_back(m1);
 
   piru::mapping::Mapping m2;
@@ -329,9 +325,9 @@ TEST_CASE("ResultFormatter respects primary_only config") {
   piru::mapping::ChainedAnchor a1;
   a1.node_id = 1; a1.offset = 0; a1.length = 4;
   a1.read_pos = 0;
-  a1.path_id = 0;
   a1.ref_coord = 4;
   m2.anchors.push_back(a1);
+  m2.path_id = 0;
   map_result.mappings.push_back(m2);
 
   auto results = formatter.format(map_result, "read1", 50);
@@ -366,9 +362,9 @@ TEST_CASE("ResultFormatter filters low-scoring secondaries") {
   piru::mapping::ChainedAnchor a0;
   a0.node_id = 0; a0.offset = 0; a0.length = 4;
   a0.read_pos = 0;
-  a0.path_id = 0;
   a0.ref_coord = 0;
   primary.anchors.push_back(a0);
+  primary.path_id = 0;
   map_result.mappings.push_back(primary);
 
   // Secondary that passes filter (70% of primary = 70)
@@ -377,9 +373,9 @@ TEST_CASE("ResultFormatter filters low-scoring secondaries") {
   piru::mapping::ChainedAnchor a1;
   a1.node_id = 1; a1.offset = 0; a1.length = 4;
   a1.read_pos = 0;
-  a1.path_id = 0;
   a1.ref_coord = 4;
   secondary_good.anchors.push_back(a1);
+  secondary_good.path_id = 0;
   map_result.mappings.push_back(secondary_good);
 
   // Secondary that fails filter
@@ -388,9 +384,9 @@ TEST_CASE("ResultFormatter filters low-scoring secondaries") {
   piru::mapping::ChainedAnchor a2;
   a2.node_id = 2; a2.offset = 0; a2.length = 4;
   a2.read_pos = 0;
-  a2.path_id = 0;
   a2.ref_coord = 8;
   secondary_bad.anchors.push_back(a2);
+  secondary_bad.path_id = 0;
   map_result.mappings.push_back(secondary_bad);
 
   auto results = formatter.format(map_result, "read1", 50);

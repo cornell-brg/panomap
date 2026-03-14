@@ -234,6 +234,7 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
     Mapping mapping;
     mapping.anchors = chain.anchors;
     mapping.chain_score = chain.score;
+    mapping.path_id = chain.path_id;
     result.mappings.push_back(std::move(mapping));
   }
 

@@ -324,9 +324,8 @@ ChainResult GraphChainer::chain(const std::vector<NodeAnchor>& hits) const {
     // Build chain
     Chain chain;
     chain.score = chain_score;
+    chain.path_id = dp[chain_indices.back()].path_id;
     chain.anchors.reserve(chain_indices.size());
-
-    std::size_t chain_path_id = dp[chain_indices.back()].path_id;
 
     for (std::size_t idx : chain_indices) {
       const auto& src = hits[order[idx]];
@@ -336,21 +335,12 @@ ChainResult GraphChainer::chain(const std::vector<NodeAnchor>& hits) const {
       ca.offset = src.offset;
       ca.length = src.span;
       ca.read_pos = src.read_pos;
-      ca.score = dp[idx].score;
-      ca.chain_id = result.chains.size();
-      ca.path_id = chain_path_id;
       ca.ref_coord = dp[idx].ref_coord;
 
       chain.anchors.push_back(ca);
     }
 
     result.chains.push_back(std::move(chain));
-  }
-
-  // Set top-level result from best chain
-  if (!result.chains.empty()) {
-    result.score = result.chains[0].score;
-    result.anchors = result.chains[0].anchors;
   }
 
   return result;

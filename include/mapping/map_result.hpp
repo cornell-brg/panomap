@@ -19,6 +19,7 @@ struct Mapping {
   // Always present (from DP chaining)
   std::vector<ChainedAnchor> anchors;
   double chain_score{0.0};
+  std::size_t path_id{0};  // Reference path ID
 
   // Optional alignment scores (reserved for future use)
   std::optional<float> alignment_cost;

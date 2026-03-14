@@ -107,8 +107,8 @@ io::AlignmentResult ResultFormatter::formatMapping(const Mapping& mapping,
   result.query_start = min_query;
   result.query_end = max_query;
 
-  // Target info - use path from first anchor (all anchors in chain should be same path)
-  std::size_t path_id = mapping.anchors.front().path_id;
+  // Target info - path_id is uniform within a chain, stored at Mapping level
+  std::size_t path_id = mapping.path_id;
   result.target_path = getPathName(path_id);
   result.target_length = computePathLength(path_id);
 

@@ -29,6 +29,12 @@ PathChainer make_chainer(const std::vector<std::vector<LinearCoordinate>>& coord
   return PathChainer(std::move(config), coords, path_lengths);
 }
 
+// Convenience accessors for best chain from ChainResult
+const std::vector<ChainedAnchor>& best_anchors(const ChainResult& r) {
+  return r.chains[0].anchors;
+}
+double best_score(const ChainResult& r) { return r.chains[0].score; }
+
 }  // namespace
 
 TEST_CASE("PathChainer: Empty input returns empty output") {
@@ -39,8 +45,7 @@ TEST_CASE("PathChainer: Empty input returns empty output") {
   auto chainer = make_chainer(coords, path_lengths);
   auto summary = chainer.chain({});
 
-  CHECK(summary.anchors.empty());
-  CHECK(summary.score == 0.0);
+  CHECK(summary.chains.empty());
 }
 
 TEST_CASE("PathChainer: Single seed produces single anchor chain") {
@@ -55,9 +60,10 @@ TEST_CASE("PathChainer: Single seed produces single anchor chain") {
   std::vector<NodeAnchor> hits = {make_hit(0, 0, 50, 20)};
   auto summary = chainer.chain(hits);
 
-  REQUIRE(summary.anchors.size() == 1);
-  CHECK(summary.anchors[0].read_pos == 50);
-  CHECK(summary.score > 0.0);
+  REQUIRE(summary.chains.size() == 1);
+  REQUIRE(best_anchors(summary).size() == 1);
+  CHECK(best_anchors(summary)[0].read_pos == 50);
+  CHECK(best_score(summary) > 0.0);
 }
 
 TEST_CASE("PathChainer: Linear colinear chain selects all anchors") {
@@ -77,10 +83,10 @@ TEST_CASE("PathChainer: Linear colinear chain selects all anchors") {
                                   make_hit(2, 0, 250, 20)};
   auto summary = chainer.chain(hits);
 
-  REQUIRE(summary.anchors.size() == 3);
-  CHECK(summary.anchors[0].read_pos == 50);
-  CHECK(summary.anchors[1].read_pos == 150);
-  CHECK(summary.anchors[2].read_pos == 250);
+  REQUIRE(best_anchors(summary).size() == 3);
+  CHECK(best_anchors(summary)[0].read_pos == 50);
+  CHECK(best_anchors(summary)[1].read_pos == 150);
+  CHECK(best_anchors(summary)[2].read_pos == 250);
 }
 
 TEST_CASE("PathChainer: Large diagonal deviation breaks chain") {
@@ -99,7 +105,7 @@ TEST_CASE("PathChainer: Large diagonal deviation breaks chain") {
   std::vector<NodeAnchor> hits = {make_hit(0, 0, 50, 20), make_hit(1, 0, 250, 20)};
   auto summary = chainer.chain(hits);
 
-  CHECK(summary.anchors.size() == 1);
+  CHECK(best_anchors(summary).size() == 1);
 }
 
 TEST_CASE("PathChainer: Distance filter prevents chaining far-apart anchors") {
@@ -117,7 +123,7 @@ TEST_CASE("PathChainer: Distance filter prevents chaining far-apart anchors") {
   std::vector<NodeAnchor> hits = {make_hit(0, 0, 50, 20), make_hit(1, 0, 9950, 20)};
   auto summary = chainer.chain(hits);
 
-  CHECK(summary.anchors.size() == 1);
+  CHECK(best_anchors(summary).size() == 1);
 }
 
 TEST_CASE("PathChainer: Rejects cross-path chains") {
@@ -135,7 +141,7 @@ TEST_CASE("PathChainer: Rejects cross-path chains") {
   std::vector<NodeAnchor> hits = {make_hit(0, 0, 50, 20), make_hit(1, 0, 150, 20)};
   auto summary = chainer.chain(hits);
 
-  CHECK(summary.anchors.size() == 1);
+  CHECK(best_anchors(summary).size() == 1);
 }
 
 TEST_CASE("PathChainer: Prefers higher-scoring chain") {
@@ -149,14 +155,13 @@ TEST_CASE("PathChainer: Prefers higher-scoring chain") {
   config.max_dist_ref = 5000;
   config.bw = 500;
   config.min_chain_score = 10;
-  // anchor_weight removed in DEV061 (implicit weight = 1)
   auto chainer = make_chainer(coords, path_lengths, config);
 
   std::vector<NodeAnchor> hits = {make_hit(0, 0, 50, 20), make_hit(1, 0, 150, 10),
                                   make_hit(2, 0, 250, 30)};
   auto summary = chainer.chain(hits);
 
-  CHECK(summary.anchors.size() >= 2);
+  CHECK(best_anchors(summary).size() >= 2);
 }
 
 TEST_CASE("PathChainer: Min chain score threshold filters weak chains") {
@@ -166,13 +171,12 @@ TEST_CASE("PathChainer: Min chain score threshold filters weak chains") {
 
   PathChainerConfig config;
   config.min_chain_score = 1000;
-  // anchor_weight removed in DEV061 (implicit weight = 1)
   auto chainer = make_chainer(coords, path_lengths, config);
 
   std::vector<NodeAnchor> hits = {make_hit(0, 0, 50, 20)};
   auto summary = chainer.chain(hits);
 
-  CHECK(summary.anchors.empty());
+  CHECK(summary.chains.empty());
 }
 
 TEST_CASE("PathChainer: Overlapping anchors are not chained together") {
@@ -193,7 +197,7 @@ TEST_CASE("PathChainer: Overlapping anchors are not chained together") {
   std::vector<NodeAnchor> hits = {make_hit(0, 0, 50, 20), make_hit(1, 0, 60, 20)};
   auto summary = chainer.chain(hits);
 
-  CHECK(summary.anchors.size() >= 1);
+  CHECK(best_anchors(summary).size() >= 1);
 }
 
 TEST_CASE("PathChainer: Backward query positions are rejected") {
@@ -211,7 +215,7 @@ TEST_CASE("PathChainer: Backward query positions are rejected") {
   std::vector<NodeAnchor> hits = {make_hit(0, 0, 150, 20), make_hit(1, 0, 50, 20)};
   auto summary = chainer.chain(hits);
 
-  CHECK(summary.anchors.size() == 1);
+  CHECK(best_anchors(summary).size() == 1);
 }
 
 TEST_CASE("PathChainer: Node appearing on multiple paths expands correctly") {
@@ -228,8 +232,9 @@ TEST_CASE("PathChainer: Node appearing on multiple paths expands correctly") {
   std::vector<NodeAnchor> hits = {make_hit(0, 0, 50, 20)};
   auto summary = chainer.chain(hits);
 
-  REQUIRE(summary.anchors.size() == 1);
-  CHECK(summary.score > 0.0);
+  REQUIRE(summary.chains.size() >= 1);
+  REQUIRE(best_anchors(summary).size() == 1);
+  CHECK(best_score(summary) > 0.0);
 }
 
 TEST_CASE("PathChainer: Chain preserves order from backtracking") {
@@ -249,7 +254,7 @@ TEST_CASE("PathChainer: Chain preserves order from backtracking") {
                                   make_hit(2, 0, 250, 20)};
   auto summary = chainer.chain(hits);
 
-  REQUIRE(summary.anchors.size() == 3);
-  CHECK(summary.anchors[0].read_pos < summary.anchors[1].read_pos);
-  CHECK(summary.anchors[1].read_pos < summary.anchors[2].read_pos);
+  REQUIRE(best_anchors(summary).size() == 3);
+  CHECK(best_anchors(summary)[0].read_pos < best_anchors(summary)[1].read_pos);
+  CHECK(best_anchors(summary)[1].read_pos < best_anchors(summary)[2].read_pos);
 }
