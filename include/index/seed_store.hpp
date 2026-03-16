@@ -15,11 +15,9 @@
 namespace piru::index {
 
 struct SeedEntry {
-  std::size_t node_id{0};
-  std::size_t offset{0};
-  std::size_t length{0};  // Seed coverage length (from Seed.length)
+  std::uint32_t node_id{0};
+  std::uint32_t offset{0};
 
-  // For sorting and deduplication (ignore length for uniqueness)
   bool operator<(const SeedEntry& other) const {
     if (node_id != other.node_id) return node_id < other.node_id;
     return offset < other.offset;

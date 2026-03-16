@@ -50,16 +50,16 @@ struct IndexPipelineConfig {
   float fuzzy_fine_min{-2.0f};
   float fuzzy_fine_max{2.0f};
   float fuzzy_fine_range{0.4f};
-  float fuzzy_diff{0.0f};          // Skip events within diff of last emitted (0 = disabled, RH2: 0.35)
+  float fuzzy_diff{0.35f};         // Skip events within diff of last emitted (0 = disabled, RH2: 0.35)
   std::uint32_t fuzzy_n_bins{0};  // 0 = use 2^qbits = 16
 
   /* Seed extraction */
 
-  std::string seed_type{"minimizer"};  // "kmer" or "minimizer"
+  std::string seed_type{"kmer"};       // "kmer" or "minimizer"
   std::size_t minimizer_window{5};     // minimizer window (w=1 -> rolling k-mer)
-  std::size_t seed_k{6};               // tokens per seed hash
+  std::size_t seed_k{8};               // tokens per seed hash
   std::size_t seed_stride{1};          // spacing between seeds (1 = dense)
-  double seed_freq_cutoff{0.9};        // keep bottom N% by frequency (0.9 = drop top 10% to cap)
+  double seed_freq_cutoff{1.0};        // keep bottom N% by frequency (1.0 = no index-time filter)
   double seed_freq_cap{0.25};          // subsample cap for seeds above cutoff
 
   /* Debug */

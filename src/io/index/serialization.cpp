@@ -20,7 +20,10 @@ namespace piru::io::index {
 namespace {
 
 constexpr char kMagic[4] = {'P', 'I', 'R', 'X'};
-constexpr uint32_t kVersion = 1;
+// Version: (major << 16) | minor. Major = breaking format change, minor = compatible.
+constexpr uint32_t kVersionMajor = 1;
+constexpr uint32_t kVersionMinor = 0;
+constexpr uint32_t kVersion = (kVersionMajor << 16) | kVersionMinor;
 
 constexpr uint32_t kFlagHasSequences = 1 << 0;
 constexpr uint32_t kFlagHasFuzzySignals = 1 << 1;  // reserved
@@ -75,6 +78,7 @@ void save_index(const std::string& path, const piru::index::GraphStore& graph_st
 
   /* 1. Header */
 
+  auto pos_start = out.tellp();
   out.write(kMagic, 4);
   write_pod<uint32_t>(out, kVersion);
   uint32_t flags = 0;
@@ -88,6 +92,7 @@ void save_index(const std::string& path, const piru::index::GraphStore& graph_st
   // Legacy: graph_flavor was "vg" vs "dbg", now unused. Write empty string
   // to preserve .pirx binary layout. Remove on next format version bump.
   write_string(out, std::string{});
+  auto pos_graph = out.tellp();
 
   /* 3. Graph - nodes */
 
@@ -124,6 +129,8 @@ void save_index(const std::string& path, const piru::index::GraphStore& graph_st
     }
   }
 
+  auto pos_linear = out.tellp();
+
   /* 6. Linearization */
 
   write_pod<uint64_t>(out, linearization_coords.size());
@@ -134,6 +141,8 @@ void save_index(const std::string& path, const piru::index::GraphStore& graph_st
       write_pod<int64_t>(out, coord.ref_coord);
     }
   }
+
+  auto pos_seeds = out.tellp();
 
   /* 7. Seeds */
 
@@ -154,14 +163,27 @@ void save_index(const std::string& path, const piru::index::GraphStore& graph_st
     write_pod<uint64_t>(out, hash);
     write_pod<uint64_t>(out, hits.size());
     for (const auto& hit : hits) {
-      write_pod<uint64_t>(out, hit.node_id);
-      write_pod<uint64_t>(out, hit.offset);
-      write_pod<uint64_t>(out, hit.length);
+      write_pod<uint32_t>(out, hit.node_id);
+      write_pod<uint32_t>(out, hit.offset);
     }
   }
 
+  auto pos_end = out.tellp();
+  auto total = pos_end - pos_start;
+  auto sz_meta = pos_graph - pos_start;
+  auto sz_graph = pos_linear - pos_graph;
+  auto sz_linear = pos_seeds - pos_linear;
+  auto sz_seeds = pos_end - pos_seeds;
   LOG_INFO("Saved index: " + std::to_string(graph.nodeCount()) + " nodes, " +
            std::to_string(seed_data.size()) + " seeds -> " + path);
+  LOG_INFO("Index breakdown: total=" + std::to_string(total / (1024*1024)) + "MB" +
+           "  header+meta=" + std::to_string(sz_meta * 100 / total) + "%" +
+           "  graph=" + std::to_string(sz_graph * 100 / total) + "%" +
+           " (" + std::to_string(sz_graph / (1024*1024)) + "MB)" +
+           "  linearization=" + std::to_string(sz_linear * 100 / total) + "%" +
+           " (" + std::to_string(sz_linear / (1024*1024)) + "MB)" +
+           "  seeds=" + std::to_string(sz_seeds * 100 / total) + "%" +
+           " (" + std::to_string(sz_seeds / (1024*1024)) + "MB)");
 }
 
 LoadedIndex load_index(const std::string& path) {
@@ -180,9 +202,11 @@ LoadedIndex load_index(const std::string& path) {
 
   uint32_t version;
   read_pod(in, version);
-  if (version > kVersion) {
-    LOG_WARN("Index version " + std::to_string(version) + " is newer than supported version " +
-             std::to_string(kVersion));
+  uint32_t major = version >> 16;
+  if (major != kVersionMajor) {
+    throw std::runtime_error("Incompatible index version " +
+        std::to_string(major) + "." + std::to_string(version & 0xFFFF) +
+        " (expected " + std::to_string(kVersionMajor) + ".x)");
   }
 
   uint32_t flags;
@@ -306,11 +330,10 @@ LoadedIndex load_index(const std::string& path) {
     uint64_t hit_count;
     read_pod(in, hit_count);
     for (uint64_t j = 0; j < hit_count; ++j) {
-      uint64_t node_id, offset, length;
+      uint32_t node_id, offset;
       read_pod(in, node_id);
       read_pod(in, offset);
-      read_pod(in, length);
-      seeds->insert(hash, piru::index::SeedEntry{node_id, offset, length});
+      seeds->insert(hash, piru::index::SeedEntry{node_id, offset});
     }
   }
 

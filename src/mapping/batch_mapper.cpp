@@ -24,11 +24,11 @@ void SeedLookup::lookup(const signal::SeedBuffer& seeds, std::vector<NodeAnchor>
     if (hits->size() > freq_threshold_) continue;  // skip overly frequent seeds
     for (const auto& h : *hits) {
       out_hits.push_back(NodeAnchor{
-          .node_id = static_cast<std::uint32_t>(h.node_id),
-          .offset = static_cast<std::uint32_t>(h.offset),
+          .node_id = h.node_id,
+          .offset = h.offset,
           .read_pos = static_cast<std::uint32_t>(seed.position),
           .span = static_cast<std::uint16_t>(std::min(seed.length, std::size_t{0xFFFF})),
-          .length = static_cast<std::uint16_t>(std::min(h.length, std::size_t{0xFFFF})),
+          .length = static_cast<std::uint16_t>(std::min(seed.length, std::size_t{0xFFFF})),
       });
     }
     // Per-read hit cap: stop collecting if we already have enough hits.

@@ -310,7 +310,8 @@ NodeFirstIndexResult nodeFirstIndex(const AlnGraph& graph, const io::KmerModel& 
 
         auto seeds = extractor.extract(window_fuzzy);
         for (const auto& seed : seeds.seeds) {
-          local_store.insert(seed.hash, SeedEntry{node_id, pos + seed.position, seed.length});
+          local_store.insert(seed.hash, SeedEntry{
+              static_cast<std::uint32_t>(node_id), static_cast<std::uint32_t>(pos + seed.position)});
           ++local_count;
         }
       }
@@ -404,7 +405,8 @@ NodeFirstIndexResult nodeFirstIndex(const AlnGraph& graph, const io::KmerModel& 
 
         auto seeds = extractor.extract(fuzzy_window);
         for (const auto& seed : seeds.seeds) {
-          local_store.insert(seed.hash, SeedEntry{node_id, pos + seed.position, seed.length});
+          local_store.insert(seed.hash, SeedEntry{
+              static_cast<std::uint32_t>(node_id), static_cast<std::uint32_t>(pos + seed.position)});
           ++local_seed_count;
         }
       }
