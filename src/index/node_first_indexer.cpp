@@ -117,6 +117,7 @@ std::vector<std::int16_t> getHashWindow(const AlnGraph& graph, const io::KmerMod
 
   for (std::size_t i = 0; i < window_size; ++i) {
     std::copy_n(context.data() + i, static_cast<std::size_t>(pore_k), kmer_buf.begin());
+    for (auto& c : kmer_buf) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
 
     if (hasNBase(kmer_buf)) {
       // Contains N - can't hash this window
@@ -207,6 +208,7 @@ NodeFirstIndexResult nodeFirstIndex(const AlnGraph& graph, const io::KmerModel& 
 
     for (std::size_t i = 0; i < num_kmers; ++i) {
       std::copy_n(node.sequence.data() + i, static_cast<std::size_t>(pore_k), kmer_buf.begin());
+      for (auto& c : kmer_buf) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
 
       if (hasNBase(kmer_buf)) {
         raw_values.push_back(std::numeric_limits<float>::quiet_NaN());

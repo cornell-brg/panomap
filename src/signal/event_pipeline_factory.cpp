@@ -49,15 +49,14 @@ EventPipelineConfig apply_rawhash_defaults(EventPipelineConfig config) {
                        config.pore_model.find("R10") != std::string::npos);
 
   if (is_r10) {
-    // R10 parameters (tuned for piru, see DEV025)
+    // Piru-tuned R10 defaults (DEV025)
     config.window_length1 = 4;
     config.window_length2 = 10;
     config.threshold1 = 4.0f;
     config.threshold2 = 3.0f;
     config.peak_height = 0.4f;
-    LOG_DEBUG("RawHash event pipeline: using R10 defaults (w1=4, w2=10, t1=4.0, t2=3.0, ph=0.4)");
-    // RawHash2 roptions.c defaults: w1=3, w2=9, t1=4.0, t2=3.5, ph=0.4
-    // Original RawHash R10 defaults (from RawHash main.cpp preset):
+    LOG_DEBUG("RawHash event pipeline: using piru R10 defaults (w1=4, w2=10, t1=4.0, t2=3.0, ph=0.4)");
+    // RawHash2 --r10 preset (from main.cpp:363):
     // w1=3, w2=6, t1=6.5, t2=4.0, ph=0.2
   } else {
     // R9 parameters (tuned for piru, see DEV025)

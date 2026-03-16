@@ -43,6 +43,7 @@ struct Chain {
 struct ChainResult {
   std::vector<Chain> chains;
   std::size_t expanded_anchor_count{0};  // total anchors before chaining
+  std::vector<bool> used_inputs;         // used_inputs[i] = true if input hits[i] participated in a chain
 };
 
 // Abstract interface for chaining backends.

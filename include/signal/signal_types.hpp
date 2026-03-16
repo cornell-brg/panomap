@@ -13,6 +13,7 @@ namespace piru::signal {
 struct NormalizedSignal {
   std::vector<float> samples;
   float sampling_rate_hz{0.0f};
+  std::vector<float> debug_normalized;  // DEV-62: pre-event-detection normalized signal for tracing
 };
 
 struct SignalEvent {

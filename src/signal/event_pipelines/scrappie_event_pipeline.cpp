@@ -348,6 +348,12 @@ NormalizedSignal ScrappieEventPipeline::process(const io::RawRead& read) const {
 
 const EventPipelineConfig& ScrappieEventPipeline::config() const { return config_; }
 
+NormalizedSignal ScrappieEventPipeline::process_chunk(const float* /*pA*/, std::size_t /*len*/,
+                                                       NormState& /*norm_state*/) const {
+  // Scrappie doesn't support chunked processing
+  return {};
+}
+
 std::string ScrappieEventPipeline::name() const { return "scrappie"; }
 
 }  // namespace piru::signal

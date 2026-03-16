@@ -252,6 +252,74 @@ NormalizedSignal RawHashEventPipeline::process(const io::RawRead& read) const {
   return result;
 }
 
+NormalizedSignal RawHashEventPipeline::process_chunk(const float* pA, std::size_t len,
+                                                      NormState& norm_state) const {
+  NormalizedSignal result;
+  if (len == 0) return result;
+
+  /* Accumulate normalization stats (progressive, like RH2 normalize_signal) */
+  for (std::size_t i = 0; i < len; ++i) {
+    norm_state.sum += pA[i];
+    norm_state.sum_sq += static_cast<double>(pA[i]) * pA[i];
+  }
+  norm_state.n += len;
+
+  const double mean = norm_state.sum / static_cast<double>(norm_state.n);
+  const double stddev = std::sqrt(norm_state.sum_sq / static_cast<double>(norm_state.n) - mean * mean);
+  if (stddev < 1e-12) return result;
+
+  /* Normalize this chunk and filter outliers */
+  std::vector<float> normalized;
+  normalized.reserve(len);
+  for (std::size_t i = 0; i < len; ++i) {
+    float norm_val = static_cast<float>((pA[i] - mean) / stddev);
+    if (norm_val > -3.0f && norm_val < 3.0f) {
+      normalized.push_back(norm_val);
+    }
+  }
+  if (normalized.empty()) return result;
+
+  // Stash normalized signal for debug dumping from caller
+  result.debug_normalized = normalized;
+
+  const int n_signals = static_cast<int>(normalized.size());
+
+  /* Event detection (independent per chunk) */
+  std::vector<float> prefix_sum, prefix_sumsq;
+  compute_sum_sumsq(normalized, prefix_sum, prefix_sumsq);
+
+  auto tstat1 = compute_tstat(prefix_sum, prefix_sumsq, n_signals, config_.window_length1);
+  auto tstat2 = compute_tstat(prefix_sum, prefix_sumsq, n_signals, config_.window_length2);
+
+  auto peaks = short_long_peak_detector(tstat1, tstat2, n_signals, config_.window_length1,
+                                        config_.window_length2, config_.threshold1,
+                                        config_.threshold2, config_.peak_height);
+  if (peaks.empty()) return result;
+
+  /* Generate events using IQR-filtered mean */
+  constexpr int kMaxSegmentLength = 500;
+  result.samples.reserve(peaks.size() + 1);
+
+  int start_idx = 0;
+  for (std::size_t pi = 0; pi < peaks.size(); ++pi) {
+    if (peaks[pi] <= 0 || peaks[pi] >= n_signals) continue;
+    int segment_length = peaks[pi] - start_idx;
+    if (segment_length > 0 && segment_length < kMaxSegmentLength) {
+      std::vector<float> segment(normalized.begin() + start_idx, normalized.begin() + peaks[pi]);
+      result.samples.push_back(iqr_filtered_mean(segment));
+    }
+    start_idx = peaks[pi];
+  }
+
+  int last_length = n_signals - start_idx;
+  if (last_length > 0 && last_length < kMaxSegmentLength) {
+    std::vector<float> segment(normalized.begin() + start_idx, normalized.end());
+    result.samples.push_back(iqr_filtered_mean(segment));
+  }
+
+  return result;
+}
+
 const EventPipelineConfig& RawHashEventPipeline::config() const { return config_; }
 
 std::string RawHashEventPipeline::name() const { return "rawhash"; }

@@ -138,6 +138,8 @@ PathWalkIndexResult pathWalkIndex(const AlnGraph& graph, const io::KmerModel& mo
 
     for (std::size_t i = 0; i + static_cast<std::size_t>(pore_k) <= path_sequence.size(); ++i) {
       std::copy_n(path_sequence.data() + i, static_cast<std::size_t>(pore_k), kmer_buf.begin());
+      // Uppercase for pore model lookup (GFA segments can be lowercase)
+      for (auto& c : kmer_buf) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
 
       if (hasNBase(kmer_buf)) {
         raw_signal.push_back(std::numeric_limits<float>::quiet_NaN());
@@ -166,6 +168,23 @@ PathWalkIndexResult pathWalkIndex(const AlnGraph& graph, const io::KmerModel& mo
     }
 
     auto fuzzy = fuzzy_quantizer.quantize(normalized);
+
+#if 1  // DEV-62: dump index tokens per path (for debugging token comparison)
+    {
+      const auto& path = graph.paths()[path_idx];
+      {
+        // Sanitize path name for filename (replace :: and other chars)
+        std::string safe_name = path.name;
+        for (auto& c : safe_name) {
+          if (c == ':' || c == '/' || c == ' ') c = '_';
+        }
+        std::string fname = "/tmp/index_tokens/" + safe_name + ".txt";
+        std::ofstream ofs(fname);
+        for (std::size_t i = 0; i < fuzzy.tokens.size(); ++i)
+          ofs << fuzzy.tokens[i] << "\n";
+      }
+    }
+#endif
 
     // Update path length (each path writes to its own slot)
     result.path_lengths[path_idx] = path_sequence.size();

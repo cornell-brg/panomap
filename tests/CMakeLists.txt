@@ -96,6 +96,7 @@ if(DOCTEST_AVAILABLE)
 
         ${CMAKE_SOURCE_DIR}/src/mapping/result_formatter.cpp
         ${CMAKE_SOURCE_DIR}/src/util/timing.cpp
+        ${CMAKE_SOURCE_DIR}/src/util/trace.cpp
     )
 
     target_link_libraries(piru_tests PRIVATE doctest::doctest)

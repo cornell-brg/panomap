@@ -104,6 +104,7 @@ add_executable(piru
     src/mapping/result_formatter.cpp
     src/util/signal_handlers.cpp
     src/util/timing.cpp
+    src/util/trace.cpp
 )
 
 target_include_directories(piru PRIVATE include ${CMAKE_CURRENT_SOURCE_DIR}/src ${PIRU_GENERATED_DIR})

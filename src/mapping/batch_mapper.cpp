@@ -3,12 +3,14 @@
 #include "mapping/batch_mapper.hpp"
 
 #include <algorithm>
+#include <fstream>
 #include <string>
 #include <utility>
 
 #include "mapping/graph_chainer.hpp"
 #include "mapping/path_chainer.hpp"
 #include "util/logging.hpp"
+#include "util/trace.hpp"
 
 namespace piru::mapping {
 
@@ -195,36 +197,127 @@ void BatchMapper::process_batch(BatchBuffer& batch) {
 }
 
 void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
-  // TODO: implement proper chunked event detection (matching RH2's 4000-sample
-  // chunk size). Current whole-read processing produces slightly different event
-  // boundaries vs chunked processing. See note-260313-pipeline-debug-comparison.md.
-  batch.normalized[index] = components_.event_pipeline->process(batch.raw_reads[index]);
+  const auto& read = batch.raw_reads[index];
+  auto& all_hits = batch.seed_hits[index];
+  all_hits.clear();
 
-  batch.fuzzy_quantized[index] = components_.fuzzy_quantizer->quantize(batch.normalized[index]);
-  batch.seeds[index] = components_.seed_extractor->extract(batch.fuzzy_quantized[index]);
+  const std::size_t chunk_size = config_.event_pipeline_config.chunk_size;
 
-  // Lookup seeds in the index and collect hits.
-  components_.lookup.lookup(batch.seeds[index], batch.seed_hits[index]);
+  if (chunk_size == 0) {
+    /* Non-chunked path: process entire signal at once (original behavior) */
+    batch.normalized[index] = components_.event_pipeline->process(read);
+    batch.fuzzy_quantized[index] = components_.fuzzy_quantizer->quantize(batch.normalized[index]);
+    batch.seeds[index] = components_.seed_extractor->extract(batch.fuzzy_quantized[index]);
+    components_.lookup.lookup(batch.seeds[index], all_hits);
+  } else {
+    /* Chunked path: process signal in chunks, accumulate seed hits.
+     * After each chunk: chain, filter survivors, check early exit.
+     * Like RH2: independent DSP per chunk, cumulative hits for chaining,
+     * early exit when confident mapping found. */
 
-  // ROI anchor filtering: keep only hits whose node_id is in the ROI set
-  if (config_.roi_filter_anchors && config_.roi_nodes) {
-    const auto& roi = *config_.roi_nodes;
-    auto& hits = batch.seed_hits[index];
-    hits.erase(std::remove_if(hits.begin(), hits.end(),
-                               [&roi](const NodeAnchor& a) {
-                                 return roi.count(a.node_id) == 0;
-                               }),
-               hits.end());
+    // Convert raw ADC to picoamps (once, full signal)
+    const float raw_unit = (read.digitisation == 0.0f) ? 1.0f : (read.range / read.digitisation);
+    std::vector<float> pA;
+    pA.reserve(read.raw_signal.size());
+    for (auto value : read.raw_signal) {
+      pA.push_back((static_cast<float>(value) + read.offset) * raw_unit);
+    }
+
+    const std::size_t total_samples = pA.size();
+    const std::size_t max_chunks = config_.event_pipeline_config.max_chunks;
+    signal::NormState norm_state;
+    std::size_t chunk_idx = 0;
+
+    for (std::size_t chunk_start = 0; chunk_start < total_samples; chunk_start += chunk_size) {
+      // Max chunks limit (0 = unlimited)
+      if (max_chunks > 0 && chunk_idx >= max_chunks) break;
+
+      std::size_t chunk_len = std::min(chunk_size, total_samples - chunk_start);
+
+      // Per-chunk DSP: event detection, quantization, seed extraction
+      auto events = components_.event_pipeline->process_chunk(
+          pA.data() + chunk_start, chunk_len, norm_state);
+      auto tokens = components_.fuzzy_quantizer->quantize(events);
+      auto seeds = components_.seed_extractor->extract(tokens);
+
+      // Lookup and accumulate hits
+      std::vector<NodeAnchor> chunk_hits;
+      components_.lookup.lookup(seeds, chunk_hits);
+      all_hits.insert(all_hits.end(), chunk_hits.begin(), chunk_hits.end());
+
+      // Trace: per-chunk pipeline dumps
+      const auto& rid = read.read_id;
+      PIRU_TRACE_DUMP(trace::kSignal, rid, {
+        std::ofstream ofs(trace::trace_path("1_pA", rid, chunk_idx));
+        for (std::size_t i = 0; i < chunk_len; ++i) ofs << pA[chunk_start + i] << "\n";
+      });
+      PIRU_TRACE_DUMP(trace::kNorm, rid, {
+        std::ofstream ofs(trace::trace_path("1b_norm", rid, chunk_idx));
+        for (const auto& v : events.debug_normalized) ofs << v << "\n";
+      });
+      PIRU_TRACE_DUMP(trace::kEvents, rid, {
+        std::ofstream ofs(trace::trace_path("2_events", rid, chunk_idx));
+        for (const auto& v : events.samples) ofs << v << "\n";
+      });
+      PIRU_TRACE_DUMP(trace::kTokens, rid, {
+        std::ofstream ofs(trace::trace_path("3_tokens", rid, chunk_idx));
+        for (const auto& v : tokens.tokens) ofs << v << "\n";
+      });
+      PIRU_TRACE_DUMP(trace::kSeeds, rid, {
+        std::ofstream ofs(trace::trace_path("4_seeds", rid, chunk_idx));
+        for (const auto& s : seeds.seeds) ofs << s.hash << "\t" << s.position << "\n";
+      });
+      PIRU_TRACE_DUMP(trace::kHits, rid, {
+        std::ofstream ofs(trace::trace_path("5_hits", rid, chunk_idx));
+        ofs << "chunk_new=" << chunk_hits.size() << "\n";
+        for (const auto& h : chunk_hits)
+          ofs << h.node_id << "\t" << h.offset << "\t" << h.read_pos << "\t" << h.span << "\n";
+      });
+
+      // Chain all accumulated hits, keep only survivors
+      ChainResult chunk_chains = components_.chainer->chain(all_hits);
+      if (!chunk_chains.used_inputs.empty()) {
+        std::vector<NodeAnchor> survivors;
+        survivors.reserve(all_hits.size());
+        for (std::size_t i = 0; i < all_hits.size(); ++i) {
+          if (i < chunk_chains.used_inputs.size() && chunk_chains.used_inputs[i]) {
+            survivors.push_back(all_hits[i]);
+          }
+        }
+        all_hits = std::move(survivors);
+      }
+
+      // Early exit: if best chain has high enough MAPQ, stop processing chunks
+      if (config_.map_threshold > 0.0f && !chunk_chains.chains.empty()) {
+        double best_cs = chunk_chains.chains[0].score;
+        double sec_cs = (chunk_chains.chains.size() > 1) ? chunk_chains.chains[1].score : 0.0;
+        double mapq = (best_cs <= 0.0) ? 0.0
+            : (sec_cs <= 0.0) ? 60.0
+            : std::clamp(40.0 * (1.0 - sec_cs / best_cs), 0.0, 60.0);
+        // RH2 early exit: single chain with mapq >= min_mapq (default 2)
+        if (chunk_chains.chains.size() == 1 && mapq >= 2.0) break;
+      }
+
+      ++chunk_idx;
+    }
   }
 
-  // Chain: expands NodeAnchors to PathAnchors internally, then DP chains
-  ChainResult chain_result = components_.chainer->chain(batch.seed_hits[index]);
+  // ROI anchor filtering
+  if (config_.roi_filter_anchors && config_.roi_nodes) {
+    const auto& roi = *config_.roi_nodes;
+    all_hits.erase(std::remove_if(all_hits.begin(), all_hits.end(),
+                                   [&roi](const NodeAnchor& a) {
+                                     return roi.count(a.node_id) == 0;
+                                   }),
+                   all_hits.end());
+  }
 
-  // Free seed hits immediately -- they're not needed after chaining and can be
-  // very large (especially with kmer seeds). Without this, all reads in the
-  // batch hold their hits simultaneously, causing OOM on large batches.
-  batch.seed_hits[index].clear();
-  batch.seed_hits[index].shrink_to_fit();
+  // Final chain with all accumulated hits
+  ChainResult chain_result = components_.chainer->chain(all_hits);
+
+  // Free seed hits
+  all_hits.clear();
+  all_hits.shrink_to_fit();
 
   // Build unified map result from chain result
   ReadMapResult& result = batch.map_results[index];
@@ -267,13 +360,23 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
     mean_mapq /= static_cast<double>(result.mappings.size());
 
     // Weighted components
+    float r_abs = std::min(static_cast<float>(best_score / config_.map_score_scale), 1.0f);
     float r_bestq = (best_mapq > 0.0) ? static_cast<float>(best_mapq / 30.0) : 0.0f;
     float r_bestmq = (best_mapq > 0.0) ? static_cast<float>(1.0 - mean_mapq / best_mapq) : 0.0f;
     float r_bestmc = (best_score > 0.0) ? static_cast<float>(1.0 - mean_score / best_score) : 0.0f;
 
-    float weighted = config_.map_w_bestq * r_bestq
+    float weighted = config_.map_w_abs * r_abs
+                   + config_.map_w_bestq * r_bestq
                    + config_.map_w_bestmq * r_bestmq
                    + config_.map_w_bestmc * r_bestmc;
+
+    PIRU_TRACE_DUMP(trace::kChains, read.read_id, {
+      std::ofstream ofs(trace::trace_path("7_decision", read.read_id));
+      ofs << "bs=" << best_score << "\tss=" << secondary_score
+          << "\tms=" << mean_score << "\tbq=" << best_mapq
+          << "\tmq=" << mean_mapq << "\tw=" << weighted
+          << "\tn=" << result.mappings.size() << "\n";
+    });
 
     if (weighted < config_.map_threshold) {
       result.mappings.clear();  // unmapped

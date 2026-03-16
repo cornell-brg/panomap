@@ -36,9 +36,13 @@ struct EventPipelineConfig {
   std::optional<float> override_threshold2;
   std::optional<float> override_peak_height;
 
+  // Chunked processing
+  std::size_t chunk_size{4000};   // Samples per chunk (0 = no chunking, process all at once)
+  std::size_t max_chunks{10};    // Max chunks to process (0 = unlimited, RH2 default: 10)
+
   // Signal trimming parameters
-  int trim_start{200};
-  int trim_end{10};
+  int trim_start{0};
+  int trim_end{0};
   int varseg_chunk{100};
   float varseg_thresh{0.0f};
 
@@ -49,6 +53,14 @@ struct EventPipelineConfig {
   float clip_max{3.0f};
 };
 
+// Normalization state accumulated across chunks (like RH2's mean_sum/std_dev_sum).
+// Allows progressive normalization: chunk N uses stats from samples 0..N.
+struct NormState {
+  double sum{0.0};
+  double sum_sq{0.0};
+  std::size_t n{0};
+};
+
 class EventPipeline {
 public:
   virtual ~EventPipeline() = default;
@@ -56,6 +68,12 @@ public:
   // Process a raw read and return normalized event signal.
   // The internal ordering (detect->normalize or normalize->detect) is backend-specific.
   virtual NormalizedSignal process(const io::RawRead& read) const = 0;
+
+  // Process one chunk of pA signal with accumulated normalization state.
+  // norm_state is updated with this chunk's statistics (progressive normalization).
+  // Event detection runs independently on this chunk's normalized signal.
+  virtual NormalizedSignal process_chunk(const float* pA, std::size_t len,
+                                         NormState& norm_state) const = 0;
 
   virtual const EventPipelineConfig& config() const = 0;
   virtual std::string name() const = 0;

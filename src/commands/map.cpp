@@ -73,11 +73,15 @@ int handle_map(const std::vector<std::string>& args) {
       {'v', "verbose", false, "Enable verbose logging (DEBUG level)"},
       {'\0', "", false, "\nMapping Options:"},
       {'\0', "seed-freq-cap", true,
-       "Skip seeds above this frequency percentile at lookup (0.0-1.0, default: none)"},
+       "Skip seeds with frequency above this value at lookup (default: from index)"},
       {'\0', "max-hits", true,
        "Max seed hits per read before stopping lookup (default: 100000, 0 = unlimited)"},
       {'\0', "diff", true,
        "Event diff filter: skip events within diff of last emitted (default: 0, RH2: 0.35)"},
+      {'\0', "chunk-size", true,
+       "Signal chunk size in samples (default: 4000, 0 = no chunking)"},
+      {'\0', "max-chunks", true,
+       "Max chunks to process per read (default: 10, 0 = unlimited)"},
       {'\0', "chainer", true, "Chainer backend (default: path-chain)"},
       {'\0', "", false, "\nSignal Processing Options:"},
       {'\0', "event-pipeline", true,
@@ -105,6 +109,8 @@ int handle_map(const std::vector<std::string>& args) {
        "Min chain score ratio vs primary for secondaries (default: 0.4)"},
       {'\0', "map-threshold", true,
        "Weighted mapping quality threshold (0 = disabled, RH2 default: 0.45)"},
+      {'\0', "map-score-scale", true,
+       "Absolute score normalizer for mapping decision (default: 100)"},
   };
   // Append backend-specific CLI options
   auto chain_opts = piru::mapping::PathChainerConfig::cli_options();
@@ -315,16 +321,18 @@ int handle_map(const std::vector<std::string>& args) {
   map_config.linearization_coords = &linearization_coords;  // For DP chaining
   map_config.path_lengths = &path_lengths;                  // For anchor bounds checking
 
-  // Configure fuzzy quantizer from index metadata.
-  // Match index-time defaults (IndexPipelineConfig) -- these are not yet stored in .pirx.
+  // Configure fuzzy quantizer to match index-time settings.
+  // Must mirror IndexPipelineConfig defaults so index and query produce
+  // identical tokens. The factory only overrides for "piru" backend;
+  // "rh2" backend uses these values directly.
   if (!fuzzy_quantizer_name.empty()) {
     map_config.fuzzy_config.backend = fuzzy_quantizer_name;
   }
   map_config.fuzzy_config.pore_model = pore_model_name;
   map_config.fuzzy_config.fine_min = -2.0f;
   map_config.fuzzy_config.fine_max = 2.0f;
-  map_config.fuzzy_config.fine_range = 0.4f;
-  map_config.fuzzy_config.n_bins = 0;
+  map_config.fuzzy_config.fine_range = 0.4f;  // must match IndexPipelineConfig::fuzzy_fine_range
+  map_config.fuzzy_config.n_bins = 0;         // must match IndexPipelineConfig::fuzzy_n_bins (0 = use qbits)
   if (parsed.values.count("diff")) {
     map_config.fuzzy_config.diff = std::stof(parsed.values.at("diff"));
   }
@@ -403,19 +411,25 @@ int handle_map(const std::vector<std::string>& args) {
         std::stof(parsed.values.at("event-peak"));
   }
 
+  // Chunk size for signal processing
+  if (parsed.values.count("chunk-size")) {
+    map_config.event_pipeline_config.chunk_size = std::stoull(parsed.values.at("chunk-size"));
+  }
+  if (parsed.values.count("max-chunks")) {
+    map_config.event_pipeline_config.max_chunks = std::stoull(parsed.values.at("max-chunks"));
+  }
+
   // Per-read total hit cap
   if (parsed.values.count("max-hits")) {
     map_config.max_total_hits = std::stoull(parsed.values.at("max-hits"));
   }
 
-  // Map-time frequency cap: recompute threshold from percentile
+  // Map-time frequency cap: set max seed frequency directly
   if (parsed.values.count("seed-freq-cap")) {
-    const double percentile = std::stod(parsed.values.at("seed-freq-cap"));
+    const auto cap = std::stoull(parsed.values.at("seed-freq-cap"));
     const_cast<piru::index::HashSeedStore*>(hash_seed_store)
-        ->recompute_threshold_from_percentile(percentile);
-    LOG_INFO(
-        "Map-time seed freq cap at " + std::to_string(percentile * 100) +
-        "th percentile -> threshold=" + std::to_string(hash_seed_store->frequency_threshold()));
+        ->set_frequency_threshold(cap);
+    LOG_INFO("Map-time seed freq cap: " + std::to_string(cap));
   }
 
   // Log the seed frequency threshold being used
@@ -462,6 +476,9 @@ int handle_map(const std::vector<std::string>& args) {
   if (parsed.values.count("map-threshold")) {
     map_config.map_threshold = std::stof(parsed.values.at("map-threshold"));
     LOG_INFO("Mapping decision threshold: " + std::to_string(map_config.map_threshold));
+  }
+  if (parsed.values.count("map-score-scale")) {
+    map_config.map_score_scale = std::stof(parsed.values.at("map-score-scale"));
   }
 
   /* Read processing */

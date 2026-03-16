@@ -202,6 +202,7 @@ ChainResult PathChainer::chain(const std::vector<NodeAnchor>& hits) const {
 
   // Run DP per path, collect all chains
   std::vector<Chain> all_chains;
+  std::vector<bool> input_used(hits.size(), false);  // track which input hits are chained
   DPBuffers dp;  // Reused across paths within this call
 
   for (std::size_t path_id = 0; path_id < groups.size(); ++path_id) {
@@ -416,7 +417,9 @@ ChainResult PathChainer::chain(const std::vector<NodeAnchor>& hits) const {
       chain.anchors.reserve(chain_indices.size());
 
       for (std::size_t idx : chain_indices) {
-        const auto& src = hits[dp.src_idx[idx]];
+        auto si = dp.src_idx[idx];
+        const auto& src = hits[si];
+        input_used[si] = true;
 
         ChainedAnchor ca;
         ca.node_id = src.node_id;
@@ -445,6 +448,7 @@ ChainResult PathChainer::chain(const std::vector<NodeAnchor>& hits) const {
   ChainResult result;
   result.chains = std::move(all_chains);
   result.expanded_anchor_count = total_anchors;
+  result.used_inputs = std::move(input_used);
   return result;
 }
 
