@@ -31,7 +31,7 @@ struct IndexMetadata {
 struct LoadedIndex {
   IndexMetadata metadata;
   std::unique_ptr<piru::index::AdjListGraphStore> graph;
-  std::unique_ptr<piru::index::HashSeedStore> seeds;
+  std::unique_ptr<piru::index::SeedStore> seeds;
   std::vector<std::vector<piru::index::LinearCoordinate>> linearization_coords;
 };
 

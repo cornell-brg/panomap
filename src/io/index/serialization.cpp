@@ -144,7 +144,7 @@ void save_index(const std::string& path, const piru::index::GraphStore& graph_st
 
   auto pos_seeds = out.tellp();
 
-  /* 7. Seeds */
+  /* 7. Seeds (CSR format) */
 
   write_string(out, hash_store->extractor_name());
   const auto& params = hash_store->params();
@@ -157,16 +157,38 @@ void save_index(const std::string& path, const piru::index::GraphStore& graph_st
   write_pod<uint64_t>(out, hash_store->max_hash_frequency());
   write_pod<uint64_t>(out, hash_store->frequency_threshold());
 
+  // Build CSR from HashSeedStore: sort hashes, flatten hits
   const auto& seed_data = hash_store->data();
-  write_pod<uint64_t>(out, seed_data.size());
+  std::vector<std::uint64_t> sorted_hashes;
+  sorted_hashes.reserve(seed_data.size());
   for (const auto& [hash, hits] : seed_data) {
-    write_pod<uint64_t>(out, hash);
-    write_pod<uint64_t>(out, hits.size());
-    for (const auto& hit : hits) {
-      write_pod<uint32_t>(out, hit.node_id);
-      write_pod<uint32_t>(out, hit.offset);
-    }
+    sorted_hashes.push_back(hash);
   }
+  std::sort(sorted_hashes.begin(), sorted_hashes.end());
+
+  std::vector<std::uint32_t> csr_offsets;
+  csr_offsets.reserve(sorted_hashes.size() + 1);
+  std::vector<piru::index::SeedEntry> csr_entries;
+
+  std::uint32_t running_offset = 0;
+  for (auto h : sorted_hashes) {
+    csr_offsets.push_back(running_offset);
+    const auto& hits = seed_data.at(h);
+    csr_entries.insert(csr_entries.end(), hits.begin(), hits.end());
+    running_offset += static_cast<std::uint32_t>(hits.size());
+  }
+  csr_offsets.push_back(running_offset);  // sentinel
+
+  uint64_t n_hashes = sorted_hashes.size();
+  uint64_t n_entries = csr_entries.size();
+  write_pod<uint64_t>(out, n_hashes);
+  write_pod<uint64_t>(out, n_entries);
+  out.write(reinterpret_cast<const char*>(sorted_hashes.data()),
+            static_cast<std::streamsize>(n_hashes * sizeof(uint64_t)));
+  out.write(reinterpret_cast<const char*>(csr_offsets.data()),
+            static_cast<std::streamsize>((n_hashes + 1) * sizeof(uint32_t)));
+  out.write(reinterpret_cast<const char*>(csr_entries.data()),
+            static_cast<std::streamsize>(n_entries * sizeof(piru::index::SeedEntry)));
 
   auto pos_end = out.tellp();
   auto total = pos_end - pos_start;
@@ -175,7 +197,7 @@ void save_index(const std::string& path, const piru::index::GraphStore& graph_st
   auto sz_linear = pos_seeds - pos_linear;
   auto sz_seeds = pos_end - pos_seeds;
   LOG_INFO("Saved index: " + std::to_string(graph.nodeCount()) + " nodes, " +
-           std::to_string(seed_data.size()) + " seeds -> " + path);
+           std::to_string(n_hashes) + " seeds (" + std::to_string(n_entries) + " hits) -> " + path);
   LOG_INFO("Index breakdown: total=" + std::to_string(total / (1024*1024)) + "MB" +
            "  header+meta=" + std::to_string(sz_meta * 100 / total) + "%" +
            "  graph=" + std::to_string(sz_graph * 100 / total) + "%" +
@@ -294,51 +316,52 @@ LoadedIndex load_index(const std::string& path) {
     }
   }
 
-  /* 7. Seeds */
+  /* 7. Seeds (CSR format) */
 
-  auto seeds = std::make_unique<piru::index::HashSeedStore>();
-  seeds->set_extractor_name(read_string(in));
+  std::string seed_extractor_name = read_string(in);
 
   uint64_t param_count;
   read_pod(in, param_count);
-  std::map<std::string, std::string> params;
+  std::map<std::string, std::string> seed_params;
   for (uint64_t i = 0; i < param_count; ++i) {
     std::string key = read_string(in);
     std::string value = read_string(in);
-    params[key] = value;
+    seed_params[key] = value;
   }
-  seeds->set_params(std::move(params));
 
   double filter_fraction;
   read_pod(in, filter_fraction);
-  seeds->set_filter_fraction(filter_fraction);
 
   uint64_t max_freq;
   read_pod(in, max_freq);
-  seeds->set_max_hash_frequency(max_freq);
 
   uint64_t freq_threshold;
   read_pod(in, freq_threshold);
-  seeds->set_frequency_threshold(freq_threshold);
 
-  uint64_t entry_count;
-  read_pod(in, entry_count);
-  for (uint64_t i = 0; i < entry_count; ++i) {
-    uint64_t hash;
-    read_pod(in, hash);
+  // Bulk-read CSR arrays
+  uint64_t n_hashes, n_entries;
+  read_pod(in, n_hashes);
+  read_pod(in, n_entries);
 
-    uint64_t hit_count;
-    read_pod(in, hit_count);
-    for (uint64_t j = 0; j < hit_count; ++j) {
-      uint32_t node_id, offset;
-      read_pod(in, node_id);
-      read_pod(in, offset);
-      seeds->insert(hash, piru::index::SeedEntry{node_id, offset});
-    }
-  }
+  std::vector<uint64_t> hashes(n_hashes);
+  in.read(reinterpret_cast<char*>(hashes.data()),
+          static_cast<std::streamsize>(n_hashes * sizeof(uint64_t)));
+
+  std::vector<uint32_t> offsets(n_hashes + 1);
+  in.read(reinterpret_cast<char*>(offsets.data()),
+          static_cast<std::streamsize>((n_hashes + 1) * sizeof(uint32_t)));
+
+  std::vector<piru::index::SeedEntry> entries(n_entries);
+  in.read(reinterpret_cast<char*>(entries.data()),
+          static_cast<std::streamsize>(n_entries * sizeof(piru::index::SeedEntry)));
+
+  auto seeds = std::make_unique<piru::index::FlatSeedStore>(
+      std::move(hashes), std::move(offsets), std::move(entries),
+      std::move(seed_extractor_name), std::move(seed_params),
+      max_freq, freq_threshold, filter_fraction);
 
   LOG_INFO("Loaded index: " + std::to_string(node_count) + " nodes, " +
-           std::to_string(entry_count) + " seeds ← " + path);
+           std::to_string(n_hashes) + " seeds (" + std::to_string(n_entries) + " hits) ← " + path);
 
   return {std::move(metadata), std::make_unique<piru::index::AdjListGraphStore>(std::move(*graph)),
           std::move(seeds), std::move(linearization_coords)};

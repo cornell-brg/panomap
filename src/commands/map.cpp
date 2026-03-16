@@ -35,7 +35,7 @@
 
 namespace {
 
-piru::signal::SeedExtractorConfig seed_config_from_store(const piru::index::HashSeedStore& store) {
+piru::signal::SeedExtractorConfig seed_config_from_store(const piru::index::SeedStore& store) {
   piru::signal::SeedExtractorConfig cfg;
   cfg.backend = store.extractor_name();
   const auto& params = store.params();
@@ -339,13 +339,7 @@ int handle_map(const std::vector<std::string>& args) {
   LOG_DEBUG("Using fuzzy quantizer: " + map_config.fuzzy_config.backend);
 
   // Configure seed extractor from seed store parameters
-  const auto* hash_seed_store = dynamic_cast<piru::index::HashSeedStore*>(seed_store.get());
-  if (!hash_seed_store) {
-    LOG_ERROR("map: unsupported seed store backend");
-    return 1;
-  }
-
-  auto index_seed_cfg = seed_config_from_store(*hash_seed_store);
+  auto index_seed_cfg = seed_config_from_store(*seed_store);
   if (index_seed_cfg.backend.empty()) {
     LOG_ERROR("map: seed store missing extractor name");
     return 1;
@@ -427,34 +421,14 @@ int handle_map(const std::vector<std::string>& args) {
   // Map-time frequency cap: set max seed frequency directly
   if (parsed.values.count("seed-freq-cap")) {
     const auto cap = std::stoull(parsed.values.at("seed-freq-cap"));
-    const_cast<piru::index::HashSeedStore*>(hash_seed_store)
-        ->set_frequency_threshold(cap);
+    seed_store->set_frequency_threshold(cap);
     LOG_INFO("Map-time seed freq cap: " + std::to_string(cap));
   }
 
   // Log the seed frequency threshold being used
-  LOG_INFO("Seed frequency threshold: " + std::to_string(hash_seed_store->frequency_threshold()) +
-           " (seeds with freq > " + std::to_string(hash_seed_store->frequency_threshold()) +
+  LOG_INFO("Seed frequency threshold: " + std::to_string(seed_store->frequency_threshold()) +
+           " (seeds with freq > " + std::to_string(seed_store->frequency_threshold()) +
            " will be skipped)");
-
-  // Dump seed store if requested (do this before mapping starts)
-  if (parsed.values.count("dump-seed-store")) {
-    const std::string dump_path = parsed.values.at("dump-seed-store");
-    std::ofstream out(dump_path);
-    if (!out.is_open()) {
-      LOG_ERROR("Failed to open seed store dump file: " + dump_path);
-      return 1;
-    }
-    out << "# Seed store dump: hash -> frequency\n";
-    out << "# freq_threshold=" << hash_seed_store->frequency_threshold() << "\n";
-    out << "hash\tfrequency\n";
-    for (const auto& [hash, hits] : hash_seed_store->data()) {
-      out << std::hex << hash << std::dec << "\t" << hits.size() << "\n";
-    }
-    out.close();
-    LOG_INFO("Dumped seed store (" + std::to_string(hash_seed_store->size()) +
-             " hashes) to: " + dump_path);
-  }
 
   // Configure result writer if specified
   if (result_writer) {

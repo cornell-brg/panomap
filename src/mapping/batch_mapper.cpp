@@ -19,10 +19,11 @@ void SeedLookup::lookup(const signal::SeedBuffer& seeds, std::vector<NodeAnchor>
   out_hits.clear();
   out_hits.reserve(seeds.seeds.size());
   for (const auto& seed : seeds.seeds) {
-    const auto* hits = store_->lookup(seed.hash);
-    if (!hits) continue;
-    if (hits->size() > freq_threshold_) continue;  // skip overly frequent seeds
-    for (const auto& h : *hits) {
+    auto hits = store_->lookup(seed.hash);
+    if (hits.count == 0) continue;
+    if (hits.count > freq_threshold_) continue;  // skip overly frequent seeds
+    for (std::size_t j = 0; j < hits.count; ++j) {
+      const auto& h = hits.data[j];
       out_hits.push_back(NodeAnchor{
           .node_id = h.node_id,
           .offset = h.offset,
