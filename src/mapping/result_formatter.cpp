@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <limits>
 #include <string_view>
 #include <unordered_map>
@@ -74,11 +75,33 @@ std::vector<io::AlignmentResult> ResultFormatter::format(const ReadMapResult& ma
     // Set graph path traversal (for GAF column 6)
     results.back().graph_path = buildPathString(mapping.anchors);
 
+    // Per-read timing tags (primary only)
+    if (is_primary) {
+      results.back().optional_fields.push_back("ck:i:" + std::to_string(map_result.chunks_processed));
+      // Format processing time to 6 decimal places (microsecond precision)
+      char dt_buf[32];
+      std::snprintf(dt_buf, sizeof(dt_buf), "dt:f:%.6f", map_result.processing_time_sec);
+      results.back().optional_fields.push_back(dt_buf);
+    }
+
     // ROI classification tags (primary only)
     if (is_primary && map_result.roi_overlap >= 0.0) {
       results.back().optional_fields.push_back("ro:f:" + std::to_string(map_result.roi_overlap));
       results.back().optional_fields.push_back(std::string("rd:A:") +
                                                (map_result.roi_keep ? "K" : "R"));
+    }
+  }
+
+  // Suppress secondaries for ambiguous reads: if many chains score similarly
+  // and MAPQ is low, only keep the primary. This reduces noisy output for
+  // reads that don't have a clear best mapping.
+  if (results.size() > 1 && results[0].mapq < 5) {
+    std::size_t n_similar = 0;
+    for (const auto& m : map_result.mappings) {
+      if (m.chain_score >= primary_score * 0.8) ++n_similar;
+    }
+    if (n_similar > 3) {
+      results.resize(1);
     }
   }
 

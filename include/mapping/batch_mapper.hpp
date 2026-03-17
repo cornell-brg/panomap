@@ -89,6 +89,7 @@ struct BatchMapperConfig {
   float map_w_bestmq{0.05f};  // Weight on MAPQ standout ratio (RH2: 0.05)
   float map_w_bestmc{0.60f};  // Weight on chain score standout ratio (RH2: 0.60)
   float map_threshold{0.12f}; // Decision threshold (0 = disabled)
+  std::size_t map_min_anchors{0};  // Min anchors in primary chain to report (0 = disabled)
 
   // Result formatting configuration
   ResultFormatterConfig formatter_config{};

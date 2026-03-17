@@ -44,6 +44,7 @@ public:
   virtual std::size_t max_hash_frequency() const = 0;
   virtual std::size_t frequency_threshold() const = 0;
   virtual void set_frequency_threshold(std::size_t threshold) = 0;
+  virtual void recompute_threshold_from_percentile(double percentile) = 0;
   virtual double filter_fraction() const = 0;
   virtual const std::string& extractor_name() const = 0;
   virtual const std::map<std::string, std::string>& params() const = 0;
@@ -150,6 +151,19 @@ public:
   std::size_t max_hash_frequency() const override { return max_hash_frequency_; }
   std::size_t frequency_threshold() const override { return frequency_threshold_; }
   void set_frequency_threshold(std::size_t threshold) override { frequency_threshold_ = threshold; }
+  void recompute_threshold_from_percentile(double percentile) override {
+    if (hashes_.empty()) return;
+    std::vector<std::size_t> freqs;
+    freqs.reserve(hashes_.size());
+    for (std::size_t i = 0; i < hashes_.size(); ++i) {
+      freqs.push_back(offsets_[i + 1] - offsets_[i]);
+    }
+    std::sort(freqs.begin(), freqs.end());
+    double frac = std::clamp(percentile, 0.0, 1.0);
+    auto pos = std::min(static_cast<std::size_t>(freqs.size() * frac), freqs.size() - 1);
+    frequency_threshold_ = freqs[pos] + 1;
+    filter_fraction_ = percentile;
+  }
   double filter_fraction() const override { return filter_fraction_; }
   const std::string& extractor_name() const override { return extractor_name_; }
   const std::map<std::string, std::string>& params() const override { return params_; }

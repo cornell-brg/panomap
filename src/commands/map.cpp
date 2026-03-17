@@ -73,7 +73,7 @@ int handle_map(const std::vector<std::string>& args) {
       {'v', "verbose", false, "Enable verbose logging (DEBUG level)"},
       {'\0', "", false, "\nMapping Options:"},
       {'\0', "seed-freq-cap", true,
-       "Skip seeds with frequency above this value at lookup (default: from index)"},
+       "Skip high-freq seeds: <N> for absolute, p<F> for percentile (default: p0.99)"},
       {'\0', "max-hits", true,
        "Max seed hits per read before stopping lookup (default: 100000, 0 = unlimited)"},
       {'\0', "diff", true,
@@ -419,13 +419,27 @@ int handle_map(const std::vector<std::string>& args) {
   }
 
   // Map-time frequency cap: set max seed frequency directly
-  if (parsed.values.count("seed-freq-cap")) {
-    const auto cap = std::stoull(parsed.values.at("seed-freq-cap"));
-    seed_store->set_frequency_threshold(cap);
-    LOG_INFO("Map-time seed freq cap: " + std::to_string(cap));
+  {
+    // Seed frequency cap: p<float> for percentile, <int> for absolute.
+    // Default: p0.99 (99th percentile, matching RH2's mid_occ_frac=0.01)
+    std::string freq_cap_str = "p0.99";
+    if (parsed.values.count("seed-freq-cap")) {
+      freq_cap_str = parsed.values.at("seed-freq-cap");
+    }
+
+    if (freq_cap_str.size() > 1 && freq_cap_str[0] == 'p') {
+      // Percentile mode
+      double percentile = std::stod(freq_cap_str.substr(1));
+      seed_store->recompute_threshold_from_percentile(percentile);
+      LOG_INFO("Seed freq cap: " + freq_cap_str + " -> threshold=" +
+               std::to_string(seed_store->frequency_threshold()));
+    } else {
+      // Absolute mode
+      seed_store->set_frequency_threshold(std::stoull(freq_cap_str));
+      LOG_INFO("Seed freq cap: " + std::to_string(seed_store->frequency_threshold()));
+    }
   }
 
-  // Log the seed frequency threshold being used
   LOG_INFO("Seed frequency threshold: " + std::to_string(seed_store->frequency_threshold()) +
            " (seeds with freq > " + std::to_string(seed_store->frequency_threshold()) +
            " will be skipped)");

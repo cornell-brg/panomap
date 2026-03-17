@@ -31,6 +31,10 @@ struct ReadMapResult {
   std::vector<Mapping> mappings;         // primary (index 0) + secondaries
   std::size_t expanded_anchor_count{0};  // anchors before chaining
 
+  // Per-read timing (for eval)
+  std::size_t chunks_processed{0};  // number of signal chunks processed
+  double processing_time_sec{0.0};  // wall clock for DSP + chaining
+
   // ROI classification (populated when --roi is active)
   double roi_overlap{-1.0};  // -1 = not computed
   bool roi_keep{false};      // final keep/reject decision

@@ -3,6 +3,8 @@
 #include "mapping/batch_mapper.hpp"
 
 #include <algorithm>
+#include <chrono>
+#include <cmath>
 #include <fstream>
 #include <string>
 #include <utility>
@@ -198,11 +200,14 @@ void BatchMapper::process_batch(BatchBuffer& batch) {
 }
 
 void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
+  const auto t_start = std::chrono::high_resolution_clock::now();
+
   const auto& read = batch.raw_reads[index];
   auto& all_hits = batch.seed_hits[index];
   all_hits.clear();
 
   const std::size_t chunk_size = config_.event_pipeline_config.chunk_size;
+  std::size_t chunks_processed = 1;  // for mapping decision score scaling
 
   if (chunk_size == 0) {
     /* Non-chunked path: process entire signal at once (original behavior) */
@@ -308,6 +313,7 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
 
       ++chunk_idx;
     }
+    chunks_processed = chunk_idx;
   }
 
   // ROI anchor filtering
@@ -331,6 +337,10 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
   ReadMapResult& result = batch.map_results[index];
   result.mappings.clear();
   result.expanded_anchor_count = chain_result.expanded_anchor_count;
+  result.chunks_processed = chunks_processed;
+  const auto t_end = std::chrono::high_resolution_clock::now();
+  result.processing_time_sec =
+      std::chrono::duration<double>(t_end - t_start).count();
 
   for (const auto& chain : chain_result.chains) {
     Mapping mapping;
@@ -368,12 +378,19 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
     mean_mapq /= static_cast<double>(result.mappings.size());
 
     // Weighted components
-    float r_abs = std::min(static_cast<float>(best_score / config_.map_score_scale), 1.0f);
+    // Scale score expectation by chunks processed: more chunks = higher expected score.
+    // Use sqrt scaling (score grows sublinearly with signal length).
+    float scaled_score_scale = config_.map_score_scale * std::sqrt(static_cast<float>(chunks_processed));
+    // Fade in absolute score weight: at 1 chunk, rely purely on standout terms.
+    // At higher chunks, absolute score becomes a stronger discriminator.
+    float chunk_factor = std::max(0.5f, 1.0f - 1.0f / static_cast<float>(chunks_processed));
+    float effective_w_abs = config_.map_w_abs * chunk_factor;
+    float r_abs = std::min(static_cast<float>(best_score / scaled_score_scale), 1.0f);
     float r_bestq = (best_mapq > 0.0) ? static_cast<float>(best_mapq / 30.0) : 0.0f;
     float r_bestmq = (best_mapq > 0.0) ? static_cast<float>(1.0 - mean_mapq / best_mapq) : 0.0f;
     float r_bestmc = (best_score > 0.0) ? static_cast<float>(1.0 - mean_score / best_score) : 0.0f;
 
-    float weighted = config_.map_w_abs * r_abs
+    float weighted = effective_w_abs * r_abs
                    + config_.map_w_bestq * r_bestq
                    + config_.map_w_bestmq * r_bestmq
                    + config_.map_w_bestmc * r_bestmc;
