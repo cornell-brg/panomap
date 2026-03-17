@@ -7,7 +7,7 @@
 #include <cmath>
 #include <fstream>
 #include <limits>
-#include <mutex>
+// mutex no longer needed -- linearization uses thread-local merge
 #include <random>
 
 #ifdef PIRU_USE_TBB
@@ -103,11 +103,12 @@ PathWalkIndexResult pathWalkIndex(const AlnGraph& graph, const io::KmerModel& mo
   std::atomic<std::size_t> atomic_seeds_extracted{0};
   std::atomic<std::size_t> atomic_total_path_length{0};
 
-  // Per-node mutexes for linearization_coords (multiple paths touch same nodes)
-  std::vector<std::mutex> node_mutexes(graph.nodeCount());
+  // Thread-local linearization coords, merged after parallel execution
+  using LinearCoordVec = std::vector<std::vector<index::LinearCoordinate>>;
 
   // Lambda to process a single path
-  auto process_path = [&](std::size_t path_idx, HashSeedStore& thread_store) {
+  auto process_path = [&](std::size_t path_idx, HashSeedStore& thread_store,
+                          LinearCoordVec& thread_coords) {
     const auto& path = graph.paths()[path_idx];
 
     // Step 1: Concatenate node sequences, track boundaries
@@ -190,10 +191,9 @@ PathWalkIndexResult pathWalkIndex(const AlnGraph& graph, const io::KmerModel& mo
     result.path_lengths[path_idx] = path_sequence.size();
     atomic_total_path_length.fetch_add(fuzzy.tokens.size(), std::memory_order_relaxed);
 
-    // Step 5: Record linear coordinates (protected by per-node mutex)
+    // Step 5: Record linear coordinates (thread-local, merged later)
     for (const auto& boundary : boundaries) {
-      std::lock_guard<std::mutex> lock(node_mutexes[boundary.node_id]);
-      result.linearization_coords[boundary.node_id].emplace_back(
+      thread_coords[boundary.node_id].emplace_back(
           path_idx, static_cast<std::int64_t>(boundary.base_start));
     }
 
@@ -263,25 +263,33 @@ PathWalkIndexResult pathWalkIndex(const AlnGraph& graph, const io::KmerModel& mo
 
 #ifdef PIRU_USE_TBB
   if (config.executor) {
-    // Parallel execution with thread-local stores
+    // Parallel execution with thread-local stores and linearization
     tbb::enumerable_thread_specific<HashSeedStore> thread_stores;
+    tbb::enumerable_thread_specific<LinearCoordVec> thread_coords(
+        [&]() { return LinearCoordVec(graph.nodeCount()); });
 
     config.executor->parallel_for(0, num_paths, 1, [&](std::size_t path_idx) {
-      process_path(path_idx, thread_stores.local());
+      process_path(path_idx, thread_stores.local(), thread_coords.local());
     });
 
     // Merge thread-local stores into result
     for (auto& store : thread_stores) {
       result.seed_store->merge(store);
     }
+    // Merge thread-local linearization coords into result
+    for (auto& coords : thread_coords) {
+      for (std::size_t i = 0; i < coords.size(); ++i) {
+        auto& dst = result.linearization_coords[i];
+        dst.insert(dst.end(), coords[i].begin(), coords[i].end());
+      }
+    }
   } else
 #endif
   {
     // Sequential execution
     for (std::size_t path_idx = 0; path_idx < num_paths; ++path_idx) {
-      process_path(path_idx, *result.seed_store);
+      process_path(path_idx, *result.seed_store, result.linearization_coords);
 
-      // Log per-path stats in sequential mode
       if (!config.executor) {
         const auto& path = graph.paths()[path_idx];
         LOG_DEBUG("Processed path " + path.name);
