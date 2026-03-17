@@ -228,6 +228,7 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
     const std::size_t max_chunks = config_.event_pipeline_config.max_chunks;
     signal::NormState norm_state;
     std::size_t chunk_idx = 0;
+    std::uint32_t query_offset = 0;  // cumulative event count for query position offset
 
     for (std::size_t chunk_start = 0; chunk_start < total_samples; chunk_start += chunk_size) {
       // Max chunks limit (0 = unlimited)
@@ -241,10 +242,16 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
       auto tokens = components_.fuzzy_quantizer->quantize(events);
       auto seeds = components_.seed_extractor->extract(tokens);
 
-      // Lookup and accumulate hits
+      // Lookup and accumulate hits, offsetting query positions by cumulative event count
       std::vector<NodeAnchor> chunk_hits;
       components_.lookup.lookup(seeds, chunk_hits);
+      for (auto& hit : chunk_hits) {
+        hit.read_pos += query_offset;
+      }
       all_hits.insert(all_hits.end(), chunk_hits.begin(), chunk_hits.end());
+
+      // Advance query offset by number of events in this chunk (like RH2's reg->offset)
+      query_offset += static_cast<std::uint32_t>(events.samples.size());
 
       // Trace: per-chunk pipeline dumps
       const auto& rid = read.read_id;
