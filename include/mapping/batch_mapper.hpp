@@ -79,15 +79,11 @@ struct BatchMapperConfig {
   // weighted = w_abs*(best_score/score_scale) + w_bestq*(mapq/30)
   //          + w_bestmq*(1-mean_mapq/best_mapq) + w_bestmc*(1-mean_score/best_score)
   // If weighted < map_threshold -> unmapped
-  //
-  // Alternative approach (not yet implemented): two-gate decision:
-  //   pass = (weighted >= threshold) OR (best_score >= min_abs AND best/mean >= min_ratio)
-  //   This would allow high-confidence reads through even with low standout.
   float map_w_abs{0.20f};     // Weight on absolute chain score (normalized by score_scale)
   float map_score_scale{100.0f};  // Normalizer for absolute score term
-  float map_w_bestq{0.35f};   // Weight on absolute MAPQ (RH2: 0.35)
-  float map_w_bestmq{0.05f};  // Weight on MAPQ standout ratio (RH2: 0.05)
-  float map_w_bestmc{0.60f};  // Weight on chain score standout ratio (RH2: 0.60)
+  float map_w_bestq{0.35f};   // Weight on absolute MAPQ
+  float map_w_bestmq{0.05f};  // Weight on MAPQ standout ratio
+  float map_w_bestmc{0.60f};  // Weight on chain score standout ratio
   float map_threshold{0.12f}; // Decision threshold (0 = disabled)
   std::size_t map_min_anchors{0};  // Min anchors in primary chain to report (0 = disabled)
 

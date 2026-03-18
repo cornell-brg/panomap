@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <unordered_map>
 #include <vector>
 
 #include "util/logging.hpp"
@@ -141,6 +142,20 @@ void apply_permutation(DPBuffers& dp, std::size_t n) {
   std::copy(tmp_u16.begin(), tmp_u16.begin() + n, dp.length.begin());
 }
 
+// Hash the ordered node_id sequence of a chain's anchors.
+// Chains traversing the same nodes (on different paths) produce the same hash.
+std::size_t hash_node_walk(const std::vector<ChainedAnchor>& anchors) {
+  std::size_t h = 14695981039346656037ULL;  // FNV-1a offset basis
+  std::uint32_t prev_node = std::numeric_limits<std::uint32_t>::max();
+  for (const auto& a : anchors) {
+    if (a.node_id == prev_node) continue;
+    h ^= static_cast<std::size_t>(a.node_id);
+    h *= 1099511628211ULL;  // FNV prime
+    prev_node = a.node_id;
+  }
+  return h;
+}
+
 }  // namespace
 
 PathChainer::PathChainer(PathChainerConfig config,
@@ -200,8 +215,8 @@ ChainResult PathChainer::chain(const std::vector<NodeAnchor>& hits) const {
     total_anchors += group.size();
   }
 
-  // Run DP per path, collect all chains
-  std::vector<Chain> all_chains;
+  // Run DP per path, dedup chains by node walk hash.
+  std::unordered_map<std::size_t, Chain> walk_map;
   std::vector<bool> input_used(hits.size(), false);  // track which input hits are chained
   DPBuffers dp;  // Reused across paths within this call
 
@@ -431,22 +446,33 @@ ChainResult PathChainer::chain(const std::vector<NodeAnchor>& hits) const {
         chain.anchors.push_back(ca);
       }
 
-      all_chains.push_back(std::move(chain));
+      // Dedup by node walk: keep higher-scoring chain for each unique walk.
+      std::size_t walk_hash = hash_node_walk(chain.anchors);
+      auto it = walk_map.find(walk_hash);
+      if (it == walk_map.end()) {
+        walk_map.emplace(walk_hash, std::move(chain));
+      } else if (chain.score > it->second.score) {
+        it->second = std::move(chain);
+      }
       ++path_chain_count;
     }
   }
 
-  // Sort all chains by score descending
-  std::sort(all_chains.begin(), all_chains.end(),
+  // Collect deduplicated chains, sort by score descending
+  std::vector<Chain> deduped;
+  deduped.reserve(walk_map.size());
+  for (auto& [hash, chain] : walk_map) {
+    deduped.push_back(std::move(chain));
+  }
+  std::sort(deduped.begin(), deduped.end(),
             [](const Chain& a, const Chain& b) { return a.score > b.score; });
 
-  // Keep top max_chains
-  if (all_chains.size() > config_.max_chains) {
-    all_chains.resize(config_.max_chains);
+  if (deduped.size() > config_.max_chains) {
+    deduped.resize(config_.max_chains);
   }
 
   ChainResult result;
-  result.chains = std::move(all_chains);
+  result.chains = std::move(deduped);
   result.expanded_anchor_count = total_anchors;
   result.used_inputs = std::move(input_used);
   return result;
