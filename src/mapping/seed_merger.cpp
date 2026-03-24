@@ -1,4 +1,13 @@
-// SPDX-License-Identifier: MIT
+/**
+ * seed_merger.cpp
+ *
+ * Merges adjacent seed hits.
+ *
+ * Related:
+ *  - seed_merger.hpp
+ *
+ * SPDX-License-Identifier: MIT
+ */
 
 #include "mapping/seed_merger.hpp"
 
@@ -61,30 +70,28 @@ std::vector<NodeAnchor> SeedMerger::merge(const std::vector<NodeAnchor>& hits,
     return {};
   }
 
-  // Sort hits by (node_id, node_offset, query_pos)
+  /* Sort hits by (node_id, node_offset, query_pos) */
   std::vector<NodeAnchor> sorted_hits = hits;
   std::sort(sorted_hits.begin(), sorted_hits.end(), SeedHitComparator{});
 
   std::vector<NodeAnchor> merged;
   merged.reserve(sorted_hits.size());
 
-  // Start with the first hit as the current accumulator
+  /* Start with the first hit as the current accumulator */
   NodeAnchor current = sorted_hits[0];
 
   for (std::size_t i = 1; i < sorted_hits.size(); ++i) {
     const auto& next = sorted_hits[i];
 
     if (can_merge(current, next, config.merge_tolerance)) {
-      // Merge next into current
       merge_into(current, next);
     } else {
-      // Cannot merge - push current and start new accumulator
       merged.push_back(current);
       current = next;
     }
   }
 
-  // Don't forget the last accumulated hit
+  // last accumulated hit not yet pushed
   merged.push_back(current);
 
   return merged;

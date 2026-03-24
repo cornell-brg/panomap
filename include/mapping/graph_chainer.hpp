@@ -1,5 +1,14 @@
-// SPDX-License-Identifier: MIT
-// Graph-space DP chainer: chains NodeAnchors directly, querying path coords.
+/**
+ * graph_chainer.hpp
+ *
+ * Graph-space chainer with haplotype hopping.
+ *
+ * Related:
+ *  - graph_chainer.cpp
+ *  - chainer.hpp
+ *
+ * SPDX-License-Identifier: MIT
+ */
 
 #pragma once
 
@@ -47,7 +56,7 @@ private:
   std::size_t max_chains_;
   std::size_t max_skip_;
 
-  // DP state per anchor
+  /* DP state per anchor */
   struct DPEntry {
     double score{0.0};
     int pred{-1};              // predecessor index (-1 = chain start)
@@ -55,9 +64,9 @@ private:
     std::int64_t ref_coord{0}; // chosen ref_coord on that path
   };
 
-  // Find best transition from anchor j to anchor i across all shared paths.
-  // Returns (gap_cost, path_id, ref_coord_j, ref_coord_i) or negative if no
-  // valid transition exists.
+  /* Find best transition from anchor j to anchor i across all shared paths.
+   * Returns (gap_cost, path_id, ref_coord_j, ref_coord_i) or negative if no
+   * valid transition exists. */
   struct Transition {
     double cost;
     std::size_t path_id;

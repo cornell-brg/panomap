@@ -1,5 +1,15 @@
-// SPDX-License-Identifier: MIT
-// Interfaces for chaining backends.
+/**
+ * chainer.hpp
+ *
+ * Chainer interface, NodeAnchor, ChainedAnchor, Chain, CoordSpace.
+ *
+ * Related:
+ *  - path_chainer.hpp
+ *  - graph_chainer.hpp
+ *  - sort_chainer.hpp
+ *
+ * SPDX-License-Identifier: MIT
+ */
 
 #pragma once
 

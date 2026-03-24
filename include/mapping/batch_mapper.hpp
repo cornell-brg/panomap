@@ -1,4 +1,15 @@
-// SPDX-License-Identifier: MIT
+/**
+ * batch_mapper.hpp
+ *
+ * BatchMapper config, stats, components, and the mapper class.
+ *
+ * Related:
+ *  - batch_mapper.cpp
+ *  - chainer.hpp
+ *  - map_result.hpp
+ *
+ * SPDX-License-Identifier: MIT
+ */
 
 #pragma once
 
@@ -50,36 +61,35 @@ struct BatchMapperConfig {
   cli::Parsed chainer_parsed{};                   // CLI args forwarded to chainer
   const index::SeedStore* seed_store{nullptr};    // non-owning pointer to loaded SeedStore
   const index::GraphStore* graph_store{nullptr};  // non-owning pointer to loaded GraphStore
-  // Linearization coordinates (needed for DP chaining)
-  // Non-owning pointer to linearization coords (from in-memory indexing or future
-  // deserialization)
+  /* Linearization coordinates (needed for DP chaining).
+   * Non-owning pointer (from in-memory indexing or future deserialization). */
   const std::vector<std::vector<index::LinearCoordinate>>* linearization_coords{nullptr};
-  // Path lengths for anchor bounds checking (parallel to graph paths)
+  /* Path lengths for anchor bounds checking (parallel to graph paths) */
   const std::vector<std::size_t>* path_lengths{nullptr};
-  // 1D sort coordinates for SortChainer (non-owning, from index)
+  /* 1D sort coordinates for SortChainer (non-owning, from index) */
   const std::vector<double>* node_1d_coords{nullptr};
 
-  // Result writer for output (non-owning, optional)
+  /* Result writer for output (non-owning, optional) */
   io::ResultWriter* result_writer{nullptr};
 
-  // Anchor merging (passed to chainer)
+  /* Anchor merging (passed to chainer) */
   bool enable_anchor_merge{true};
   std::size_t pore_k{0};  // Pore model k, passed to chainer for scoring span
 
-  // ROI classification
+  /* ROI classification */
   const std::unordered_set<std::size_t>* roi_nodes{nullptr};  // non-owning
   std::string classify_mode{};  // "enrich" or "deplete", empty = disabled
   bool roi_filter_anchors{false};     // --chain-target: filter anchors to ROI nodes
   double roi_score_threshold{30.0};   // --chain-target: min chain score for accept
   double roi_overlap_threshold{0.5};  // --chain-genome: min ROI overlap for accept
 
-  // Seed lookup limits
+  /* Seed lookup limits */
   std::size_t max_total_hits{100000};  // Per-read hit cap (0 = unlimited, default 100k)
 
-  // Mapping decision (weighted score filter)
-  // weighted = w_abs*(best_score/score_scale) + w_bestq*(mapq/30)
-  //          + w_bestmq*(1-mean_mapq/best_mapq) + w_bestmc*(1-mean_score/best_score)
-  // If weighted < map_threshold -> unmapped
+  /* Mapping decision (weighted score filter).
+   * weighted = w_abs*(best_score/score_scale) + w_bestq*(mapq/30)
+   *          + w_bestmq*(1-mean_mapq/best_mapq) + w_bestmc*(1-mean_score/best_score)
+   * If weighted < map_threshold -> unmapped */
   float map_w_abs{0.20f};     // Weight on absolute chain score (normalized by score_scale)
   float map_score_scale{100.0f};  // Normalizer for absolute score term
   float map_w_bestq{0.35f};   // Weight on absolute MAPQ

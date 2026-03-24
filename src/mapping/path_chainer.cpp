@@ -1,4 +1,14 @@
-// SPDX-License-Identifier: MIT
+/**
+ * path_chainer.cpp
+ *
+ * Path-space DP chainer with SoA layout and node walk dedup.
+ *
+ * Related:
+ *  - path_chainer.hpp
+ *  - chainer.hpp
+ *
+ * SPDX-License-Identifier: MIT
+ */
 
 #include "mapping/path_chainer.hpp"
 
@@ -15,20 +25,20 @@ namespace piru::mapping {
 
 namespace {
 
-// SoA DP buffers -- reused across paths within a single chain() call.
-// Kept as a local variable in chain() for thread safety.
+/* SoA DP buffers -- reused across paths within a single chain() call.
+ * Kept as a local variable in chain() for thread safety. */
 struct DPBuffers {
-  // SoA anchor data (populated from PathAnchors)
+  /* SoA anchor data (populated from PathAnchors) */
   std::vector<std::uint32_t> ref_coord;
   std::vector<std::uint32_t> query_pos;
   std::vector<std::uint16_t> length;
   std::vector<std::uint32_t> src_idx;
-  // Precomputed per-anchor
+  /* Precomputed per-anchor */
   std::vector<std::int32_t> q_span;
-  // DP state
+  /* DP state */
   std::vector<std::int32_t> f, v;
   std::vector<std::int32_t> pred, t;
-  // Sort permutation
+  /* Sort permutation */
   std::vector<std::uint32_t> order;
 
   void resize(std::size_t n);
@@ -163,7 +173,7 @@ PathChainer::PathChainer(PathChainerConfig config,
                      const std::vector<std::size_t>& path_lengths)
     : config_(std::move(config)), coords_(coords), path_lengths_(path_lengths) {}
 
-// Expand NodeAnchors to PathAnchors grouped by path_id.
+/* Expand NodeAnchors to PathAnchors grouped by path_id. */
 PathAnchorGroups expand(const std::vector<NodeAnchor>& hits,
                         const std::vector<std::vector<index::LinearCoordinate>>& coords,
                         const std::vector<std::size_t>& path_lengths) {
@@ -206,7 +216,7 @@ PathAnchorGroups expand(const std::vector<NodeAnchor>& hits,
 ChainResult PathChainer::chain(const std::vector<NodeAnchor>& hits) const {
   auto groups = expand(hits, coords_, path_lengths_);
 
-  // Count total expanded anchors
+  /* Count total expanded anchors */
   std::size_t total_anchors = 0;
   for (auto& group : groups) {
     if (config_.merge_anchors) {
@@ -215,7 +225,7 @@ ChainResult PathChainer::chain(const std::vector<NodeAnchor>& hits) const {
     total_anchors += group.size();
   }
 
-  // Run DP per path, dedup chains by node walk hash.
+  /* Run DP per path, dedup chains by node walk hash. */
   std::unordered_map<std::size_t, Chain> walk_map;
   std::vector<bool> input_used(hits.size(), false);  // track which input hits are chained
   DPBuffers dp;  // Reused across paths within this call
@@ -261,14 +271,14 @@ ChainResult PathChainer::chain(const std::vector<NodeAnchor>& hits) const {
       dp.t[i] = 0;
     }
 
-    // Cache config values for inner loop
+    /* Cache config values for inner loop */
     const auto max_dist_ref = static_cast<std::uint32_t>(config_.max_dist_ref);
     const auto max_dist_query = static_cast<std::int32_t>(config_.max_dist_query);
     const auto bw = static_cast<std::int32_t>(config_.bw);
     const float chn_pen_gap = config_.chn_pen_gap;
     const float chn_pen_skip = config_.chn_pen_skip;
 
-    // Local pointers for SoA arrays (keeps them in registers)
+    // keeps them in registers
     const auto* rc = dp.ref_coord.data();
     const auto* qp = dp.query_pos.data();
     const auto* qs = dp.q_span.data();
@@ -292,7 +302,7 @@ ChainResult PathChainer::chain(const std::vector<NodeAnchor>& hits) const {
       for (std::size_t j = i; j > st && num_skipped < config_.max_skip;) {
         --j;
 
-        // Inline compute_score(j, i)
+        /* Inline compute_score(j, i) */
         auto dq = static_cast<std::int32_t>(qp[i]) - static_cast<std::int32_t>(qp[j]);
         if (dq <= 0 || dq > max_dist_query) {
           ++num_skipped;
@@ -316,7 +326,7 @@ ChainResult PathChainer::chain(const std::vector<NodeAnchor>& hits) const {
           float log_pen = dd >= 1 ? mg_log2(static_cast<float>(dd + 1)) : 0.0f;
           sc -= static_cast<std::int32_t>(lin_pen + 0.5f * log_pen);
         }
-        // End inline compute_score
+        /* End inline compute_score */
 
         sc += f[j];
         if (sc > max_f) {
@@ -329,7 +339,7 @@ ChainResult PathChainer::chain(const std::vector<NodeAnchor>& hits) const {
         if (pred[j] >= 0) t[pred[j]] = static_cast<std::int32_t>(i);
       }
 
-      // Check max_ii (best predecessor within band)
+      /* Check max_ii (best predecessor within band) */
       if (max_ii < 0 || rc[i] > rc[max_ii] + max_dist_ref) {
         std::int32_t best = std::numeric_limits<std::int32_t>::min();
         max_ii = -1;
@@ -344,7 +354,7 @@ ChainResult PathChainer::chain(const std::vector<NodeAnchor>& hits) const {
       if (max_ii >= 0 && static_cast<std::size_t>(max_ii) < st) {
         // max_ii fell out of range, skip
       } else if (max_ii >= 0) {
-        // Inline compute_score(max_ii, i)
+        /* Inline compute_score(max_ii, i) */
         auto dq_m = static_cast<std::int32_t>(qp[i]) - static_cast<std::int32_t>(qp[max_ii]);
         auto dr_m = static_cast<std::int32_t>(rc[i]) - static_cast<std::int32_t>(rc[max_ii]);
         std::int32_t tmp = std::numeric_limits<std::int32_t>::min();
@@ -399,9 +409,9 @@ ChainResult PathChainer::chain(const std::vector<NodeAnchor>& hits) const {
     for (std::size_t k = 0; k < z.size() && path_chain_count < config_.max_chains; ++k) {
       if (used[z[k].idx]) continue;
 
-      // Backtrack, marking used as we go.
-      // If we hit an already-used anchor, this chain shares a prefix
-      // with a previously extracted chain -- discard it entirely.
+      /* Backtrack, marking used as we go.
+       * If we hit an already-used anchor, this chain shares a prefix
+       * with a previously extracted chain -- discard it entirely. */
       std::vector<std::size_t> chain_indices;
       bool shared_prefix = false;
       {
@@ -419,13 +429,12 @@ ChainResult PathChainer::chain(const std::vector<NodeAnchor>& hits) const {
         std::reverse(chain_indices.begin(), chain_indices.end());
       }
 
-      // Discard chains that share predecessors with an existing chain,
-      // or have too few anchors
+      /* Discard chains that share predecessors or have too few anchors */
       if (shared_prefix || chain_indices.size() < config_.min_chain_anchors) {
         continue;
       }
 
-      // Build Chain: recover graph-space fields via src_idx
+      /* Build Chain: recover graph-space fields via src_idx */
       Chain chain;
       chain.score = static_cast<double>(z[k].score);
       chain.path_id = path_id;
@@ -446,7 +455,7 @@ ChainResult PathChainer::chain(const std::vector<NodeAnchor>& hits) const {
         chain.anchors.push_back(ca);
       }
 
-      // Dedup by node walk: keep higher-scoring chain for each unique walk.
+      /* Dedup by node walk: keep higher-scoring chain for each unique walk. */
       std::size_t walk_hash = hash_node_walk(chain.anchors);
       auto it = walk_map.find(walk_hash);
       if (it == walk_map.end()) {
@@ -458,7 +467,7 @@ ChainResult PathChainer::chain(const std::vector<NodeAnchor>& hits) const {
     }
   }
 
-  // Collect deduplicated chains, sort by score descending
+  /* Collect deduplicated chains, sort by score descending */
   std::vector<Chain> deduped;
   deduped.reserve(walk_map.size());
   for (auto& [hash, chain] : walk_map) {
@@ -478,7 +487,7 @@ ChainResult PathChainer::chain(const std::vector<NodeAnchor>& hits) const {
   return result;
 }
 
-// -- PathChainerConfig CLI integration --
+/* PathChainerConfig CLI integration */
 
 std::vector<cli::Option> PathChainerConfig::cli_options() {
   return {

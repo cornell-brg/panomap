@@ -85,7 +85,7 @@ BatchMapper::BatchMapper(io::ReadProvider& provider, BatchMapperConfig config, s
 PipelineComponents BatchMapper::create_components() const {
   PipelineComponents comps;
 
-  // Create unified event pipeline (event detection + normalization)
+  /* Create unified event pipeline (event detection + normalization) */
   comps.event_pipeline = signal::make_event_pipeline(config_.event_pipeline_config);
 
   comps.fuzzy_quantizer = signal::make_fuzzy_quantizer(config_.fuzzy_config);
@@ -96,7 +96,7 @@ PipelineComponents BatchMapper::create_components() const {
     throw std::runtime_error("BatchMapper requires a SeedStore for lookup");
   }
 
-  // Create chainer backend
+  /* Create chainer backend */
   if (config_.chainer_backend == "path-chain") {
     if (!config_.linearization_coords) {
       throw std::runtime_error("PathChainer requires linearization_coords");
@@ -131,7 +131,7 @@ PipelineComponents BatchMapper::create_components() const {
   const std::size_t freq_threshold = comps.seed_store->frequency_threshold();
   comps.lookup = SeedLookup(comps.seed_store, freq_threshold, config_.max_total_hits);
 
-  // Log pipeline configuration
+  /* Log pipeline configuration */
   LOG_DEBUG("Pipeline: " + comps.chainer->name() + " chaining");
 
   return comps;
@@ -155,7 +155,7 @@ BatchMapperStats BatchMapper::process_all() {
     stats.reads_processed += batch.num_reads;
     process_batch(batch);
 
-    // Accumulate output stats
+    /* Accumulate output stats */
     auto batch_stats = output_batch(batch);
     stats.reads_mapped += batch_stats.reads_mapped;
     stats.reads_unmapped += batch_stats.reads_unmapped;
@@ -166,7 +166,7 @@ BatchMapperStats BatchMapper::process_all() {
     batch.clear();
   }
 
-  // Log detailed summary
+  /* Log detailed summary */
   LOG_INFO("BatchMapper finished: batches=" + std::to_string(stats.batches) +
            ", reads=" + std::to_string(stats.reads_processed) +
            ", mapped=" + std::to_string(stats.reads_mapped) +
@@ -190,7 +190,7 @@ void BatchMapper::load_batch(BatchBuffer& batch) {
 }
 
 void BatchMapper::process_batch(BatchBuffer& batch) {
-  // Calculate estimated memory before processing
+  /* Calculate estimated memory before processing */
   std::size_t est_mem_mb = 0;
   for (std::size_t i = 0; i < batch.num_reads; ++i) {
     est_mem_mb += batch.raw_reads[i].len_raw_signal * sizeof(int16_t) / 1024 / 1024;
@@ -200,7 +200,7 @@ void BatchMapper::process_batch(BatchBuffer& batch) {
 
   executor_->parallel_for(0, batch.num_reads, 1, [&](std::size_t i) { process_read(batch, i); });
 
-  // Calculate seed hits memory
+  /* Calculate seed hits memory */
   std::size_t total_hits = 0;
   for (std::size_t i = 0; i < batch.num_reads; ++i) {
     total_hits += batch.seed_hits[i].size();
@@ -232,7 +232,7 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
      * Like RH2: independent DSP per chunk, cumulative hits for chaining,
      * early exit when confident mapping found. */
 
-    // Convert raw ADC to picoamps (once, full signal)
+    /* Convert raw ADC to picoamps (once, full signal) */
     const float raw_unit = (read.digitisation == 0.0f) ? 1.0f : (read.range / read.digitisation);
     std::vector<float> pA;
     pA.reserve(read.raw_signal.size());
@@ -252,13 +252,13 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
 
       std::size_t chunk_len = std::min(chunk_size, total_samples - chunk_start);
 
-      // Per-chunk DSP: event detection, quantization, seed extraction
+      /* Per-chunk DSP: event detection, quantization, seed extraction */
       auto events = components_.event_pipeline->process_chunk(
           pA.data() + chunk_start, chunk_len, norm_state);
       auto tokens = components_.fuzzy_quantizer->quantize(events);
       auto seeds = components_.seed_extractor->extract(tokens);
 
-      // Lookup and accumulate hits, offsetting query positions by cumulative event count
+      /* Lookup and accumulate hits, offsetting query positions by cumulative event count */
       std::vector<NodeAnchor> chunk_hits;
       components_.lookup.lookup(seeds, chunk_hits);
       for (auto& hit : chunk_hits) {
@@ -266,10 +266,10 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
       }
       all_hits.insert(all_hits.end(), chunk_hits.begin(), chunk_hits.end());
 
-      // Advance query offset by number of events in this chunk (like RH2's reg->offset)
+      // like RH2's reg->offset
       query_offset += static_cast<std::uint32_t>(events.samples.size());
 
-      // Trace: per-chunk pipeline dumps
+      /* Trace: per-chunk pipeline dumps */
       const auto& rid = read.read_id;
       PIRU_TRACE_DUMP(trace::kSignal, rid, {
         std::ofstream ofs(trace::trace_path("1_pA", rid, chunk_idx));
@@ -298,7 +298,7 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
           ofs << h.node_id << "\t" << h.offset << "\t" << h.read_pos << "\t" << h.span << "\n";
       });
 
-      // Chain all accumulated hits, keep only survivors
+      /* Chain all accumulated hits, keep only survivors */
       ChainResult chunk_chains = components_.chainer->chain(all_hits);
       if (!chunk_chains.used_inputs.empty()) {
         std::vector<NodeAnchor> survivors;
@@ -311,7 +311,7 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
         all_hits = std::move(survivors);
       }
 
-      // Early exit: if best chain has high enough MAPQ, stop processing chunks
+      /* Early exit: if best chain has high enough MAPQ, stop processing chunks */
       if (config_.map_threshold > 0.0f && !chunk_chains.chains.empty()) {
         double best_cs = chunk_chains.chains[0].score;
         double sec_cs = (chunk_chains.chains.size() > 1) ? chunk_chains.chains[1].score : 0.0;
@@ -327,7 +327,7 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
     chunks_processed = chunk_idx;
   }
 
-  // ROI anchor filtering
+  /* ROI anchor filtering */
   if (config_.roi_filter_anchors && config_.roi_nodes) {
     const auto& roi = *config_.roi_nodes;
     all_hits.erase(std::remove_if(all_hits.begin(), all_hits.end(),
@@ -337,14 +337,14 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
                    all_hits.end());
   }
 
-  // Final chain with all accumulated hits
+  /* Final chain with all accumulated hits */
   ChainResult chain_result = components_.chainer->chain(all_hits);
 
-  // Free seed hits
+  /* Free seed hits */
   all_hits.clear();
   all_hits.shrink_to_fit();
 
-  // Build unified map result from chain result
+  /* Build unified map result from chain result */
   ReadMapResult& result = batch.map_results[index];
   result.mappings.clear();
   result.expanded_anchor_count = chain_result.expanded_anchor_count;
@@ -362,21 +362,21 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
     result.mappings.push_back(std::move(mapping));
   }
 
-  // Mapping decision: RH2-style weighted score filter.
-  // Computes how much the best chain stands out from the average.
-  // If weighted score < threshold, declare unmapped.
+  /* Mapping decision: RH2-style weighted score filter.
+   * Computes how much the best chain stands out from the average.
+   * If weighted score < threshold, declare unmapped. */
   if (config_.map_threshold > 0.0f && result.mappings.size() >= 1) {
     double best_score = result.mappings[0].chain_score;
 
-    // Compute MAPQ from best/secondary ratio
+    /* Compute MAPQ from best/secondary ratio */
     double secondary_score = (result.mappings.size() > 1)
         ? result.mappings[1].chain_score : 0.0;
     double best_mapq = (best_score <= 0.0) ? 0.0
         : (secondary_score <= 0.0) ? 60.0
         : std::clamp(40.0 * (1.0 - secondary_score / best_score), 0.0, 60.0);
 
-    // Per-chain mapq: each chain's mapq is based on its score vs the next chain.
-    // Mean score and mean mapq across all chains.
+    /* Per-chain mapq: each chain's mapq is based on its score vs the next chain.
+     * Mean score and mean mapq across all chains. */
     double mean_score = 0.0, mean_mapq = 0.0;
     const auto& mappings = result.mappings;
     for (std::size_t mi = 0; mi < mappings.size(); ++mi) {
@@ -390,7 +390,7 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
     mean_score /= static_cast<double>(mappings.size());
     mean_mapq /= static_cast<double>(mappings.size());
 
-    // Weighted components
+    /* Weighted components */
     float scaled_score_scale = config_.map_score_scale * std::sqrt(static_cast<float>(chunks_processed));
     float chunk_factor = std::max(0.5f, 1.0f - 1.0f / static_cast<float>(chunks_processed));
     float effective_w_abs = config_.map_w_abs * chunk_factor;
@@ -422,7 +422,7 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
     }
   }
 
-  // Compute per-mapping MAPQ
+  /* Compute per-mapping MAPQ */
   if (!result.mappings.empty()) {
     for (std::size_t i = 0; i < result.mappings.size(); ++i) {
       double sec = (i + 1 < result.mappings.size()) ? result.mappings[i + 1].chain_score : 0.0;
@@ -437,8 +437,8 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
       }
     }
 
-    // Secondary suppression: if many chains score similarly and primary
-    // mapq is low, only keep the primary.
+    /* Secondary suppression: if many chains score similarly and primary
+     * mapq is low, only keep the primary. */
     if (result.mappings.size() > 1 && result.mappings[0].mapq < 5) {
       double primary_score = result.mappings[0].chain_score;
       std::size_t n_similar = 0;
@@ -451,18 +451,18 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
     }
   }
 
-  // ROI classification (if --roi is active)
+  /* ROI classification (if --roi is active) */
   if (config_.roi_nodes && !config_.classify_mode.empty() && result.mapped()) {
     bool above_threshold;
 
     if (config_.roi_filter_anchors) {
-      // --chain-target: classify by chain score threshold.
-      // All anchors are ROI nodes, so overlap is meaningless.
+      /* --chain-target: classify by chain score threshold.
+       * All anchors are ROI nodes, so overlap is meaningless. */
       double chain_score = result.mappings[0].chain_score;
       result.roi_overlap = chain_score;  // repurpose field for output
       above_threshold = chain_score >= config_.roi_score_threshold;
     } else {
-      // --chain-genome: classify by ROI node overlap fraction
+      /* --chain-genome: classify by ROI node overlap fraction */
       const auto& anchors = result.mappings[0].anchors;
       const auto& roi = *config_.roi_nodes;
 
@@ -496,7 +496,7 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
 BatchMapperStats BatchMapper::output_batch(const BatchBuffer& batch) const {
   BatchMapperStats stats;
 
-  // Try to get path names from graph store
+  /* Try to get path names from graph store */
   const index::AdjListGraphStore* adj_store =
       dynamic_cast<const index::AdjListGraphStore*>(config_.graph_store);
 
@@ -504,7 +504,7 @@ BatchMapperStats BatchMapper::output_batch(const BatchBuffer& batch) const {
     const auto& read = batch.raw_reads[i];
     const auto& map_result = batch.map_results[i];
 
-    // Track mapped/unmapped
+    /* Track mapped/unmapped */
     const bool is_mapped = map_result.mapped();
     if (is_mapped) {
       ++stats.reads_mapped;
@@ -512,7 +512,7 @@ BatchMapperStats BatchMapper::output_batch(const BatchBuffer& batch) const {
       ++stats.reads_unmapped;
     }
 
-    // Write to result file if configured
+    /* Write to result file if configured */
     if (config_.result_writer) {
       config_.result_writer->write(map_result, read.read_id, read.len_raw_signal);
       if (is_mapped) {

@@ -1,5 +1,14 @@
-// SPDX-License-Identifier: MIT
-// Seed merging component to consolidate adjacent/overlapping seed hits.
+/**
+ * seed_merger.hpp
+ *
+ * Merges adjacent NodeAnchors on the same diagonal.
+ *
+ * Related:
+ *  - seed_merger.cpp
+ *  - batch_mapper.cpp
+ *
+ * SPDX-License-Identifier: MIT
+ */
 
 #pragma once
 

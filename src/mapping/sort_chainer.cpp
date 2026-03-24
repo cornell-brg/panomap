@@ -75,7 +75,7 @@ ChainResult SortChainer::chain(const std::vector<NodeAnchor>& hits) const {
 
   if (anchors.size() < config_.min_chain_anchors) return result;
 
-  // Sort by ref_coord, then query_pos
+  /* Sort by ref_coord, then query_pos */
   std::sort(anchors.begin(), anchors.end(), [](const SortAnchor& a, const SortAnchor& b) {
     return a.ref_coord != b.ref_coord ? a.ref_coord < b.ref_coord : a.query_pos < b.query_pos;
   });
@@ -143,7 +143,7 @@ ChainResult SortChainer::chain(const std::vector<NodeAnchor>& hits) const {
       if (pred[j] >= 0) t[pred[j]] = static_cast<std::int32_t>(i);
     }
 
-    // Check max_ii
+    /* Check max_ii */
     if (max_ii < 0 || anchors[i].ref_coord > anchors[max_ii].ref_coord + max_dist_ref) {
       std::int32_t best = std::numeric_limits<std::int32_t>::min();
       max_ii = -1;

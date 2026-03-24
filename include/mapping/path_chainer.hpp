@@ -1,5 +1,14 @@
-// SPDX-License-Identifier: MIT
-// Path-space DP chainer: expands to per-path anchors, chains per path.
+/**
+ * path_chainer.hpp
+ *
+ * Path-space chainer, per-path DP, node walk dedup.
+ *
+ * Related:
+ *  - path_chainer.cpp
+ *  - chainer.hpp
+ *
+ * SPDX-License-Identifier: MIT
+ */
 
 #pragma once
 

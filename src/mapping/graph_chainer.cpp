@@ -1,4 +1,14 @@
-// SPDX-License-Identifier: MIT
+/**
+ * graph_chainer.cpp
+ *
+ * Graph-space DP chainer implementation.
+ *
+ * Related:
+ *  - graph_chainer.hpp
+ *  - chainer.hpp
+ *
+ * SPDX-License-Identifier: MIT
+ */
 
 #include "mapping/graph_chainer.hpp"
 
@@ -36,7 +46,7 @@ GraphChainer::Transition GraphChainer::bestTransition(const NodeAnchor& j, const
   for (const auto& lc_j : j_coords) {
     std::int64_t ref_j = lc_j.ref_coord + static_cast<std::int64_t>(j.offset);
 
-    // Look up i's ref_coords on the same path
+    /* Look up i's ref_coords on the same path */
     if (lc_j.path_id >= transposed_.size()) continue;
     if (i.node_id >= transposed_[lc_j.path_id].size()) continue;
 
@@ -46,20 +56,20 @@ GraphChainer::Transition GraphChainer::bestTransition(const NodeAnchor& j, const
     for (std::int64_t ref_coord_i : i_refs) {
       std::int64_t ref_i = ref_coord_i + static_cast<std::int64_t>(i.offset);
 
-      // Ref distance band
+      /* Ref distance band */
       auto delta_ref = ref_i - ref_j;
       if (delta_ref < 0) continue;  // must be forward
       if (static_cast<std::size_t>(delta_ref) > max_dist_) continue;
 
-      // Query distance (already checked by caller, but compute for gap cost)
+      // already checked by caller, but compute for gap cost
       auto delta_query = static_cast<std::int64_t>(i.read_pos) - static_cast<std::int64_t>(j.read_pos);
       if (delta_query <= 0) continue;
 
-      // Diagonal deviation
+      /* Diagonal deviation */
       auto diag_dev = std::abs(delta_ref - delta_query);
       if (static_cast<std::size_t>(diag_dev) > max_diag_dev_) continue;
 
-      // Compute gap cost (same formula as PathChainer)
+      /* Compute gap cost (same formula as PathChainer) */
       auto j_ref_end = ref_j + static_cast<std::int64_t>(j.span);
       auto j_query_end = static_cast<std::int64_t>(j.read_pos + j.span);
 
@@ -72,14 +82,14 @@ GraphChainer::Transition GraphChainer::bestTransition(const NodeAnchor& j, const
 
       cost += static_cast<double>(diag_dev) * 0.05;  // diag_penalty_factor
 
-      // Overlap penalty
+      /* Overlap penalty */
       if (ref_gap < 0 || query_gap < 0) {
         double ref_overlap = std::abs(std::min<std::int64_t>(0, ref_gap));
         double query_overlap = std::abs(std::min<std::int64_t>(0, query_gap));
         cost += (ref_overlap + query_overlap) / 2.0 * 0.90;  // overlap_penalty_factor
       }
 
-      // Same-path preference: slight bonus for staying on same path
+      // slight bonus for staying on same path
       if (lc_j.path_id == prev_path_id) {
         cost -= 0.1;
       }
@@ -127,8 +137,8 @@ ChainResult GraphChainer::chain(const std::vector<NodeAnchor>& hits) const {
   const std::size_t n = order.size();
   result.expanded_anchor_count = n;
 
-  // Per-path anchor lists sorted by ref_coord, self-contained for the inner
-  // loop (no random access back into hits[] needed).
+  /* Per-path anchor lists sorted by ref_coord, self-contained for the inner
+   * loop (no random access back into hits[] needed). */
   std::size_t num_paths = transposed_.size();
   struct PathEntry {
     std::int64_t ref_coord;
@@ -139,7 +149,7 @@ ChainResult GraphChainer::chain(const std::vector<NodeAnchor>& hits) const {
   };
   std::vector<std::vector<PathEntry>> path_lists(num_paths);
 
-  // Also record which paths each anchor belongs to (for the outer DP loop)
+  /* Also record which paths each anchor belongs to (for the outer DP loop) */
   struct AnchorPathInfo {
     std::uint32_t path_id;
     std::int64_t ref_coord;
@@ -162,7 +172,7 @@ ChainResult GraphChainer::chain(const std::vector<NodeAnchor>& hits) const {
     std::sort(plist.begin(), plist.end());
   }
 
-  // Debug counters
+  /* Debug counters */
   std::size_t dbg_candidates = 0;
   std::size_t dbg_valid = 0;
   std::size_t dbg_improved = 0;
@@ -175,18 +185,18 @@ ChainResult GraphChainer::chain(const std::vector<NodeAnchor>& hits) const {
     DPEntry best_entry;
     best_entry.score = anchorScore(anchor_i);
 
-    // For each path that anchor i is on, binary search for predecessors
+    /* For each path that anchor i is on, binary search for predecessors */
     for (const auto& pi : anchor_paths[ii]) {
       const auto& plist = path_lists[pi.path_id];
       if (plist.empty()) continue;
 
       std::int64_t ref_lo = pi.ref_coord - static_cast<std::int64_t>(max_dist_);
 
-      // Binary search for first entry >= ref_lo
+      /* Binary search for first entry >= ref_lo */
       PathEntry search_key{ref_lo, 0, 0, 0};
       auto it_lo = std::lower_bound(plist.begin(), plist.end(), search_key);
 
-      // Scan from lower bound to ref_i
+      /* Scan from lower bound to ref_i */
       std::size_t num_skipped = 0;
       for (auto it = it_lo; it != plist.end() && num_skipped < max_skip_; ++it) {
         if (it->ref_coord >= pi.ref_coord) break;
@@ -207,7 +217,7 @@ ChainResult GraphChainer::chain(const std::vector<NodeAnchor>& hits) const {
         num_skipped = 0;
         ++dbg_valid;
 
-        // Gap cost (all fields from PathEntry -- no hits[] access needed)
+        /* Gap cost (all fields from PathEntry -- no hits[] access needed) */
         auto j_ref_end = it->ref_coord + static_cast<std::int64_t>(it->span);
         auto j_query_end = static_cast<std::int64_t>(it->read_pos + it->span);
 
@@ -225,10 +235,10 @@ ChainResult GraphChainer::chain(const std::vector<NodeAnchor>& hits) const {
           cost += (ref_overlap + query_overlap) / 2.0 * 0.90;
         }
 
-        // Same-path preference
+        // slight bonus for staying on same path
         if (pi.path_id == dp[it->dp_idx].path_id) cost -= 0.1;
 
-        // Matching bonus
+        /* Matching bonus */
         double match_bonus =
             std::min({anchorScore(anchor_i),
                       static_cast<double>(std::max<std::int64_t>(0, delta_query)),
@@ -245,7 +255,7 @@ ChainResult GraphChainer::chain(const std::vector<NodeAnchor>& hits) const {
       }
     }
 
-    // If no predecessor found, pick first available path
+    /* If no predecessor found, pick first available path */
     if (best_entry.pred == -1 && !anchor_paths[ii].empty()) {
       best_entry.path_id = anchor_paths[ii][0].path_id;
       best_entry.ref_coord = anchor_paths[ii][0].ref_coord;
@@ -254,7 +264,7 @@ ChainResult GraphChainer::chain(const std::vector<NodeAnchor>& hits) const {
     dp[ii] = best_entry;
   }
 
-  // Debug summary
+  /* Debug summary */
   double best_dp = -1e9;
   for (std::size_t i = 0; i < n; ++i) {
     if (dp[i].score > best_dp) best_dp = dp[i].score;
@@ -270,7 +280,7 @@ ChainResult GraphChainer::chain(const std::vector<NodeAnchor>& hits) const {
   std::vector<bool> used(n, false);
 
   while (result.chains.size() < max_chains_) {
-    // Find best unused endpoint
+    /* Find best unused endpoint */
     std::size_t best_idx = 0;
     double best_dp_score = -std::numeric_limits<double>::infinity();
     bool found = false;
@@ -288,7 +298,7 @@ ChainResult GraphChainer::chain(const std::vector<NodeAnchor>& hits) const {
       break;
     }
 
-    // Backtrack, but stop if we hit a used anchor
+    /* Backtrack, but stop if we hit a used anchor */
     std::vector<std::size_t> chain_indices;
     {
       int idx = static_cast<int>(best_idx);
@@ -305,8 +315,8 @@ ChainResult GraphChainer::chain(const std::vector<NodeAnchor>& hits) const {
       continue;
     }
 
-    // Compute truncated chain score: endpoint score minus the score at
-    // the truncation point's predecessor (if truncated)
+    /* Compute truncated chain score: endpoint score minus the score at
+     * the truncation point's predecessor (if truncated). */
     double chain_score = best_dp_score;
     std::size_t first_idx = chain_indices.front();
     if (dp[first_idx].pred >= 0) {
@@ -314,14 +324,14 @@ ChainResult GraphChainer::chain(const std::vector<NodeAnchor>& hits) const {
       chain_score -= dp[static_cast<std::size_t>(dp[first_idx].pred)].score;
     }
 
-    // Mark chain anchors as used
+    /* Mark chain anchors as used */
     for (std::size_t idx : chain_indices) {
       used[idx] = true;
     }
 
     if (chain_score < static_cast<double>(min_chain_score_)) continue;
 
-    // Build chain
+    /* Build chain */
     Chain chain;
     chain.score = chain_score;
     chain.path_id = dp[chain_indices.back()].path_id;
