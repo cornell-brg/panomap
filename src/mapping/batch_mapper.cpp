@@ -363,32 +363,34 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
         : (secondary_score <= 0.0) ? 60.0
         : std::clamp(40.0 * (1.0 - secondary_score / best_score), 0.0, 60.0);
 
-    // Mean scores across all chains
+    // Per-chain mapq: each chain's mapq is based on its score vs the next chain.
+    // Mean score and mean mapq across all chains.
     double mean_score = 0.0, mean_mapq = 0.0;
-    for (const auto& m : result.mappings) {
-      mean_score += m.chain_score;
-      double sec = (&m == &result.mappings[0] && result.mappings.size() > 1)
-          ? result.mappings[1].chain_score : 0.0;
-      double mq = (m.chain_score <= 0.0) ? 0.0
+    const auto& mappings = result.mappings;
+    for (std::size_t mi = 0; mi < mappings.size(); ++mi) {
+      mean_score += mappings[mi].chain_score;
+      double sec = (mi + 1 < mappings.size()) ? mappings[mi + 1].chain_score : 0.0;
+      double mq = (mappings[mi].chain_score <= 0.0) ? 0.0
           : (sec <= 0.0) ? 60.0
-          : std::clamp(40.0 * (1.0 - sec / m.chain_score), 0.0, 60.0);
+          : std::clamp(40.0 * (1.0 - sec / mappings[mi].chain_score), 0.0, 60.0);
       mean_mapq += mq;
     }
-    mean_score /= static_cast<double>(result.mappings.size());
-    mean_mapq /= static_cast<double>(result.mappings.size());
+    mean_score /= static_cast<double>(mappings.size());
+    mean_mapq /= static_cast<double>(mappings.size());
 
     // Weighted components
-    // Scale score expectation by chunks processed: more chunks = higher expected score.
-    // Use sqrt scaling (score grows sublinearly with signal length).
     float scaled_score_scale = config_.map_score_scale * std::sqrt(static_cast<float>(chunks_processed));
-    // Fade in absolute score weight: at 1 chunk, rely purely on standout terms.
-    // At higher chunks, absolute score becomes a stronger discriminator.
     float chunk_factor = std::max(0.5f, 1.0f - 1.0f / static_cast<float>(chunks_processed));
     float effective_w_abs = config_.map_w_abs * chunk_factor;
     float r_abs = std::min(static_cast<float>(best_score / scaled_score_scale), 1.0f);
-    float r_bestq = (best_mapq > 0.0) ? static_cast<float>(best_mapq / 30.0) : 0.0f;
-    float r_bestmq = (best_mapq > 0.0) ? static_cast<float>(1.0 - mean_mapq / best_mapq) : 0.0f;
-    float r_bestmc = (best_score > 0.0) ? static_cast<float>(1.0 - mean_score / best_score) : 0.0f;
+    float r_bestq = (best_mapq > 0.0) ? std::min(static_cast<float>(best_mapq / 30.0), 1.0f) : 0.0f;
+    // Clamp to [0,1] matching RH2
+    float r_bestmq = (best_mapq > 0.0)
+        ? std::clamp(static_cast<float>(1.0 - mean_mapq / best_mapq), 0.0f, 1.0f)
+        : 0.0f;
+    float r_bestmc = (best_score > 0.0)
+        ? std::clamp(static_cast<float>(1.0 - mean_score / best_score), 0.0f, 1.0f)
+        : 0.0f;
 
     float weighted = effective_w_abs * r_abs
                    + config_.map_w_bestq * r_bestq
