@@ -54,9 +54,9 @@ cd piru && mkdir build && cd build && cmake .. && make
 
 | Command | Description |
 |---------|-------------|
-| `piru index` | Build .pirx index from GFA/VG graph + pore model |
-| `piru map` | Map BLOW5 reads against index, optionally classify with ROI |
-| `piru annotate` | Project BED target intervals onto graph -> .pira annotation |
+| `piru index` | Build .pirx index from GFA graph + pore model. Supports 1D PG-SGD coordinates via --1d-coords-file (odgi, recommended) or --compute-1d-sort (built-in, not yet verified) |
+| `piru map` | Map BLOW5 reads against index. Three chainer backends: path-chain (default), graph-chain, sort-chain |
+| `piru annotate` | Project BED target intervals onto graph -> .pira v2 annotation with 1D canonical intervals |
 
 Run `piru <command> --help` for full options.
 
