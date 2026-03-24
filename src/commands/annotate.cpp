@@ -37,19 +37,11 @@
 
 namespace {
 
-/// Walk a path's steps to find nodes overlapping [bed_start, bed_end).
-struct IntervalWalk {
+// Walk a path to collect node IDs overlapping [bed_start, bed_end).
+std::vector<std::size_t> walkInterval(const piru::index::AlnGraph& graph,
+                                       const piru::index::AlnPath& path,
+                                       std::int64_t bed_start, std::int64_t bed_end) {
   std::vector<std::size_t> node_ids;
-  std::size_t start_offset{0};
-  std::size_t end_offset{0};
-  std::int64_t interval_length{0};
-};
-
-IntervalWalk walkInterval(const piru::index::AlnGraph& graph, const piru::index::AlnPath& path,
-                          std::int64_t bed_start, std::int64_t bed_end) {
-  IntervalWalk result;
-  result.interval_length = bed_end - bed_start;
-
   std::int64_t offset = 0;
   for (const auto& step : path.steps) {
     std::size_t node_id = std::stoull(step.node_id);
@@ -60,19 +52,12 @@ IntervalWalk walkInterval(const piru::index::AlnGraph& graph, const piru::index:
     std::int64_t node_end = offset + node_len;
 
     if (node_end > bed_start && node_start < bed_end) {
-      if (result.node_ids.empty()) {
-        result.start_offset = static_cast<std::size_t>(bed_start - node_start);
-      }
-      result.node_ids.push_back(node_id);
-      std::int64_t this_node_bed_end = std::min(bed_end, node_end);
-      result.end_offset = static_cast<std::size_t>(this_node_bed_end - node_start);
+      node_ids.push_back(node_id);
     }
-
     if (node_start >= bed_end) break;
     offset = node_end;
   }
-
-  return result;
+  return node_ids;
 }
 
 }  // namespace
@@ -87,7 +72,8 @@ int handle_annotate(const std::vector<std::string>& args) {
       {'b', "bed", true, "BED file with target regions (path_name start end)"},
       {'o', "output", true, "Output annotation file (.pira, default: annotate.pira)"},
       {'\0', "1d-coords-file", true, "1D coords TSV (from odgi sort --path-sgd-layout)"},
-      {'\0', "mode", true, "Node selection mode: strict (default) or union"},
+      {'\0', "with-nodes", false, "Include node set in output (for --roi usage)"},
+      {'\0', "mode", true, "Node selection mode with --with-nodes: strict (default) or union"},
       {'v', "verbose", false, "Enable verbose logging"},
   };
   config.on_error = [](const std::string&) { std::cerr << "annotate: invalid option\n"; };
@@ -121,6 +107,7 @@ int handle_annotate(const std::vector<std::string>& args) {
   const std::string bed_path = parsed.values.at("bed");
   const std::string output_path =
       parsed.values.count("output") ? parsed.values.at("output") : "annotate.pira";
+  const bool with_nodes = parsed.values.count("with-nodes") > 0;
   const std::string mode =
       parsed.values.count("mode") ? parsed.values.at("mode") : "strict";
 
@@ -175,7 +162,8 @@ int handle_annotate(const std::vector<std::string>& args) {
     LOG_ERROR("annotate: cannot open output file '" + output_path + "'");
     return 1;
   }
-  ofs << "#pira v2 mode=" << mode << (has_1d ? " coords=1d" : " coords=node-only") << "\n";
+  // TODO: set to v1.0 at release
+  ofs << "#pira v2" << (has_1d ? " coords=1d" : "") << (with_nodes ? " nodes=" + mode : "") << "\n";
 
   for (const auto& rec : bed_records) {
     auto it = path_name_to_id.find(rec.path_name);
@@ -191,22 +179,19 @@ int handle_annotate(const std::vector<std::string>& args) {
     const auto& path = aln_graph.paths()[path_idx];
 
     /* Walk the path to get nodes in BED interval */
-    auto walk = walkInterval(aln_graph, path, rec.start, rec.end);
-    if (walk.node_ids.empty()) {
+    auto walk_nodes = walkInterval(aln_graph, path, rec.start, rec.end);
+    if (walk_nodes.empty()) {
       LOG_WARN("No nodes found for " + rec.path_name + ":" +
                std::to_string(rec.start) + "-" + std::to_string(rec.end));
       continue;
     }
-
-    LOG_INFO(rec.path_name + ":" + std::to_string(rec.start) + "-" +
-             std::to_string(rec.end) + " -> " + std::to_string(walk.node_ids.size()) + " nodes");
 
     /* Compute 1D interval from walked nodes */
     double coord_1d_start = 0.0, coord_1d_end = 0.0;
     if (has_1d) {
       coord_1d_start = std::numeric_limits<double>::max();
       coord_1d_end = std::numeric_limits<double>::lowest();
-      for (std::size_t nid : walk.node_ids) {
+      for (std::size_t nid : walk_nodes) {
         if (nid < node_1d_coords.size()) {
           double node_start = node_1d_coords[nid];
           double node_end = node_start + aln_graph.node(nid).sequence.size();
@@ -216,64 +201,68 @@ int handle_annotate(const std::vector<std::string>& args) {
       }
     }
 
-    /* Collect output nodes based on mode */
-    std::set<std::size_t> roi_nodes;
+    /* Collect output nodes (only if --with-nodes) */
+    std::set<std::size_t> roi_with_rev;
 
-    if (mode == "strict") {
-      // Exact nodes from this haplotype path
-      for (std::size_t nid : walk.node_ids) {
-        roi_nodes.insert(nid);
-      }
-    } else {
-      // Union: all nodes whose 1D coord falls in [coord_1d_start, coord_1d_end]
-      if (!has_1d) {
-        LOG_ERROR("union mode requires --1d-coords-file");
-        return 1;
-      }
-      for (std::size_t nid = 0; nid < node_1d_coords.size(); ++nid) {
-        double node_start = node_1d_coords[nid];
-        double node_end = node_start + aln_graph.node(nid).sequence.size();
-        if (node_end > coord_1d_start && node_start < coord_1d_end) {
+    if (with_nodes) {
+      std::set<std::size_t> roi_nodes;
+
+      if (mode == "strict") {
+        for (std::size_t nid : walk_nodes) {
           roi_nodes.insert(nid);
+        }
+      } else {
+        if (!has_1d) {
+          LOG_ERROR("union mode requires --1d-coords-file");
+          return 1;
+        }
+        for (std::size_t nid = 0; nid < node_1d_coords.size(); ++nid) {
+          double node_start = node_1d_coords[nid];
+          double node_end = node_start + aln_graph.node(nid).sequence.size();
+          if (node_end > coord_1d_start && node_start < coord_1d_end) {
+            roi_nodes.insert(nid);
+          }
+        }
+      }
+
+      // Add reverse counterparts
+      for (std::size_t nid : roi_nodes) {
+        roi_with_rev.insert(nid);
+        std::size_t orig = piru::index::originalIndex(nid);
+        if (piru::index::isReverseNode(nid)) {
+          roi_with_rev.insert(piru::index::forwardNodeId(orig));
+        } else {
+          roi_with_rev.insert(piru::index::reverseNodeId(orig));
         }
       }
     }
 
-    // Add reverse counterparts
-    std::set<std::size_t> roi_with_rev;
-    for (std::size_t nid : roi_nodes) {
-      roi_with_rev.insert(nid);
-      std::size_t orig = piru::index::originalIndex(nid);
-      if (piru::index::isReverseNode(nid)) {
-        roi_with_rev.insert(piru::index::forwardNodeId(orig));
-      } else {
-        roi_with_rev.insert(piru::index::reverseNodeId(orig));
-      }
-    }
-
-    LOG_INFO("  " + mode + " mode: " + std::to_string(roi_with_rev.size()) + " nodes" +
-             (has_1d ? " 1d=[" + std::to_string(coord_1d_start) + ", " +
-                           std::to_string(coord_1d_end) + ")"
-                     : ""));
+    LOG_INFO("  1d=[" + std::to_string(coord_1d_start) + ", " +
+             std::to_string(coord_1d_end) + ")" +
+             (with_nodes ? " " + mode + " nodes: " + std::to_string(roi_with_rev.size()) : ""));
 
     /* Write output line */
-    // Format: region_label\t1d_start\t1d_end\tnode1,node2,...
+    // Default: region_label\t1d_start\t1d_end
+    // With --with-nodes: region_label\t1d_start\t1d_end\tnode1,node2,...
     ofs << rec.path_name << ":" << rec.start << "-" << rec.end;
     if (has_1d) {
       ofs << "\t" << coord_1d_start << "\t" << coord_1d_end;
     } else {
       ofs << "\t*\t*";
     }
-    ofs << "\t";
-    bool first = true;
-    for (std::size_t nid : roi_with_rev) {
-      if (!first) ofs << ",";
-      ofs << nid;
-      first = false;
+    if (with_nodes) {
+      ofs << "\t";
+      bool first = true;
+      for (std::size_t nid : roi_with_rev) {
+        if (!first) ofs << ",";
+        ofs << nid;
+        first = false;
+      }
     }
     ofs << "\n";
   }
 
-  LOG_INFO("Annotation written to " + output_path + " (" + mode + " mode)");
+  LOG_INFO("Annotation written to " + output_path +
+           (with_nodes ? " (" + mode + " nodes)" : " (1D intervals only)"));
   return 0;
 }
