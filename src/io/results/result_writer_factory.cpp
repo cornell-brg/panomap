@@ -3,8 +3,6 @@
 #include <algorithm>
 
 #include "io/results/gaf_writer.hpp"
-#include "io/results/gam_writer.hpp"
-#include "io/results/json_writer.hpp"
 #include "io/results/paf_writer.hpp"
 #include "util/logging.hpp"
 
@@ -25,24 +23,20 @@ std::string extension_of(const std::string& path) {
 
 }  // namespace
 
-ResultWriterPtr make_result_writer(const std::string& path) {
-  const std::string ext = extension_of(path);
-  return make_result_writer(path, ext);
+ResultWriterPtr make_result_writer(const std::string& path,
+                                    const index::AlnGraph& graph) {
+  return make_result_writer(path, extension_of(path), graph);
 }
 
-ResultWriterPtr make_result_writer(const std::string& path, const std::string& format) {
+ResultWriterPtr make_result_writer(const std::string& path,
+                                    const std::string& format,
+                                    const index::AlnGraph& graph) {
   const std::string fmt = to_lower(format);
   if (fmt == "paf") {
     return std::make_unique<PafWriter>(path);
   }
   if (fmt == "gaf") {
-    return std::make_unique<GafWriter>(path);
-  }
-  if (fmt == "gam") {
-    return std::make_unique<GamWriter>(path);
-  }
-  if (fmt == "json") {
-    return std::make_unique<JsonWriter>(path);
+    return std::make_unique<GafWriter>(path, graph);
   }
   LOG_ERROR("Unsupported result format '" + format + "' for '" + path + "'");
   return nullptr;

@@ -68,9 +68,6 @@ add_executable(piru
     src/io/graphs/gfa_exporter.cpp
     src/io/results/gaf_writer.cpp
     src/io/results/paf_writer.cpp
-    src/io/results/gam_writer.cpp
-    src/io/results/json_writer.cpp
-    src/io/results/alignment_conversion.cpp
     src/io/results/result_writer_factory.cpp
     src/io/reads/read_provider_factory.cpp
     src/io/reads/pod5_provider.cpp
@@ -96,12 +93,13 @@ add_executable(piru
     src/index/path_walk_indexer.cpp
     src/index/node_first_indexer.cpp
     src/index/index_pipeline.cpp
+    src/index/sort_1d.cpp
     src/mapping/batch_mapper.cpp
     src/mapping/seed_merger.cpp
     src/mapping/path_chainer.cpp
     src/mapping/graph_chainer.cpp
+    src/mapping/sort_chainer.cpp
 
-    src/mapping/result_formatter.cpp
     src/util/signal_handlers.cpp
     src/util/timing.cpp
     src/util/trace.cpp

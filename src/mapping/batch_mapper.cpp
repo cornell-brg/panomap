@@ -1,4 +1,16 @@
-// SPDX-License-Identifier: MIT
+/**
+ * batch_mapper.cpp
+ *
+ * Orchestrates read mapping: signal processing, seed lookup, chaining,
+ * mapping decision, and result output. Processes reads in batches.
+ *
+ * Related:
+ *  - batch_mapper.hpp
+ *  - path_chainer.cpp, graph_chainer.cpp, sort_chainer.cpp (chaining backends)
+ *  - gaf_writer.cpp (result output)
+ *
+ * SPDX-License-Identifier: MIT
+ */
 
 #include "mapping/batch_mapper.hpp"
 
@@ -11,6 +23,7 @@
 
 #include "mapping/graph_chainer.hpp"
 #include "mapping/path_chainer.hpp"
+#include "mapping/sort_chainer.hpp"
 #include "util/logging.hpp"
 #include "util/trace.hpp"
 
@@ -105,6 +118,13 @@ PipelineComponents BatchMapper::create_components() const {
     }
     comps.chainer = std::make_unique<GraphChainer>(*config_.linearization_coords,
                                                    *config_.path_lengths);
+  } else if (config_.chainer_backend == "sort-chain") {
+    if (!config_.node_1d_coords) {
+      throw std::runtime_error("SortChainer requires node_1d_coords (use --compute-1d-sort or --1d-coords-file at index time)");
+    }
+    SortChainerConfig sort_config;
+    sort_config.pore_k = config_.pore_k;
+    comps.chainer = std::make_unique<SortChainer>(sort_config, *config_.node_1d_coords);
   } else {
     throw std::runtime_error("Unknown chainer backend: " + config_.chainer_backend);
   }
@@ -113,15 +133,6 @@ PipelineComponents BatchMapper::create_components() const {
 
   // Log pipeline configuration
   LOG_DEBUG("Pipeline: " + comps.chainer->name() + " chaining");
-
-  // Create result formatter if we have a graph store (needed for result output)
-  const auto* adj_store = dynamic_cast<const index::AdjListGraphStore*>(config_.graph_store);
-  if (adj_store && config_.result_writer) {
-    comps.result_formatter =
-        std::make_unique<ResultFormatter>(adj_store->graph(), config_.formatter_config);
-    LOG_INFO("Result formatter enabled for output (min_secondary_ratio=" +
-             std::to_string(config_.formatter_config.min_secondary_ratio) + ")");
-  }
 
   return comps;
 }
@@ -347,6 +358,7 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
     mapping.anchors = chain.anchors;
     mapping.chain_score = chain.score;
     mapping.path_id = chain.path_id;
+    mapping.coord_space = chain.coord_space;
     result.mappings.push_back(std::move(mapping));
   }
 
@@ -407,6 +419,35 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
 
     if (weighted < config_.map_threshold) {
       result.mappings.clear();  // unmapped
+    }
+  }
+
+  // Compute per-mapping MAPQ
+  if (!result.mappings.empty()) {
+    for (std::size_t i = 0; i < result.mappings.size(); ++i) {
+      double sec = (i + 1 < result.mappings.size()) ? result.mappings[i + 1].chain_score : 0.0;
+      double pri = result.mappings[i].chain_score;
+      if (pri <= 0.0) {
+        result.mappings[i].mapq = 0;
+      } else if (sec <= 0.0) {
+        result.mappings[i].mapq = 60;
+      } else {
+        result.mappings[i].mapq = static_cast<int>(
+            std::clamp(40.0 * (1.0 - sec / pri), 0.0, 60.0) + 0.499);
+      }
+    }
+
+    // Secondary suppression: if many chains score similarly and primary
+    // mapq is low, only keep the primary.
+    if (result.mappings.size() > 1 && result.mappings[0].mapq < 5) {
+      double primary_score = result.mappings[0].chain_score;
+      std::size_t n_similar = 0;
+      for (const auto& m : result.mappings) {
+        if (m.chain_score >= primary_score * 0.8) ++n_similar;
+      }
+      if (n_similar > 3) {
+        result.mappings.resize(1);
+      }
     }
   }
 
@@ -472,17 +513,13 @@ BatchMapperStats BatchMapper::output_batch(const BatchBuffer& batch) const {
     }
 
     // Write to result file if configured
-    if (config_.result_writer && components_.result_formatter) {
-      auto results =
-          components_.result_formatter->format(map_result, read.read_id, read.len_raw_signal);
-      for (std::size_t r = 0; r < results.size(); ++r) {
-        config_.result_writer->write(results[r]);
-        ++stats.results_written;
-        if (r == 0) {
-          ++stats.primary_alignments;
-        } else {
-          ++stats.secondary_alignments;
-        }
+    if (config_.result_writer) {
+      config_.result_writer->write(map_result, read.read_id, read.len_raw_signal);
+      if (is_mapped) {
+        ++stats.primary_alignments;
+        std::size_t sec_count = map_result.mappings.size() > 1 ? map_result.mappings.size() - 1 : 0;
+        stats.secondary_alignments += sec_count;
+        stats.results_written += 1 + sec_count;
       }
     }
 

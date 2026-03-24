@@ -71,9 +71,14 @@ int handle_index(const std::vector<std::string>& args) {
        "Event diff filter: skip events within diff of last emitted (default: 0, RH2: 0.35)"},
       {'\0', "", false, "\nIndexer Options:"},
       {'\0', "indexer-backend", true, "Indexer backend: node-first, path-walk (default)"},
+      {'\0', "compute-1d-sort", false, "Compute 1D SGD coordinates for SortChainer"},
+      {'\0', "1d-coords-file", true,
+       "Import pre-computed 1D coords from TSV (odgi sort --path-sgd-layout output)"},
       {'\0', "", false, "\nDebug Options:"},
       {'\0', "dump-norm-stats", true,
        "Dump per-path normalization stats to TSV file (path-walk only)"},
+      {'\0', "dump-1d-coords", true,
+       "Dump 1D sort coordinates to TSV file"},
   };
   config.on_error = [](const std::string&) { std::cerr << "index: invalid option\n"; };
 
@@ -201,10 +206,30 @@ int handle_index(const std::vector<std::string>& args) {
   if (parsed.values.count("dump-norm-stats")) {
     index_config.dump_norm_stats_path = parsed.values.at("dump-norm-stats");
   }
+  if (parsed.values.count("compute-1d-sort")) {
+    index_config.compute_1d_sort = true;
+  }
 
   index_config.executor = executor.get();
 
   auto result = piru::index::run_index_pipeline(imported, *model, index_config);
+
+  // Import pre-computed 1D coords (overrides --compute-1d-sort)
+  if (parsed.values.count("1d-coords-file")) {
+    std::size_t num_nodes = result.graph_store->nodeCount();
+    result.node_1d_coords = piru::index::import_1d_coords_odgi(
+        parsed.values.at("1d-coords-file"), num_nodes);
+  }
+
+  // Dump 1D coordinates if requested
+  if (parsed.values.count("dump-1d-coords") && !result.node_1d_coords.empty()) {
+    auto* adj_store = dynamic_cast<piru::index::AdjListGraphStore*>(result.graph_store.get());
+    if (adj_store) {
+      piru::index::dump_1d_coords_tsv(parsed.values.at("dump-1d-coords"),
+                                       result.node_1d_coords,
+                                       adj_store->graph());
+    }
+  }
 
   /* Serialize index */
 

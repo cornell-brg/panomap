@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Writer for PAF-formatted alignment results.
+// Writer for PAF-formatted mapping results.
 
 #pragma once
 
@@ -11,16 +11,16 @@
 namespace piru::io {
 
 class PafWriter : public ResultWriter {
-public:
+ public:
   explicit PafWriter(const std::string& path);
   ~PafWriter() override;
 
-  bool write(const AlignmentResult& result) override;
+  void write(const mapping::ReadMapResult& result,
+             const std::string& read_id,
+             std::size_t read_length) override;
 
-private:
+ private:
   std::ofstream out_;
 };
-
-using PafWriterPtr = std::unique_ptr<PafWriter>;
 
 }  // namespace piru::io

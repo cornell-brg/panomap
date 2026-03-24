@@ -8,55 +8,46 @@
 
 namespace piru::io {
 
-namespace {
-
-// PAF format: 12 mandatory columns + optional tags
-// 1. Query name
-// 2. Query length
-// 3. Query start (0-based)
-// 4. Query end
-// 5. Strand (+/-)
-// 6. Target name
-// 7. Target length
-// 8. Target start (0-based)
-// 9. Target end
-// 10. Number of matches
-// 11. Alignment block length
-// 12. Mapping quality
-std::string to_paf_line(const AlignmentResult& r) {
-  std::stringstream ss;
-  ss << r.query_name << '\t' << r.query_length << '\t' << r.query_start << '\t' << r.query_end
-     << '\t' << r.strand << '\t' << r.target_path << '\t' << r.target_length << '\t'
-     << r.target_start << '\t' << r.target_end << '\t' << r.matches << '\t'
-     << r.alignment_block_length << '\t' << r.mapq;
-
-  // Optional tags
-  for (const auto& tag : r.optional_fields) {
-    ss << '\t' << tag;
-  }
-
-  return ss.str();
-}
-
-}  // namespace
-
 PafWriter::PafWriter(const std::string& path) : out_(path, std::ios::out | std::ios::trunc) {
   if (!out_) {
     LOG_ERROR("Failed to open PAF output: " + path);
-  } else {
-    // Write header comment for development convenience
-    out_ << "#query_name\tquery_len\tquery_start\tquery_end\tstrand\t"
-         << "target_path\ttarget_len\ttarget_start\ttarget_end\t"
-         << "matches\tblock_len\tmapq\t[optional_tags...]\n";
   }
 }
 
 PafWriter::~PafWriter() { out_.flush(); }
 
-bool PafWriter::write(const AlignmentResult& result) {
-  if (!out_) return false;
-  out_ << to_paf_line(result) << '\n';
-  return static_cast<bool>(out_);
+void PafWriter::write(const mapping::ReadMapResult& result,
+                      const std::string& read_id,
+                      std::size_t read_length) {
+  if (!out_ || result.mappings.empty()) return;
+
+  // PAF: write primary mapping only (simple for now)
+  const auto& mapping = result.mappings[0];
+
+  std::size_t min_query = mapping.anchors.front().read_pos;
+  std::size_t max_query = mapping.anchors.front().read_pos;
+  for (const auto& a : mapping.anchors) {
+    min_query = std::min(min_query, static_cast<std::size_t>(a.read_pos));
+    max_query = std::max(max_query, static_cast<std::size_t>(a.read_pos) + a.length);
+  }
+
+  std::int64_t min_ref = mapping.anchors.front().ref_coord;
+  std::int64_t max_ref = mapping.anchors.front().ref_coord;
+  for (const auto& a : mapping.anchors) {
+    min_ref = std::min(min_ref, a.ref_coord);
+    max_ref = std::max(max_ref, a.ref_coord + static_cast<std::int64_t>(a.length));
+  }
+
+  std::uint64_t total_anchor_len = 0;
+  for (const auto& a : mapping.anchors) total_anchor_len += a.length;
+
+  std::stringstream ss;
+  ss << read_id << '\t' << read_length << '\t' << min_query << '\t' << max_query
+     << "\t+\t*\t0\t" << min_ref << '\t' << max_ref
+     << '\t' << total_anchor_len << '\t' << (max_ref - min_ref) << '\t' << mapping.mapq;
+  ss << "\tcs:i:" << static_cast<int>(mapping.chain_score);
+
+  out_ << ss.str() << '\n';
 }
 
 }  // namespace piru::io

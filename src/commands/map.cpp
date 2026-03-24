@@ -27,6 +27,7 @@
 #include "io/reads/read_provider_factory.hpp"
 #include "io/regions/pira_parser.hpp"
 #include "io/results/result_writer_factory.hpp"
+#include "index/sort_1d.hpp"
 #include "mapping/batch_mapper.hpp"
 #include "mapping/path_chainer.hpp"
 #include "util/logging.hpp"
@@ -82,7 +83,8 @@ int handle_map(const std::vector<std::string>& args) {
        "Signal chunk size in samples (default: 4000, 0 = no chunking)"},
       {'\0', "max-chunks", true,
        "Max chunks to process per read (default: 10, 0 = unlimited)"},
-      {'\0', "chainer", true, "Chainer backend (default: path-chain)"},
+      {'\0', "chainer", true, "Chainer backend: path-chain (default), graph-chain, sort-chain"},
+      {'\0', "1d-coords-file", true, "1D coords TSV for sort-chain (from odgi sort --path-sgd-layout)"},
       {'\0', "", false, "\nSignal Processing Options:"},
       {'\0', "event-pipeline", true,
        "Event pipeline backend: rawhash (default), scrappie, passthrough"},
@@ -103,8 +105,8 @@ int handle_map(const std::vector<std::string>& args) {
        "Whole-genome chaining: classify by ROI overlap fraction >= threshold (default: 0.5)"},
       {'\0', "", false, "\nOutput Options:"},
       {'o', "output", true,
-       "Output file path (format auto-detected from extension: .paf, .gaf, .gam, .json)"},
-      {'\0', "output-format", true, "Override output format (paf, gaf, gam, json)"},
+       "Output file path (format auto-detected from extension: .paf, .gaf)"},
+      {'\0', "output-format", true, "Override output format (paf, gaf)"},
       {'\0', "min-secondary-ratio", true,
        "Min chain score ratio vs primary for secondaries (default: 0.4)"},
       {'\0', "map-threshold", true,
@@ -226,22 +228,7 @@ int handle_map(const std::vector<std::string>& args) {
   const std::string output_format =
       parsed.values.count("output-format") ? parsed.values.at("output-format") : "";
 
-  // Create result writer if output specified
-  piru::io::ResultWriterPtr result_writer;
-  if (!output_path.empty()) {
-    if (!output_format.empty()) {
-      // Use explicit format override
-      result_writer = piru::io::make_result_writer(output_path, output_format);
-    } else {
-      // Auto-detect from extension
-      result_writer = piru::io::make_result_writer(output_path);
-    }
-    if (!result_writer) {
-      LOG_ERROR("map: failed to create output writer for '" + output_path + "'");
-      return 1;
-    }
-    LOG_INFO("Writing results to: " + output_path);
-  }
+  // Result writer created after index load (needs graph for GAF path lookups)
 
   PIRU_PROFILE_START(profile, "map");
 
@@ -272,6 +259,22 @@ int handle_map(const std::vector<std::string>& args) {
     for (std::size_t i = 0; i < paths.size(); ++i) {
       path_lengths[i] = paths[i].length;
     }
+  }
+
+  // Create result writer (needs graph for GAF path lookups)
+  piru::io::ResultWriterPtr result_writer;
+  if (!output_path.empty()) {
+    const auto& aln_graph = loaded.graph->graph();
+    if (!output_format.empty()) {
+      result_writer = piru::io::make_result_writer(output_path, output_format, aln_graph);
+    } else {
+      result_writer = piru::io::make_result_writer(output_path, aln_graph);
+    }
+    if (!result_writer) {
+      LOG_ERROR("map: failed to create output writer for '" + output_path + "'");
+      return 1;
+    }
+    LOG_INFO("Writing results to: " + output_path);
   }
 
   auto graph_store = std::move(loaded.graph);
@@ -320,6 +323,15 @@ int handle_map(const std::vector<std::string>& args) {
   map_config.graph_store = graph_store.get();
   map_config.linearization_coords = &linearization_coords;  // For DP chaining
   map_config.path_lengths = &path_lengths;                  // For anchor bounds checking
+
+  // Load 1D coords for sort-chain mode
+  std::vector<double> node_1d_coords;
+  if (parsed.values.count("1d-coords-file")) {
+    std::size_t num_nodes = graph_store->nodeCount();
+    node_1d_coords = piru::index::import_1d_coords_odgi(
+        parsed.values.at("1d-coords-file"), num_nodes);
+    map_config.node_1d_coords = &node_1d_coords;
+  }
 
   // Configure fuzzy quantizer to match index-time settings.
   // Must mirror IndexPipelineConfig defaults so index and query produce
@@ -454,11 +466,8 @@ int handle_map(const std::vector<std::string>& args) {
     LOG_INFO("Anchor merging disabled");
   }
 
-  // Configure result formatter
-  if (parsed.values.count("min-secondary-ratio")) {
-    map_config.formatter_config.min_secondary_ratio =
-        std::stod(parsed.values.at("min-secondary-ratio"));
-  }
+  // min-secondary-ratio is now handled by the GafWriter directly
+  // TODO: pass this to the writer config if needed
 
   // Configure mapping decision threshold
   if (parsed.values.count("map-threshold")) {

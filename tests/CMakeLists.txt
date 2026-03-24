@@ -71,10 +71,7 @@ if(DOCTEST_AVAILABLE)
         ${CMAKE_SOURCE_DIR}/src/io/graphs/vg_loader.cpp
         ${CMAKE_SOURCE_DIR}/src/io/graphs/gfa_exporter.cpp
         ${CMAKE_SOURCE_DIR}/src/io/results/gaf_writer.cpp
-        ${CMAKE_SOURCE_DIR}/src/io/results/gam_writer.cpp
-        ${CMAKE_SOURCE_DIR}/src/io/results/json_writer.cpp
         ${CMAKE_SOURCE_DIR}/src/io/results/paf_writer.cpp
-        ${CMAKE_SOURCE_DIR}/src/io/results/alignment_conversion.cpp
         ${CMAKE_SOURCE_DIR}/src/io/results/result_writer_factory.cpp
         ${CMAKE_SOURCE_DIR}/src/io/models/builtin_models.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/event_pipeline_factory.cpp
@@ -93,8 +90,8 @@ if(DOCTEST_AVAILABLE)
         ${CMAKE_SOURCE_DIR}/src/mapping/seed_merger.cpp
         ${CMAKE_SOURCE_DIR}/src/mapping/path_chainer.cpp
         ${CMAKE_SOURCE_DIR}/src/mapping/graph_chainer.cpp
+        ${CMAKE_SOURCE_DIR}/src/mapping/sort_chainer.cpp
 
-        ${CMAKE_SOURCE_DIR}/src/mapping/result_formatter.cpp
         ${CMAKE_SOURCE_DIR}/src/util/timing.cpp
         ${CMAKE_SOURCE_DIR}/src/util/trace.cpp
     )

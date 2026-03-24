@@ -17,6 +17,7 @@
 #include "index/node_first_indexer.hpp"
 #include "index/path_walk_indexer.hpp"
 #include "index/simple_expand.hpp"
+#include "index/sort_1d.hpp"
 #include "signal/fuzzy_quantizers/fuzzy_quantizer_factory.hpp"
 #include "signal/seed_extractors/seed_extractor_factory.hpp"
 #include "util/logging.hpp"
@@ -113,9 +114,22 @@ IndexPipelineResult run_index_pipeline(const io::ImportedGraph& imported,
     result.linearization_coords = std::move(pwi_result.linearization_coords);
   }
 
-  /* 3. Package result */
+  /* 3. Compute 1D sort coordinates (for SortChainer) */
 
-  // Store path lengths in graph (for result_formatter coordinate flipping)
+  if (config.compute_1d_sort) {
+    auto sort_start = std::chrono::high_resolution_clock::now();
+    result.node_1d_coords = compute_1d_sort(aln_graph, result.linearization_coords,
+                                             path_lengths, config.sort_1d_config);
+    auto sort_elapsed =
+        std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - sort_start)
+            .count();
+    LOG_INFO("[3/3] 1D sort: " + std::to_string(result.node_1d_coords.size()) +
+             " node positions [" + std::to_string(sort_elapsed) + "s]");
+  }
+
+  /* 4. Package result */
+
+  // Store path lengths in graph (for GafWriter coordinate flipping)
   for (std::size_t i = 0; i < aln_graph.pathCount(); ++i) {
     aln_graph.mutablePath(i).length = path_lengths[i];
   }

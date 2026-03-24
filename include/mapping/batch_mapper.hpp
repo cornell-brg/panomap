@@ -17,7 +17,6 @@
 #include "io/results/result_writer.hpp"
 #include "mapping/chainer.hpp"
 #include "mapping/map_result.hpp"
-#include "mapping/result_formatter.hpp"
 #include "signal/event_pipelines/event_pipeline_factory.hpp"
 #include "signal/fuzzy_quantizers/fuzzy_quantizer_factory.hpp"
 #include "signal/seed_extractors/seed_extractor_factory.hpp"
@@ -57,6 +56,8 @@ struct BatchMapperConfig {
   const std::vector<std::vector<index::LinearCoordinate>>* linearization_coords{nullptr};
   // Path lengths for anchor bounds checking (parallel to graph paths)
   const std::vector<std::size_t>* path_lengths{nullptr};
+  // 1D sort coordinates for SortChainer (non-owning, from index)
+  const std::vector<double>* node_1d_coords{nullptr};
 
   // Result writer for output (non-owning, optional)
   io::ResultWriter* result_writer{nullptr};
@@ -87,8 +88,6 @@ struct BatchMapperConfig {
   float map_threshold{0.12f}; // Decision threshold (0 = disabled)
   std::size_t map_min_anchors{0};  // Min anchors in primary chain to report (0 = disabled)
 
-  // Result formatting configuration
-  ResultFormatterConfig formatter_config{};
 };
 
 struct BatchMapperStats {
@@ -122,7 +121,6 @@ struct PipelineComponents {
   const index::GraphStore* graph_store{nullptr};  // non-owning; loaded index
   SeedLookup lookup{nullptr, 0};
   ChainerPtr chainer;
-  std::unique_ptr<ResultFormatter> result_formatter;  // Formats map results to PAF/GAF
 };
 
 class BatchMapper {

@@ -1,20 +1,23 @@
 // SPDX-License-Identifier: MIT
-// Interface for writing alignment results.
+// Interface for writing mapping results.
 
 #pragma once
 
 #include <memory>
+#include <string>
 
-#include "io/results/result.hpp"
+#include "mapping/map_result.hpp"
 
 namespace piru::io {
 
 class ResultWriter {
-public:
+ public:
   virtual ~ResultWriter() = default;
 
-  // Write a single result. Returns false on failure.
-  virtual bool write(const AlignmentResult& result) = 0;
+  // Write results for a single read.
+  virtual void write(const mapping::ReadMapResult& result,
+                     const std::string& read_id,
+                     std::size_t read_length) = 0;
 };
 
 using ResultWriterPtr = std::unique_ptr<ResultWriter>;

@@ -33,10 +33,17 @@ struct ChainedAnchor {
   std::int64_t ref_coord{0};  // Linear position on reference path
 };
 
+// Coordinate space for chain ref_coords.
+enum class CoordSpace {
+  kPath,      // ref_coord in path-linear space (PathChainer, GraphChainer)
+  kCanonical, // ref_coord in 1D canonical space (SortChainer)
+};
+
 // A single chain: scored group of anchors.
 struct Chain {
   double score{0.0};
-  std::size_t path_id{0};  // Reference path ID (uniform within chain)
+  std::size_t path_id{0};                     // Reference path ID (kPath only)
+  CoordSpace coord_space{CoordSpace::kPath};  // Coordinate system for ref_coords
   std::vector<ChainedAnchor> anchors;
 };
 
