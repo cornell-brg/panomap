@@ -106,7 +106,8 @@ add_executable(piru
     src/util/trace.cpp
 )
 
-target_include_directories(piru PRIVATE include ${CMAKE_CURRENT_SOURCE_DIR}/src ${PIRU_GENERATED_DIR})
+target_include_directories(piru PRIVATE include ${CMAKE_CURRENT_SOURCE_DIR}/src ${PIRU_GENERATED_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/dirtyzipf)
 
 if(PIRU_ENABLE_WARNINGS)
     if(MSVC)

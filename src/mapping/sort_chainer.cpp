@@ -106,7 +106,7 @@ void apply_permutation(DPBuffers& dp, std::size_t n) {
 }  // namespace
 
 SortChainer::SortChainer(SortChainerConfig config,
-                         const std::vector<double>& node_1d_coords,
+                         const std::vector<float>& node_1d_coords,
                          std::vector<std::uint32_t> node_bp_lens)
     : config_(std::move(config)), node_1d_coords_(node_1d_coords),
       node_bp_lens_(std::move(node_bp_lens)) {}

@@ -59,6 +59,7 @@ if(DOCTEST_AVAILABLE)
         ${CMAKE_SOURCE_DIR}/src
         ${CMAKE_BINARY_DIR}/generated
         ${CMAKE_SOURCE_DIR}/third_party/slow5lib/include
+        ${CMAKE_SOURCE_DIR}/third_party/dirtyzipf
     )
 
     target_sources(piru_tests PRIVATE

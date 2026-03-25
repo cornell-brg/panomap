@@ -148,7 +148,7 @@ int handle_annotate(const std::vector<std::string>& args) {
   }
 
   /* Load 1D coords if provided */
-  std::vector<double> node_1d_coords;
+  std::vector<float> node_1d_coords;
   bool has_1d = false;
   if (parsed.values.count("1d-coords-file")) {
     node_1d_coords = piru::index::import_1d_coords_odgi(

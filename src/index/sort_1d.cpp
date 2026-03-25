@@ -6,10 +6,12 @@
  *
  * The algorithm iteratively adjusts 1D node positions so that the distance
  * between node pairs in the layout matches their nucleotide distance along
- * shared paths. Uses Zipfian sampling to prioritize nearby node pairs.
+ * shared paths. Uses Zipfian sampling to prioritize nearby node pairs,
+ * with 50% uniform sampling for long-range corrections.
  *
  * Related:
  *  - sort_1d.hpp
+ *  - third_party/dirtyzipf/dirty_zipfian_int_distribution.h
  *  - "Graph Drawing by Stochastic Gradient Descent" (Zheng et al. 2018)
  *
  * SPDX-License-Identifier: MIT
@@ -23,6 +25,7 @@
 #include <random>
 #include <vector>
 
+#include "dirty_zipfian_int_distribution.h"
 #include "util/logging.hpp"
 
 namespace piru::index {
@@ -92,7 +95,7 @@ std::vector<double> compute_schedule(double w_min, double w_max,
 
 }  // namespace
 
-std::vector<double> compute_1d_sort(
+std::vector<float> compute_1d_sort(
     const AlnGraph& graph,
     const std::vector<std::vector<LinearCoordinate>>& coords,
     const std::vector<std::size_t>& /*path_lengths*/,
@@ -113,8 +116,7 @@ std::vector<double> compute_1d_sort(
     cumulative += fwd_lengths[i];
   }
 
-  /* 2. Build path step index for sampling.
-   * Map directional node IDs to forward-only indices (nid / 2). */
+  /* 2. Build path step index for sampling. */
   auto path_index = build_path_step_index(graph, coords);
 
   // Filter to paths with more than one step
@@ -126,37 +128,58 @@ std::vector<double> compute_1d_sort(
   }
   if (valid_paths.empty()) {
     LOG_WARN("No valid paths for 1D SGD (all paths have <= 1 step)");
-    return X;
+    return std::vector<float>(X.begin(), X.end());
   }
 
   // Total steps across all valid paths (for uniform sampling)
   std::uint64_t total_steps = 0;
-  for (auto p : valid_paths) {
-    total_steps += path_index[p].size();
-  }
-
-  /* 3. Compute learning rate schedule (matches odgi defaults).
-   * eta_max = max_path_step_count^2, w_min = 1/eta_max */
   std::size_t max_path_steps = 0;
   for (auto p : valid_paths) {
+    total_steps += path_index[p].size();
     max_path_steps = std::max(max_path_steps, path_index[p].size());
   }
+
+  /* 3. Determine space (max Zipfian jump distance in path steps).
+   * Default (space=0): longest path step count, matching odgi. */
+  std::uint64_t space = config.space;
+  if (space == 0) space = max_path_steps;
+  std::uint64_t space_max = config.space_max;
+
+  /* 4. Precompute zeta values for Zipfian distributions.
+   * Matches odgi: precompute for all jump distances up to space,
+   * with quantization beyond space_max. */
+  std::uint64_t num_zetas = (space <= space_max)
+      ? space
+      : space_max + (space - space_max) / space_max + 1;
+  std::vector<double> zetas(num_zetas + 1, 0.0);
+  {
+    double zeta_tmp = 0.0;
+    for (std::uint64_t i = 1; i <= space; ++i) {
+      zeta_tmp += dirtyzipf::fast_precise_pow(1.0 / static_cast<double>(i), config.theta);
+      if (i <= space_max) {
+        zetas[i] = zeta_tmp;
+      }
+      if (i >= space_max && (i - space_max) % space_max == 0) {
+        zetas[space_max + 1 + (i - space_max) / space_max] = zeta_tmp;
+      }
+    }
+  }
+
+  /* 5. Compute learning rate schedule (matches odgi defaults). */
   double eta_max_val = static_cast<double>(max_path_steps) * static_cast<double>(max_path_steps);
   double w_min = 1.0 / eta_max_val;
   double w_max = 1.0;
   auto etas = compute_schedule(w_min, w_max, config.iter_max,
                                 config.iter_with_max_lr, config.eps);
 
-  /* 4. SGD loop */
-  // min_term_updates = total path steps (one full pass per iteration)
+  /* 6. SGD loop */
   std::uint64_t min_term_updates = total_steps;
   std::uint64_t first_cooling_iter = static_cast<std::uint64_t>(
       std::floor(config.cooling_start * static_cast<double>(config.iter_max)));
 
   std::mt19937_64 rng(config.seed);
 
-  // Build cumulative step count for weighted path sampling (matches odgi:
-  // sample uniformly from all steps, longer paths get more samples)
+  // Build cumulative step count for weighted path sampling
   std::vector<std::uint64_t> cum_steps;
   cum_steps.reserve(valid_paths.size());
   std::uint64_t running = 0;
@@ -165,6 +188,7 @@ std::vector<double> compute_1d_sort(
     cum_steps.push_back(running);
   }
   std::uniform_int_distribution<std::uint64_t> global_step_dist(0, running - 1);
+  std::uniform_int_distribution<int> flip(0, 1);  // coin flip for 50/50 sampling
 
   double delta_max = 0.0;
 
@@ -172,14 +196,12 @@ std::vector<double> compute_1d_sort(
     double eta = etas[iteration];
     delta_max = 0.0;
 
-    // Adjust Zipfian theta for cooling phase
-    double adj_theta = config.theta;
-    if (iteration > first_cooling_iter) {
-      adj_theta = 0.001;  // near-uniform sampling in cooling phase
-    }
+    // Adjust theta for cooling phase
+    bool cooling = iteration > first_cooling_iter;
+    double adj_theta = cooling ? 0.001 : config.theta;
 
     for (std::uint64_t update = 0; update < min_term_updates; ++update) {
-      // Sample a random step uniformly from all path steps (matches odgi)
+      /* Sample first step uniformly from all path steps */
       std::uint64_t global_idx = global_step_dist(rng);
       auto it = std::lower_bound(cum_steps.begin(), cum_steps.end(), global_idx + 1);
       std::size_t path_rank = static_cast<std::size_t>(it - cum_steps.begin());
@@ -189,37 +211,46 @@ std::vector<double> compute_1d_sort(
       std::size_t offset_in_path = (path_rank > 0) ? cum_steps[path_rank - 1] : 0;
       std::size_t s_rank = static_cast<std::size_t>(global_idx - offset_in_path);
 
-      // Sample second step on same path using Zipfian-like distance.
-      // Zipfian: P(k) ~ 1/k^theta. For theta~1, strongly favors small jumps.
-      // Approximation: sample uniform u in (0,1), then jump = floor(n * u^(1/(1-theta)))
-      // where n = min(space, step_count-1). This is the inverse CDF method.
-      std::size_t max_jump = std::min(config.space, step_count - 1);
-      if (max_jump == 0) continue;
-      std::size_t jump;
-      if (adj_theta > 0.5) {
-        // Approximate Zipfian via inverse transform
-        std::uniform_real_distribution<double> u01(0.0, 1.0);
-        double u = u01(rng);
-        double exp = 1.0 / (1.0 - adj_theta + 0.01);  // avoid div by 0 when theta=1
-        jump = static_cast<std::size_t>(std::pow(u, exp) * max_jump) + 1;
-        jump = std::min(jump, max_jump);
+      /* Sample second step: 50% Zipfian (nearby) + 50% uniform (long-range).
+       * Matches odgi: if (cooling || flip(gen)) -> Zipfian, else -> uniform.
+       * During cooling, always Zipfian with theta=0.001 (near-uniform). */
+      std::size_t s_rank_b;
+      if (cooling || flip(rng)) {
+        // Zipfian sampling: bias toward nearby steps
+        std::uint64_t jump_space;
+        bool go_backward = (s_rank > 0 && flip(rng)) || s_rank == step_count - 1;
+
+        if (go_backward) {
+          jump_space = std::min(space, static_cast<std::uint64_t>(s_rank));
+        } else {
+          jump_space = std::min(space, static_cast<std::uint64_t>(step_count - s_rank - 1));
+        }
+        if (jump_space == 0) continue;
+
+        // Look up precomputed zeta (with quantization for large jump_space)
+        std::uint64_t zeta_idx = jump_space;
+        if (jump_space > space_max) {
+          zeta_idx = space_max + 1 + (jump_space - space_max) / space_max;
+        }
+        if (zeta_idx >= zetas.size()) zeta_idx = zetas.size() - 1;
+
+        dirtyzipf::dirty_zipfian_int_distribution<std::uint64_t>::param_type z_p(
+            1, jump_space, adj_theta, zetas[zeta_idx]);
+        dirtyzipf::dirty_zipfian_int_distribution<std::uint64_t> z(z_p);
+        std::uint64_t z_i = z(rng);
+
+        if (go_backward) {
+          s_rank_b = s_rank - static_cast<std::size_t>(z_i);
+        } else {
+          s_rank_b = s_rank + static_cast<std::size_t>(z_i);
+        }
       } else {
-        // Near-uniform for cooling
-        std::uniform_int_distribution<std::size_t> uni_dist(1, max_jump);
-        jump = uni_dist(rng);
+        // Uniform sampling: random step anywhere on this path (long-range correction)
+        std::uniform_int_distribution<std::size_t> uni_dist(0, step_count - 1);
+        s_rank_b = uni_dist(rng);
       }
 
-      // Go forward or backward
-      std::size_t s_rank_b;
-      if (rng() % 2 == 0 && s_rank >= jump) {
-        s_rank_b = s_rank - jump;
-      } else if (s_rank + jump < step_count) {
-        s_rank_b = s_rank + jump;
-      } else if (s_rank >= jump) {
-        s_rank_b = s_rank - jump;
-      } else {
-        continue;  // can't sample a valid pair
-      }
+      if (s_rank_b >= step_count || s_rank_b == s_rank) continue;
 
       // Get nodes and target distance
       std::uint32_t node_i = steps[s_rank].node_id;
@@ -264,22 +295,22 @@ std::vector<double> compute_1d_sort(
   LOG_INFO("1D SGD complete: " + std::to_string(num_fwd) + " forward nodes, " +
            std::to_string(config.iter_max) + " iterations");
 
-  // Expand to full node count: forward nodes get start pos, reverse get end pos
-  std::vector<double> X_full(num_nodes);
+  // Expand to full node count and convert double -> float32
+  std::vector<float> X_full(num_nodes);
   for (std::size_t i = 0; i < num_fwd; ++i) {
-    X_full[i * 2] = X[i];                              // forward: start
-    X_full[i * 2 + 1] = X[i] + fwd_lengths[i];        // reverse: end (read from other direction)
+    X_full[i * 2] = static_cast<float>(X[i]);                                   // forward: start
+    X_full[i * 2 + 1] = static_cast<float>(X[i] + static_cast<double>(fwd_lengths[i]));  // reverse: end
   }
 
   return X_full;
 }
 
-std::vector<double> import_1d_coords_odgi(const std::string& path,
-                                           std::size_t num_nodes) {
+std::vector<float> import_1d_coords_odgi(const std::string& path,
+                                          std::size_t num_nodes) {
   // odgi TSV: idx\tX\tY, two rows per node (start, end). Y=0 for 1D layout.
   // odgi has N original nodes, we have 2N directional nodes.
   std::size_t num_orig = num_nodes / 2;
-  std::vector<double> result(num_nodes, 0.0);
+  std::vector<float> result(num_nodes, 0.0f);
 
   std::ifstream ifs(path);
   if (!ifs.is_open()) {
@@ -309,8 +340,8 @@ std::vector<double> import_1d_coords_odgi(const std::string& path,
     }
 
     // Forward node: start position. Reverse node: end position.
-    result[orig_idx * 2] = x_start;
-    result[orig_idx * 2 + 1] = x_end;
+    result[orig_idx * 2] = static_cast<float>(x_start);
+    result[orig_idx * 2 + 1] = static_cast<float>(x_end);
     ++orig_idx;
   }
 
@@ -321,7 +352,7 @@ std::vector<double> import_1d_coords_odgi(const std::string& path,
 }
 
 void dump_1d_coords_tsv(const std::string& path,
-                         const std::vector<double>& coords,
+                         const std::vector<float>& coords,
                          const AlnGraph& graph) {
   std::ofstream ofs(path);
   ofs << "node_id\tstart_pos\tend_pos\tseq_len\n";

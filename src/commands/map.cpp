@@ -336,9 +336,12 @@ int handle_map(const std::vector<std::string>& args) {
   map_config.linearization_coords = &linearization_coords;  // For DP chaining
   map_config.path_lengths = &path_lengths;                  // For anchor bounds checking
 
-  // Load 1D coords for sort-chain mode
-  std::vector<double> node_1d_coords;
-  if (parsed.values.count("1d-coords-file")) {
+  // Load 1D coords: prefer .pirx embedded, fallback to --1d-coords-file
+  std::vector<float> node_1d_coords;
+  if (!loaded.node_1d_coords.empty()) {
+    node_1d_coords = std::move(loaded.node_1d_coords);
+    map_config.node_1d_coords = &node_1d_coords;
+  } else if (parsed.values.count("1d-coords-file")) {
     std::size_t num_nodes = graph_store->nodeCount();
     node_1d_coords = piru::index::import_1d_coords_odgi(
         parsed.values.at("1d-coords-file"), num_nodes);

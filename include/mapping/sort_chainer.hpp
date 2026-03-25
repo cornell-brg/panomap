@@ -53,7 +53,7 @@ struct SortChainerConfig {
  */
 class SortChainer : public Chainer {
  public:
-  SortChainer(SortChainerConfig config, const std::vector<double>& node_1d_coords,
+  SortChainer(SortChainerConfig config, const std::vector<float>& node_1d_coords,
               std::vector<std::uint32_t> node_bp_lens);
 
   ChainResult chain(const std::vector<NodeAnchor>& hits) const override;
@@ -61,7 +61,7 @@ class SortChainer : public Chainer {
 
  private:
   SortChainerConfig config_;
-  const std::vector<double>& node_1d_coords_;
+  const std::vector<float>& node_1d_coords_;
   std::vector<std::uint32_t> node_bp_lens_;
 };
 

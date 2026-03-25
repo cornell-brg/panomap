@@ -58,7 +58,7 @@ struct PanChainerConfig {
 class PanChainer : public Chainer {
  public:
   PanChainer(PanChainerConfig config,
-             const std::vector<double>& node_1d_coords,
+             const std::vector<float>& node_1d_coords,
              const std::vector<std::vector<index::LinearCoordinate>>& linearization_coords,
              const std::vector<std::size_t>& path_lengths);
 
@@ -67,7 +67,7 @@ class PanChainer : public Chainer {
 
  private:
   PanChainerConfig config_;
-  const std::vector<double>& node_1d_coords_;
+  const std::vector<float>& node_1d_coords_;
   const std::vector<std::vector<index::LinearCoordinate>>& coords_;
   const std::vector<std::size_t>& path_lengths_;
 };

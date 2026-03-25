@@ -67,7 +67,7 @@ struct BatchMapperConfig {
   /* Path lengths for anchor bounds checking (parallel to graph paths) */
   const std::vector<std::size_t>* path_lengths{nullptr};
   /* 1D sort coordinates for SortChainer (non-owning, from index) */
-  const std::vector<double>* node_1d_coords{nullptr};
+  const std::vector<float>* node_1d_coords{nullptr};
 
   /* Result writer for output (non-owning, optional) */
   io::ResultWriter* result_writer{nullptr};

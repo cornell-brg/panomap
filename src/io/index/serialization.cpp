@@ -58,7 +58,8 @@ std::string read_string(std::istream& in) {
 void save_index(const std::string& path, const piru::index::GraphStore& graph_store,
                 const piru::index::SeedStore& seed_store,
                 const std::vector<std::vector<piru::index::LinearCoordinate>>& linearization_coords,
-                const IndexMetadata& metadata) {
+                const IndexMetadata& metadata,
+                const std::vector<float>& node_1d_coords) {
   const auto* adj_store = dynamic_cast<const piru::index::AdjListGraphStore*>(&graph_store);
   if (!adj_store) {
     throw std::runtime_error("Unsupported GraphStore backend for serialization");
@@ -189,6 +190,16 @@ void save_index(const std::string& path, const piru::index::GraphStore& graph_st
             static_cast<std::streamsize>((n_hashes + 1) * sizeof(uint32_t)));
   out.write(reinterpret_cast<const char*>(csr_entries.data()),
             static_cast<std::streamsize>(n_entries * sizeof(piru::index::SeedEntry)));
+
+  /* 8. 1D canonical coordinates (optional, float32 bulk write) */
+
+  auto pos_1d = out.tellp();
+  uint64_t n_1d = node_1d_coords.size();
+  write_pod<uint64_t>(out, n_1d);
+  if (n_1d > 0) {
+    out.write(reinterpret_cast<const char*>(node_1d_coords.data()),
+              static_cast<std::streamsize>(n_1d * sizeof(float)));
+  }
 
   auto pos_end = out.tellp();
   auto total = pos_end - pos_start;
@@ -360,11 +371,25 @@ LoadedIndex load_index(const std::string& path) {
       std::move(seed_extractor_name), std::move(seed_params),
       max_freq, freq_threshold, filter_fraction);
 
+  /* 8. 1D canonical coordinates (optional, backwards-compatible) */
+
+  std::vector<float> node_1d_coords;
+  if (in.peek() != std::ifstream::traits_type::eof()) {
+    uint64_t n_1d;
+    read_pod(in, n_1d);
+    if (n_1d > 0) {
+      node_1d_coords.resize(n_1d);
+      in.read(reinterpret_cast<char*>(node_1d_coords.data()),
+              static_cast<std::streamsize>(n_1d * sizeof(float)));
+      LOG_INFO("Loaded 1D coords: " + std::to_string(n_1d) + " nodes");
+    }
+  }
+
   LOG_INFO("Loaded index: " + std::to_string(node_count) + " nodes, " +
            std::to_string(n_hashes) + " seeds (" + std::to_string(n_entries) + " hits) ← " + path);
 
   return {std::move(metadata), std::make_unique<piru::index::AdjListGraphStore>(std::move(*graph)),
-          std::move(seeds), std::move(linearization_coords)};
+          std::move(seeds), std::move(linearization_coords), std::move(node_1d_coords)};
 }
 
 bool is_pirx_index(const std::string& path) {

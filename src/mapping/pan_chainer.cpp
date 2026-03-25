@@ -189,7 +189,7 @@ inline std::int32_t score_transition(
 }  // namespace
 
 PanChainer::PanChainer(PanChainerConfig config,
-                       const std::vector<double>& node_1d_coords,
+                       const std::vector<float>& node_1d_coords,
                        const std::vector<std::vector<index::LinearCoordinate>>& linearization_coords,
                        const std::vector<std::size_t>& path_lengths)
     : config_(std::move(config)), node_1d_coords_(node_1d_coords),
