@@ -45,17 +45,44 @@ struct PathCoord {
   std::int64_t ref_coord;
 };
 
-/* CSR-like storage for per-anchor path coords.
+/* CSR-like storage for per-anchor path coords + path membership bitmap.
  * anchor i's path coords are in path_coords[offsets[i] .. offsets[i+1]).
- * Sorted by path_id within each anchor for fast intersection. */
+ * Sorted by path_id within each anchor for fast intersection.
+ * Bitmap: flat array, words_per_anchor uint64 words per anchor.
+ * shares_path(i, j) does a quick AND check before merge-intersect. */
 struct AnchorPathIndex {
-  std::vector<PathCoord> coords;   // flat array of all (path_id, ref_coord)
+  std::vector<PathCoord> coords;       // flat array of all (path_id, ref_coord)
   std::vector<std::uint32_t> offsets;  // offsets[i] = start of anchor i's coords
+  std::vector<std::uint64_t> bitmap;   // path membership bitmap, contiguous SoA
+  std::size_t words_per_anchor{0};     // ceil(num_paths / 64)
+
+  /* Quick shared-path check via bitmap AND. */
+  inline bool shares_path(std::size_t i, std::size_t j) const {
+    auto bi = i * words_per_anchor;
+    auto bj = j * words_per_anchor;
+    for (std::size_t w = 0; w < words_per_anchor; ++w) {
+      if (bitmap[bi + w] & bitmap[bj + w]) return true;
+    }
+    return false;
+  }
 
   void build(const std::vector<NodeAnchor>& hits,
              const std::vector<std::vector<index::LinearCoordinate>>& lin_coords,
              const std::uint32_t* order, std::size_t na) {
-    // Count total entries
+    /* 1. Find max path_id for bitmap sizing */
+    std::uint32_t max_pid = 0;
+    for (std::size_t k = 0; k < na; ++k) {
+      auto nid = hits[order[k]].node_id;
+      if (nid < lin_coords.size()) {
+        for (const auto& lc : lin_coords[nid])
+          if (static_cast<std::uint32_t>(lc.path_id) > max_pid)
+            max_pid = static_cast<std::uint32_t>(lc.path_id);
+      }
+    }
+    words_per_anchor = (max_pid / 64) + 1;
+    bitmap.assign(na * words_per_anchor, 0);
+
+    /* 2. Build CSR coords + bitmap */
     std::size_t total = 0;
     for (std::size_t k = 0; k < na; ++k) {
       auto nid = hits[order[k]].node_id;
@@ -72,11 +99,13 @@ struct AnchorPathIndex {
       auto ofs = hits[order[k]].offset;
       if (nid < lin_coords.size()) {
         for (const auto& lc : lin_coords[nid]) {
-          coords[pos].path_id = static_cast<std::uint32_t>(lc.path_id);
+          auto pid = static_cast<std::uint32_t>(lc.path_id);
+          coords[pos].path_id = pid;
           coords[pos].ref_coord = lc.ref_coord + static_cast<std::int64_t>(ofs);
           ++pos;
+          // Set bitmap bit
+          bitmap[k * words_per_anchor + pid / 64] |= (1ULL << (pid % 64));
         }
-        // Sort this anchor's entries by path_id for fast intersection
         std::sort(coords.data() + offsets[k], coords.data() + pos,
                   [](const PathCoord& a, const PathCoord& b) {
                     return a.path_id < b.path_id;
@@ -255,6 +284,9 @@ ChainResult PanChainer::chain(const std::vector<NodeAnchor>& hits) const {
 
       auto dq = static_cast<std::int32_t>(qp[i]) - static_cast<std::int32_t>(qp[j]);
       if (dq <= 0 || dq > max_dist_query) { ++num_skipped; continue; }
+
+      // Quick bitmap check: skip if no shared path possible
+      if (!path_idx.shares_path(i, j)) continue;
 
       /* Shared-path intersection + scoring via merge of sorted path_id lists */
       std::int32_t best_net = std::numeric_limits<std::int32_t>::min();
