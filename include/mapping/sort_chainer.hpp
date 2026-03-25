@@ -37,8 +37,12 @@ struct SortChainerConfig {
 
   float chn_pen_gap{0.4f};           // lower than PathChainer (0.8) for 1D distortion
   float chn_pen_skip{0.0f};
+  float dd_tolerance_frac{0.0f};     // dead zone: dd below tolerance_frac * dg is penalty-free
+  float chn_pen_ratio{0.5f};         // penalty for ratio inconsistency between consecutive transitions
 
   std::size_t pore_k{0};
+
+  static SortChainerConfig from_parsed(const cli::Parsed& parsed);
 };
 
 /**
@@ -49,7 +53,8 @@ struct SortChainerConfig {
  */
 class SortChainer : public Chainer {
  public:
-  SortChainer(SortChainerConfig config, const std::vector<double>& node_1d_coords);
+  SortChainer(SortChainerConfig config, const std::vector<double>& node_1d_coords,
+              std::vector<std::uint32_t> node_bp_lens);
 
   ChainResult chain(const std::vector<NodeAnchor>& hits) const override;
   std::string name() const override { return "sort-chain"; }
@@ -57,6 +62,7 @@ class SortChainer : public Chainer {
  private:
   SortChainerConfig config_;
   const std::vector<double>& node_1d_coords_;
+  std::vector<std::uint32_t> node_bp_lens_;
 };
 
 }  // namespace piru::mapping

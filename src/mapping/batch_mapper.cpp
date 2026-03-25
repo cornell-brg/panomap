@@ -22,6 +22,7 @@
 #include <utility>
 
 #include "mapping/graph_chainer.hpp"
+#include "mapping/pan_chainer.hpp"
 #include "mapping/path_chainer.hpp"
 #include "mapping/sort_chainer.hpp"
 #include "util/logging.hpp"
@@ -122,9 +123,28 @@ PipelineComponents BatchMapper::create_components() const {
     if (!config_.node_1d_coords) {
       throw std::runtime_error("SortChainer requires node_1d_coords (use --compute-1d-sort or --1d-coords-file at index time)");
     }
-    SortChainerConfig sort_config;
+    auto sort_config = SortChainerConfig::from_parsed(config_.chainer_parsed);
     sort_config.pore_k = config_.pore_k;
-    comps.chainer = std::make_unique<SortChainer>(sort_config, *config_.node_1d_coords);
+    std::vector<std::uint32_t> bp_lens(config_.graph_store->nodeCount());
+    for (std::size_t i = 0; i < bp_lens.size(); ++i)
+      bp_lens[i] = static_cast<std::uint32_t>(config_.graph_store->sequence(i).size());
+    comps.chainer = std::make_unique<SortChainer>(sort_config, *config_.node_1d_coords,
+                                                   std::move(bp_lens));
+  } else if (config_.chainer_backend == "pan-chain") {
+    if (!config_.node_1d_coords) {
+      throw std::runtime_error("PanChainer requires node_1d_coords (use --compute-1d-sort or --1d-coords-file)");
+    }
+    if (!config_.linearization_coords) {
+      throw std::runtime_error("PanChainer requires linearization_coords");
+    }
+    if (!config_.path_lengths) {
+      throw std::runtime_error("PanChainer requires path_lengths");
+    }
+    auto pan_config = PanChainerConfig::from_parsed(config_.chainer_parsed);
+    pan_config.pore_k = config_.pore_k;
+    comps.chainer = std::make_unique<PanChainer>(pan_config, *config_.node_1d_coords,
+                                                  *config_.linearization_coords,
+                                                  *config_.path_lengths);
   } else {
     throw std::runtime_error("Unknown chainer backend: " + config_.chainer_backend);
   }
@@ -300,6 +320,29 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
 
       /* Chain all accumulated hits, keep only survivors */
       ChainResult chunk_chains = components_.chainer->chain(all_hits);
+
+      PIRU_TRACE_DUMP(trace::kChains, rid, {
+        std::ofstream ofs(trace::trace_path("6_anchors", rid, chunk_idx));
+        ofs << "# Anchor cloud: query_pos\t1d_ref_coord\tnode_id\toffset\tspan\n";
+        for (const auto& h : all_hits) {
+          double ref_1d = 0.0;
+          if (config_.node_1d_coords && h.node_id < config_.node_1d_coords->size())
+            ref_1d = (*config_.node_1d_coords)[h.node_id] + static_cast<double>(h.offset);
+          ofs << h.read_pos << "\t" << ref_1d << "\t" << h.node_id << "\t"
+              << h.offset << "\t" << h.span << "\n";
+        }
+        ofs << "# Chains: " << chunk_chains.chains.size() << "\n";
+        for (std::size_t ci = 0; ci < chunk_chains.chains.size(); ++ci) {
+          const auto& chain = chunk_chains.chains[ci];
+          ofs << "# chain " << ci << " score=" << chain.score
+              << " anchors=" << chain.anchors.size() << "\n";
+          for (const auto& a : chain.anchors) {
+            ofs << a.read_pos << "\t" << a.ref_coord << "\t" << a.node_id << "\t"
+                << a.offset << "\t" << a.length << "\tCHAIN=" << ci << "\n";
+          }
+        }
+      });
+
       if (!chunk_chains.used_inputs.empty()) {
         std::vector<NodeAnchor> survivors;
         survivors.reserve(all_hits.size());

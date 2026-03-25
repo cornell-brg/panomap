@@ -91,6 +91,7 @@ if(DOCTEST_AVAILABLE)
         ${CMAKE_SOURCE_DIR}/src/mapping/path_chainer.cpp
         ${CMAKE_SOURCE_DIR}/src/mapping/graph_chainer.cpp
         ${CMAKE_SOURCE_DIR}/src/mapping/sort_chainer.cpp
+        ${CMAKE_SOURCE_DIR}/src/mapping/pan_chainer.cpp
 
         ${CMAKE_SOURCE_DIR}/src/util/timing.cpp
         ${CMAKE_SOURCE_DIR}/src/util/trace.cpp

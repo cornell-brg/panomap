@@ -99,6 +99,7 @@ add_executable(piru
     src/mapping/path_chainer.cpp
     src/mapping/graph_chainer.cpp
     src/mapping/sort_chainer.cpp
+    src/mapping/pan_chainer.cpp
 
     src/util/signal_handlers.cpp
     src/util/timing.cpp

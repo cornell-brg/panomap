@@ -83,8 +83,8 @@ int handle_map(const std::vector<std::string>& args) {
        "Signal chunk size in samples (default: 4000, 0 = no chunking)"},
       {'\0', "max-chunks", true,
        "Max chunks to process per read (default: 10, 0 = unlimited)"},
-      {'\0', "chainer", true, "Chainer backend: path-chain (default), graph-chain, sort-chain"},
-      {'\0', "1d-coords-file", true, "1D coords TSV for sort-chain (from odgi sort --path-sgd-layout)"},
+      {'\0', "chainer", true, "Chainer backend: path-chain (default), graph-chain, sort-chain, pan-chain"},
+      {'\0', "1d-coords-file", true, "1D coords TSV for sort-chain/pan-chain (from odgi sort --path-sgd-layout)"},
       {'\0', "", false, "\nSignal Processing Options:"},
       {'\0', "event-pipeline", true,
        "Event pipeline backend: rawhash (default), scrappie, passthrough"},
@@ -117,6 +117,18 @@ int handle_map(const std::vector<std::string>& args) {
   // Append backend-specific CLI options
   auto chain_opts = piru::mapping::PathChainerConfig::cli_options();
   config.options.insert(config.options.end(), chain_opts.begin(), chain_opts.end());
+  config.options.push_back(
+      {'\0', "chain-dd-tolerance", true,
+       "SortChainer: dead zone fraction for diagonal deviation (default: 0.0)"});
+  config.options.push_back(
+      {'\0', "chain-pen-ratio", true,
+       "SortChainer: ratio consistency penalty factor (default: 0.5)"});
+  config.options.push_back(
+      {'\0', "chain-band-1d", true,
+       "PanChainer: 1D band width for candidate selection (default: 5000)"});
+  config.options.push_back(
+      {'\0', "chain-pen-switch", true,
+       "PanChainer: penalty for switching haplotype path (default: 50)"});
 
   config.on_error = [](const std::string&) { std::cerr << "map: invalid option\n"; };
 
