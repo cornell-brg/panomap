@@ -96,6 +96,7 @@ struct BatchMapperConfig {
   float map_w_bestmq{0.05f};  // Weight on MAPQ standout ratio
   float map_w_bestmc{0.60f};  // Weight on chain score standout ratio
   float map_threshold{0.12f}; // Decision threshold (0 = disabled)
+  bool no_map_filter{false};  // Skip map/unmap filter (output all chains)
   std::size_t map_min_anchors{0};  // Min anchors in primary chain to report (0 = disabled)
 
 };

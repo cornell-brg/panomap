@@ -452,6 +452,13 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
                    + config_.map_w_bestmq * r_bestmq
                    + config_.map_w_bestmc * r_bestmc;
 
+    // Store decision scores for GAF output
+    result.decision_weighted = weighted;
+    result.decision_r_abs = r_abs;
+    result.decision_r_bestq = r_bestq;
+    result.decision_r_bestmq = r_bestmq;
+    result.decision_r_bestmc = r_bestmc;
+
     PIRU_TRACE_DUMP(trace::kChains, read.read_id, {
       std::ofstream ofs(trace::trace_path("7_decision", read.read_id));
       ofs << "bs=" << best_score << "\tss=" << secondary_score
@@ -460,7 +467,7 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
           << "\tn=" << result.mappings.size() << "\n";
     });
 
-    if (weighted < config_.map_threshold) {
+    if (weighted < config_.map_threshold && !config_.no_map_filter) {
       result.mappings.clear();  // unmapped
     }
   }

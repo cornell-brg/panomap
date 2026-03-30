@@ -113,6 +113,16 @@ int handle_map(const std::vector<std::string>& args) {
        "Weighted mapping quality threshold (0 = disabled, RH2 default: 0.45)"},
       {'\0', "map-score-scale", true,
        "Absolute score normalizer for mapping decision (default: 100)"},
+      {'\0', "no-map-filter", false,
+       "Disable map/unmap filter (output all chains, decision scores in GAF tags)"},
+      {'\0', "map-w-abs", true,
+       "Map decision weight on absolute chain score (default: 0.20)"},
+      {'\0', "map-w-bestq", true,
+       "Map decision weight on best MAPQ (default: 0.35)"},
+      {'\0', "map-w-bestmq", true,
+       "Map decision weight on MAPQ standout ratio (default: 0.05)"},
+      {'\0', "map-w-bestmc", true,
+       "Map decision weight on chain score standout ratio (default: 0.60)"},
   };
   // Append backend-specific CLI options
   auto chain_opts = piru::mapping::PathChainerConfig::cli_options();
@@ -484,14 +494,36 @@ int handle_map(const std::vector<std::string>& args) {
   // min-secondary-ratio is now handled by the GafWriter directly
   // TODO: pass this to the writer config if needed
 
-  // Configure mapping decision threshold
-  if (parsed.values.count("map-threshold")) {
+  // Configure mapping decision threshold.
+  // Per-chainer defaults (tuned on DRB1 chunk sweep, dev-75):
+  //   PathChainer: 0.34/100 (stable across chunks)
+  //   PanChainer:  0.40/100 (needs higher threshold for cross-path chains)
+  //   SortChainer: 0.40/100 (needs higher threshold for approximate scoring)
+  if (!parsed.values.count("map-threshold")) {
+    if (map_config.chainer_backend == "pan-chain" || map_config.chainer_backend == "sort-chain") {
+      map_config.map_threshold = 0.40f;
+    } else {
+      map_config.map_threshold = 0.34f;
+    }
+  } else {
     map_config.map_threshold = std::stof(parsed.values.at("map-threshold"));
-    LOG_INFO("Mapping decision threshold: " + std::to_string(map_config.map_threshold));
   }
   if (parsed.values.count("map-score-scale")) {
     map_config.map_score_scale = std::stof(parsed.values.at("map-score-scale"));
   }
+  if (parsed.values.count("no-map-filter")) {
+    map_config.no_map_filter = true;
+  }
+  if (parsed.values.count("map-w-abs"))
+    map_config.map_w_abs = std::stof(parsed.values.at("map-w-abs"));
+  if (parsed.values.count("map-w-bestq"))
+    map_config.map_w_bestq = std::stof(parsed.values.at("map-w-bestq"));
+  if (parsed.values.count("map-w-bestmq"))
+    map_config.map_w_bestmq = std::stof(parsed.values.at("map-w-bestmq"));
+  if (parsed.values.count("map-w-bestmc"))
+    map_config.map_w_bestmc = std::stof(parsed.values.at("map-w-bestmc"));
+  LOG_INFO("Mapping decision threshold: " + std::to_string(map_config.map_threshold)
+           + (map_config.no_map_filter ? " (DISABLED, --no-map-filter)" : ""));
 
   /* Read processing */
 
