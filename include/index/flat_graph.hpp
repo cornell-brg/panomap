@@ -11,13 +11,10 @@
  * - u32 indices instead of pointers (2x savings on 64-bit)
  * - CSR for adjacency lists (no vector-of-vector)
  * - Arena for variable-length data (sequences, names)
- * - mmap-able: the layout can serve as a binary file format
- *
- * Memory per node: ~20 bytes (vs ~160 bytes for AlnNode)
+ * - 2-bit packed DNA sequences (4x compression vs ASCII)
  *
  * Related:
  *  - graph_store.hpp (abstract interface, FlatGraph plugs in via FlatGraphStore)
- *  - graph_store.hpp (abstract interface, FlatGraph plugs in)
  *
  * SPDX-License-Identifier: MIT
  */
@@ -34,7 +31,7 @@ class FlatGraph {
 public:
   FlatGraph() = default;
 
-  // Build from pre-assembled raw arrays (for deserialization)
+  // Build from pre-assembled raw arrays (ASCII sequences -- packed internally)
   static FlatGraph fromRawArrays(
       std::uint32_t node_count, std::uint32_t path_count,
       std::vector<char> seq_data, std::vector<std::uint32_t> seq_offset,
@@ -47,16 +44,58 @@ public:
       std::vector<std::uint32_t> path_name_offset, std::vector<std::uint16_t> path_name_len,
       std::vector<std::uint64_t> path_length);
 
+  // --- 2-bit encoding helpers ---
+
+  // Encode: A=0, C=1, G=2, T=3. N and others map to 0 (check n_mask).
+  static constexpr std::uint8_t encode2bit(char c) {
+    // Lookup table approach for speed
+    switch (c) {
+      case 'C': case 'c': return 1;
+      case 'G': case 'g': return 2;
+      case 'T': case 't': return 3;
+      default: return 0;  // A, N, and anything else
+    }
+  }
+
+  static constexpr char decode2bit(std::uint8_t v) {
+    constexpr char table[] = {'A', 'C', 'G', 'T'};
+    return table[v & 3];
+  }
+
   // --- Node accessors ---
 
   std::uint32_t nodeCount() const { return node_count_; }
 
-  std::string_view seq(std::uint32_t node_id) const {
-    return {seq_data_.data() + seq_offset_[node_id], seq_len_[node_id]};
-  }
-
   std::size_t seqLen(std::uint32_t node_id) const {
     return seq_len_[node_id];
+  }
+
+  // Get 2-bit encoded base at position within node (0-3, check isN for ambiguity)
+  std::uint8_t base2bit(std::uint32_t node_id, std::uint32_t pos) const {
+    std::uint32_t abs_pos = seq_base_offset_[node_id] + pos;
+    std::uint32_t byte_idx = abs_pos >> 2;         // abs_pos / 4
+    std::uint32_t bit_shift = (abs_pos & 3) << 1;  // (abs_pos % 4) * 2
+    return (seq_packed_[byte_idx] >> bit_shift) & 3;
+  }
+
+  // Check if position is an N base
+  bool isN(std::uint32_t node_id, std::uint32_t pos) const {
+    std::uint32_t abs_pos = seq_base_offset_[node_id] + pos;
+    return (seq_n_mask_[abs_pos >> 3] >> (abs_pos & 7)) & 1;
+  }
+
+  // Decode full node sequence to ASCII string (for serialization/export)
+  std::string seqDecoded(std::uint32_t node_id) const {
+    std::size_t len = seq_len_[node_id];
+    std::string result(len, '\0');
+    for (std::size_t i = 0; i < len; ++i) {
+      if (isN(node_id, static_cast<std::uint32_t>(i))) {
+        result[i] = 'N';
+      } else {
+        result[i] = decode2bit(base2bit(node_id, static_cast<std::uint32_t>(i)));
+      }
+    }
+    return result;
   }
 
   std::string_view name(std::uint32_t node_id) const {
@@ -77,7 +116,6 @@ public:
 
   std::uint32_t edgeCount() const { return static_cast<std::uint32_t>(edge_target_.size()); }
 
-  // Outgoing neighbors of node_id
   const std::uint32_t* outBegin(std::uint32_t node_id) const {
     return edge_target_.data() + out_edge_offset_[node_id];
   }
@@ -104,7 +142,6 @@ public:
     path_length_[path_id] = len;
   }
 
-  // Steps for path_id: array of node_ids
   const std::uint32_t* pathStepsBegin(std::uint32_t path_id) const {
     return step_data_.data() + path_step_offset_[path_id];
   }
@@ -115,11 +152,13 @@ public:
     return path_step_offset_[path_id + 1] - path_step_offset_[path_id];
   }
 
-  // --- Raw arena access (for serialization) ---
+  // --- Raw access (for serialization) ---
 
-  const std::vector<char>& seqData() const { return seq_data_; }
-  const std::vector<std::uint32_t>& seqOffsets() const { return seq_offset_; }
+  const std::vector<std::uint8_t>& seqPacked() const { return seq_packed_; }
+  const std::vector<std::uint8_t>& seqNMask() const { return seq_n_mask_; }
+  const std::vector<std::uint32_t>& seqBaseOffsets() const { return seq_base_offset_; }
   const std::vector<std::uint32_t>& seqLens() const { return seq_len_; }
+  std::size_t totalBases() const { return total_bases_; }
   const std::vector<char>& nameData() const { return name_data_; }
   const std::vector<std::uint32_t>& nameOffsets() const { return name_offset_; }
   const std::vector<std::uint16_t>& nameLens() const { return name_len_; }
@@ -135,11 +174,13 @@ public:
 private:
   std::uint32_t node_count_{0};
   std::uint32_t path_count_{0};
+  std::size_t total_bases_{0};
 
-  // Sequence arena
-  std::vector<char> seq_data_;
-  std::vector<std::uint32_t> seq_offset_;   // [node_count]
-  std::vector<std::uint32_t> seq_len_;      // [node_count]
+  // 2-bit packed sequence arena (4 bases per byte)
+  std::vector<std::uint8_t> seq_packed_;     // ceil(total_bases / 4) bytes
+  std::vector<std::uint8_t> seq_n_mask_;     // 1 bit per base (ceil(total_bases / 8) bytes)
+  std::vector<std::uint32_t> seq_base_offset_; // [node_count] offset in bases
+  std::vector<std::uint32_t> seq_len_;         // [node_count] length in bases
 
   // Name arena (shared by nodes and paths)
   std::vector<char> name_data_;

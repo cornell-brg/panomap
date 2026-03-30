@@ -103,8 +103,7 @@ PathWalkIndexResult pathWalkIndex(const FlatGraph& graph, const io::KmerModel& m
       if (node_id >= graph.nodeCount()) continue;
 
       boundaries.push_back({node_id, path_sequence.size()});
-      auto sv = graph.seq(node_id);
-      path_sequence.append(sv.data(), sv.size());
+      path_sequence += graph.seqDecoded(node_id);
     }
 
     if (path_sequence.size() < static_cast<std::size_t>(pore_k)) return;

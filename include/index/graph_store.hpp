@@ -18,7 +18,6 @@ public:
   virtual ~GraphStore() = default;
 
   virtual std::size_t nodeCount() const = 0;
-  virtual std::string_view sequence(std::size_t node_id) const = 0;
   virtual std::size_t sequenceLen(std::size_t node_id) const = 0;
   virtual const FlatGraph& flat() const = 0;
 };
@@ -31,9 +30,6 @@ public:
   const FlatGraph& flat() const override { return graph_; }
 
   std::size_t nodeCount() const override { return graph_.nodeCount(); }
-  std::string_view sequence(std::size_t node_id) const override {
-    return graph_.seq(static_cast<std::uint32_t>(node_id));
-  }
   std::size_t sequenceLen(std::size_t node_id) const override {
     return graph_.seqLen(static_cast<std::uint32_t>(node_id));
   }

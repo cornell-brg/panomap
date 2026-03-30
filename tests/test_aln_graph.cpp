@@ -1,177 +1,90 @@
 #include <doctest/doctest.h>
 
-#include "index/aln_graph.hpp"
+#include "index/flat_graph.hpp"
 
 using namespace piru::index;
 
-TEST_CASE("AlnGraph basic path operations") {
-  AlnGraph graph;
+TEST_CASE("FlatGraph 2-bit encoding round-trip") {
+  // Build a simple graph with known sequences
+  std::vector<char> seq_data = {'A', 'C', 'G', 'T', 'N', 'A', 'C', 'G'};
+  std::vector<std::uint32_t> seq_offset = {0, 5};  // node 0: ACGTN, node 1: ACG
+  std::vector<std::uint32_t> seq_len = {5, 3};
+  std::vector<char> name_data = {'n', '1', 'n', '2'};
+  std::vector<std::uint32_t> name_offset = {0, 2};
+  std::vector<std::uint16_t> name_len = {2, 2};
+  std::vector<std::uint8_t> is_reverse = {0, 1};
+  std::vector<std::uint32_t> edge_target;
+  std::vector<std::uint32_t> out_edge_offset = {0, 0, 0};
+  std::vector<std::uint32_t> step_data;
+  std::vector<std::uint32_t> path_step_offset = {0};
+  std::vector<std::uint32_t> path_name_offset;
+  std::vector<std::uint16_t> path_name_len;
+  std::vector<std::uint64_t> path_length;
 
-  // Add nodes
-  AlnNode node1;
-  node1.label = "node1";
-  node1.sequence = "ACGT";
-  graph.addNode(node1);
+  auto fg = FlatGraph::fromRawArrays(
+      2, 0, std::move(seq_data), std::move(seq_offset), std::move(seq_len),
+      std::move(name_data), std::move(name_offset), std::move(name_len),
+      std::move(is_reverse), std::move(edge_target), std::move(out_edge_offset),
+      std::move(step_data), std::move(path_step_offset),
+      std::move(path_name_offset), std::move(path_name_len), std::move(path_length));
 
-  AlnNode node2;
-  node2.label = "node2";
-  node2.sequence = "GG";
-  graph.addNode(node2);
+  CHECK(fg.nodeCount() == 2);
+  CHECK(fg.seqLen(0) == 5);
+  CHECK(fg.seqLen(1) == 3);
 
-  // Add a path
-  AlnPath path1;
-  path1.name = "pathA";
-  path1.steps.push_back({"node1", false});
-  path1.steps.push_back({"node2", true});
-  path1.overlaps.push_back(1);  // Example overlap
-  graph.addPath(path1);
+  // Verify 2-bit encoding
+  CHECK(fg.base2bit(0, 0) == 0);  // A
+  CHECK(fg.base2bit(0, 1) == 1);  // C
+  CHECK(fg.base2bit(0, 2) == 2);  // G
+  CHECK(fg.base2bit(0, 3) == 3);  // T
+  CHECK(fg.isN(0, 4) == true);    // N
+  CHECK(fg.isN(0, 0) == false);
 
-  CHECK(graph.pathCount() == 1);
-  REQUIRE(graph.paths().size() == 1);
-  CHECK(graph.paths()[0].name == "pathA");
-  CHECK(graph.paths()[0].steps.size() == 2);
-  CHECK(graph.paths()[0].steps[0].node_id == "node1");
-  CHECK(graph.paths()[0].steps[1].node_id == "node2");
-  CHECK(graph.paths()[0].steps[1].is_reverse == true);
-  CHECK(graph.paths()[0].overlaps.size() == 1);
+  // Verify decode round-trip
+  CHECK(fg.seqDecoded(0) == "ACGTN");
+  CHECK(fg.seqDecoded(1) == "ACG");
 
-  // Add another path
-  AlnPath path2;
-  path2.name = "pathB";
-  path2.steps.push_back({"node1", false});
-  graph.addPath(path2);
-
-  CHECK(graph.pathCount() == 2);
-  REQUIRE(graph.paths().size() == 2);
-  CHECK(graph.paths()[1].name == "pathB");
-  CHECK(graph.paths()[1].steps.size() == 1);
+  // Verify metadata
+  CHECK(fg.name(0) == "n1");
+  CHECK(fg.name(1) == "n2");
+  CHECK(fg.isReverse(0) == false);
+  CHECK(fg.isReverse(1) == true);
 }
 
-TEST_CASE("AlnGraph validation with paths") {
-  AlnGraph graph;
+TEST_CASE("FlatGraph path accessors") {
+  std::vector<char> seq_data = {'A', 'C', 'G', 'T'};
+  std::vector<std::uint32_t> seq_offset = {0, 2};
+  std::vector<std::uint32_t> seq_len = {2, 2};
+  std::vector<char> name_data = {'a', 'b', 'p', '1'};
+  std::vector<std::uint32_t> name_offset = {0, 1};
+  std::vector<std::uint16_t> name_len = {1, 1};
+  std::vector<std::uint8_t> is_reverse = {0, 0};
+  std::vector<std::uint32_t> edge_target = {1};
+  std::vector<std::uint32_t> out_edge_offset = {0, 1, 1};
+  std::vector<std::uint32_t> step_data = {0, 1};
+  std::vector<std::uint32_t> path_step_offset = {0, 2};
+  std::vector<std::uint32_t> path_name_offset = {2};
+  std::vector<std::uint16_t> path_name_len = {2};
+  std::vector<std::uint64_t> path_length = {4};
 
-  // Add valid nodes
-  AlnNode node1;
-  node1.label = "node1";
-  node1.sequence = "ACGT";
-  graph.addNode(node1);
+  auto fg = FlatGraph::fromRawArrays(
+      2, 1, std::move(seq_data), std::move(seq_offset), std::move(seq_len),
+      std::move(name_data), std::move(name_offset), std::move(name_len),
+      std::move(is_reverse), std::move(edge_target), std::move(out_edge_offset),
+      std::move(step_data), std::move(path_step_offset),
+      std::move(path_name_offset), std::move(path_name_len), std::move(path_length));
 
-  AlnNode node2;
-  node2.label = "node2";
-  node2.sequence = "GG";
-  graph.addNode(node2);
+  CHECK(fg.pathCount() == 1);
+  CHECK(fg.pathName(0) == "p1");
+  CHECK(fg.pathLength(0) == 4);
+  CHECK(fg.pathStepCount(0) == 2);
 
-  // Add a valid path
-  AlnPath valid_path;
-  valid_path.name = "valid_path";
-  valid_path.steps.push_back({"node1", false});
-  valid_path.steps.push_back({"node2", false});
-  graph.addPath(valid_path);
+  const auto* steps = fg.pathStepsBegin(0);
+  CHECK(steps[0] == 0);
+  CHECK(steps[1] == 1);
 
-  // The graph should be valid so far
-  CHECK(graph.validate() == true);
-
-  // Add an invalid path (references a non-existent node label)
-  AlnPath invalid_path;
-  invalid_path.name = "invalid_path";
-  invalid_path.steps.push_back({"node1", false});
-  invalid_path.steps.push_back({"non_existent_node", false});
-  graph.addPath(invalid_path);
-
-  // Now the graph should be invalid due to the bad path reference
-  CHECK(graph.validate() == false);
-
-  // Test with an empty path
-  AlnGraph empty_path_graph;
-  AlnNode n1;
-  n1.label = "n1";
-  n1.sequence = "A";
-  empty_path_graph.addNode(n1);
-
-  AlnPath empty_path;
-  empty_path.name = "empty";
-  empty_path_graph.addPath(empty_path);
-  CHECK(empty_path_graph.validate() == true);  // Empty path is valid
-}
-
-TEST_CASE("AlnGraph validation with path steps referencing correct labels") {
-  AlnGraph graph;
-
-  AlnNode n_a;
-  n_a.label = "A";
-  n_a.sequence = "AAA";
-  graph.addNode(n_a);
-
-  AlnNode n_b;
-  n_b.label = "B";
-  n_b.sequence = "BBB";
-  graph.addNode(n_b);
-
-  // Valid path
-  AlnPath p_valid;
-  p_valid.name = "p_valid";
-  p_valid.steps.push_back({"A", false});
-  p_valid.steps.push_back({"B", false});
-  graph.addPath(p_valid);
-
-  CHECK(graph.validate() == true);
-
-  // Path with non-existent node
-  AlnPath p_invalid_node;
-  p_invalid_node.name = "p_invalid_node";
-  p_invalid_node.steps.push_back({"C", false});  // 'C' does not exist
-  graph.addPath(p_invalid_node);
-
-  CHECK(graph.validate() == false);
-}
-
-TEST_CASE("AlnGraph validation with path overlaps size") {
-  AlnGraph graph;
-
-  AlnNode n1;
-  n1.label = "N1";
-  n1.sequence = "AAAA";
-  graph.addNode(n1);
-
-  AlnNode n2;
-  n2.label = "N2";
-  n2.sequence = "BBBB";
-  graph.addNode(n2);
-
-  AlnNode n3;
-  n3.label = "N3";
-  n3.sequence = "CCCC";
-  graph.addNode(n3);
-
-  // Valid path with correct overlap size (steps.size() - 1)
-  AlnPath p_valid_overlaps;
-  p_valid_overlaps.name = "p_valid_overlaps";
-  p_valid_overlaps.steps.push_back({"N1", false});
-  p_valid_overlaps.steps.push_back({"N2", false});
-  p_valid_overlaps.steps.push_back({"N3", false});
-  p_valid_overlaps.overlaps.push_back(10);  // Overlap N1->N2
-  p_valid_overlaps.overlaps.push_back(20);  // Overlap N2->N3
-  graph.addPath(p_valid_overlaps);
-  CHECK(graph.validate() == true);
-
-  // Invalid path with incorrect overlap size (should be steps.size() - 1, which is 2)
-  AlnPath p_invalid_overlaps_size;
-  p_invalid_overlaps_size.name = "p_invalid_overlaps_size";
-  p_invalid_overlaps_size.steps.push_back({"N1", false});
-  p_invalid_overlaps_size.steps.push_back({"N2", false});
-  p_invalid_overlaps_size.steps.push_back({"N3", false});
-  p_invalid_overlaps_size.overlaps.push_back(10);  // Only one overlap, but 3 steps
-  graph.addPath(p_invalid_overlaps_size);
-  CHECK(graph.validate() == false);
-
-  // Path with no overlaps (valid)
-  AlnPath p_no_overlaps;
-  p_no_overlaps.name = "p_no_overlaps";
-  p_no_overlaps.steps.push_back({"N1", false});
-  p_no_overlaps.steps.push_back({"N2", false});
-  graph.addPath(p_no_overlaps);
-  // The previous validation failed, so this check will still fail the graph.
-  // To properly test this, we'd need a fresh graph or a way to remove invalid paths.
-  // For now, we'll assume the validation logic is atomic per call.
-  // A more robust test would clear the graph before each invalid case.
+  // Edge check
+  CHECK(fg.outDegree(0) == 1);
+  CHECK(*fg.outBegin(0) == 1);
+  CHECK(fg.outDegree(1) == 0);
 }

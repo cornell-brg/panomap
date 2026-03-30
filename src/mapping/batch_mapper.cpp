@@ -127,7 +127,7 @@ PipelineComponents BatchMapper::create_components() const {
     sort_config.pore_k = config_.pore_k;
     std::vector<std::uint32_t> bp_lens(config_.graph_store->nodeCount());
     for (std::size_t i = 0; i < bp_lens.size(); ++i)
-      bp_lens[i] = static_cast<std::uint32_t>(config_.graph_store->sequence(i).size());
+      bp_lens[i] = static_cast<std::uint32_t>(config_.graph_store->sequenceLen(i));
     comps.chainer = std::make_unique<SortChainer>(sort_config, *config_.node_1d_coords,
                                                    std::move(bp_lens));
   } else if (config_.chainer_backend == "pan-chain") {

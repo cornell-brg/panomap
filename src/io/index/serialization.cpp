@@ -102,8 +102,7 @@ void save_index(const std::string& path, const piru::index::GraphStore& graph_st
     write_string(out, std::string(name));
     write_pod<uint8_t>(out, fg.isReverse(i) ? 1 : 0);
     if (flags & kFlagHasSequences) {
-      auto seq = fg.seq(i);
-      write_string(out, std::string(seq));
+      write_string(out, fg.seqDecoded(i));
     }
   }
 

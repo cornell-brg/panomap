@@ -86,14 +86,21 @@ std::vector<std::int16_t> getHashWindow(const FlatGraph& graph, const io::KmerMo
       continue;
     }
 
-    auto seq = graph.seq(node_id);
-    const std::size_t node_len = seq.size();
+    const std::size_t node_len = graph.seqLen(node_id);
 
     std::size_t available = (current_offset < node_len) ? (node_len - current_offset) : 0;
     std::size_t to_take = std::min(available, bases_needed - context.size());
 
     if (to_take > 0) {
-      context.append(seq.data() + current_offset, to_take);
+      // Decode bases from 2-bit packed storage
+      for (std::size_t b = 0; b < to_take; ++b) {
+        std::uint32_t pos = static_cast<std::uint32_t>(current_offset + b);
+        if (graph.isN(node_id, pos)) {
+          context += 'N';
+        } else {
+          context += FlatGraph::decode2bit(graph.base2bit(node_id, pos));
+        }
+      }
     }
 
     ++current_node_idx;
@@ -182,8 +189,8 @@ NodeFirstIndexResult nodeFirstIndex(const FlatGraph& graph, const io::KmerModel&
   const std::size_t grain = 100;  // Process nodes in batches
 
   auto squigglize_node = [&](std::size_t node_id) {
-    auto seq = graph.seq(static_cast<std::uint32_t>(node_id));
-    const std::size_t node_len = seq.size();
+    std::uint32_t nid = static_cast<std::uint32_t>(node_id);
+    const std::size_t node_len = graph.seqLen(nid);
 
     if (node_len < static_cast<std::size_t>(pore_k)) {
       return;
@@ -193,6 +200,8 @@ NodeFirstIndexResult nodeFirstIndex(const FlatGraph& graph, const io::KmerModel&
     auto& raw_values = node_raw_values[node_id];
     raw_values.reserve(num_kmers);
 
+    // Decode node sequence for k-mer iteration
+    std::string node_seq = graph.seqDecoded(nid);
     std::string kmer_buf(static_cast<std::size_t>(pore_k), '\0');
 
     double local_sum = 0.0;
@@ -200,7 +209,7 @@ NodeFirstIndexResult nodeFirstIndex(const FlatGraph& graph, const io::KmerModel&
     std::size_t local_count = 0;
 
     for (std::size_t i = 0; i < num_kmers; ++i) {
-      std::copy_n(seq.data() + i, static_cast<std::size_t>(pore_k), kmer_buf.begin());
+      std::copy_n(node_seq.data() + i, static_cast<std::size_t>(pore_k), kmer_buf.begin());
       for (auto& c : kmer_buf) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
 
       if (hasNBase(kmer_buf)) {
