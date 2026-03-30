@@ -72,6 +72,8 @@ PathWalkIndexResult pathWalkIndex(const FlatGraph& graph, const io::KmerModel& m
   result.path_lengths.resize(graph.pathCount(), 0);
 
   const int pore_k = model.k();
+  const auto pore_flat = model.buildFlatLookup();  // float[4^k], built once
+  const std::uint64_t kmer_mask = (1ULL << (2 * pore_k)) - 1;
 
   result.seed_store->set_extractor_name(extractor.name());
   std::map<std::string, std::string> params;
@@ -91,45 +93,71 @@ PathWalkIndexResult pathWalkIndex(const FlatGraph& graph, const io::KmerModel& m
 
   auto process_path = [&](std::size_t path_idx, HashSeedStore& thread_store,
                           LinearCoordVec& thread_coords) {
-    // Step 1: Concatenate node sequences via FlatGraph accessors
-    std::string path_sequence;
+    // Step 1: Compute path length and build boundaries
     std::vector<NodeBoundary> boundaries;
 
     const auto* steps = graph.pathStepsBegin(static_cast<std::uint32_t>(path_idx));
     std::size_t num_steps = graph.pathStepCount(static_cast<std::uint32_t>(path_idx));
 
+    std::size_t path_len = 0;
     for (std::size_t s = 0; s < num_steps; ++s) {
       std::uint32_t node_id = steps[s];
       if (node_id >= graph.nodeCount()) continue;
-
-      boundaries.push_back({node_id, path_sequence.size()});
-      path_sequence += graph.seqDecoded(node_id);
+      boundaries.push_back({node_id, path_len});
+      path_len += graph.seqLen(node_id);
     }
 
-    if (path_sequence.size() < static_cast<std::size_t>(pore_k)) return;
+    if (path_len < static_cast<std::size_t>(pore_k)) return;
 
-    // Step 2: Squigglize
-    std::vector<float> raw_signal;
-    raw_signal.reserve(path_sequence.size() - pore_k + 1);
+    // Step 2: Fast squigglize using rolling 2-bit k-mer + flat pore model array.
+    // Iterates through node sequences directly from 2-bit packed storage.
+    // No string allocation, no hash table lookup.
+    const std::size_t num_positions = path_len - static_cast<std::size_t>(pore_k) + 1;
+    std::vector<float> raw_signal(num_positions);
 
-    std::size_t count = 0;
-    std::string kmer_buf(static_cast<std::size_t>(pore_k), '\0');
+    std::uint64_t kmer = 0;
+    int valid_bases = 0;
+    std::size_t sig_idx = 0;
+    std::size_t base_pos = 0;
 
-    for (std::size_t i = 0; i + static_cast<std::size_t>(pore_k) <= path_sequence.size(); ++i) {
-      std::copy_n(path_sequence.data() + i, static_cast<std::size_t>(pore_k), kmer_buf.begin());
-      for (auto& c : kmer_buf) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+    for (std::size_t s = 0; s < num_steps; ++s) {
+      std::uint32_t node_id = steps[s];
+      if (node_id >= graph.nodeCount()) continue;
+      std::uint32_t node_len = static_cast<std::uint32_t>(graph.seqLen(node_id));
 
-      if (hasNBase(kmer_buf)) {
-        raw_signal.push_back(std::numeric_limits<float>::quiet_NaN());
-        continue;
+      for (std::uint32_t j = 0; j < node_len; ++j) {
+        if (graph.isN(node_id, j)) {
+          // N base: reset rolling k-mer, emit NaN for affected positions
+          kmer = 0;
+          valid_bases = 0;
+          if (base_pos >= static_cast<std::size_t>(pore_k) - 1) {
+            // This N invalidates the current position
+          }
+          // Positions where the k-mer window includes this N will get NaN
+          // We handle this by only writing valid values below
+        } else {
+          std::uint8_t base = graph.base2bit(node_id, j);
+          kmer = ((kmer << 2) | base) & kmer_mask;
+          valid_bases++;
+        }
+
+        if (base_pos >= static_cast<std::size_t>(pore_k) - 1) {
+          if (valid_bases >= pore_k) {
+            raw_signal[sig_idx] = pore_flat[kmer];
+          } else {
+            raw_signal[sig_idx] = std::numeric_limits<float>::quiet_NaN();
+          }
+          sig_idx++;
+        }
+        base_pos++;
       }
-
-      double mean = 0.0;
-      if (!model.lookup(kmer_buf, mean)) mean = 0.0;
-      raw_signal.push_back(static_cast<float>(mean));
-      ++count;
     }
 
+    // Check if any valid signals were produced
+    std::size_t count = 0;
+    for (std::size_t i = 0; i < num_positions; ++i) {
+      if (!std::isnan(raw_signal[i])) count++;
+    }
     if (count == 0) return;
 
     signal::NormalizedSignal normalized;
@@ -137,7 +165,7 @@ PathWalkIndexResult pathWalkIndex(const FlatGraph& graph, const io::KmerModel& m
 
     auto fuzzy = fuzzy_quantizer.quantize(normalized);
 
-    result.path_lengths[path_idx] = path_sequence.size();
+    result.path_lengths[path_idx] = path_len;
     atomic_total_path_length.fetch_add(fuzzy.tokens.size(), std::memory_order_relaxed);
 
     // Step 5: Linear coordinates
