@@ -66,7 +66,8 @@ void save_index(const std::string& path, const piru::index::GraphStore& graph_st
   }
 
   const auto* hash_store = dynamic_cast<const piru::index::HashSeedStore*>(&seed_store);
-  if (!hash_store) {
+  const auto* flat_store = dynamic_cast<const piru::index::FlatSeedStore*>(&seed_store);
+  if (!hash_store && !flat_store) {
     throw std::runtime_error("Unsupported SeedStore backend for serialization");
   }
 
@@ -149,49 +150,68 @@ void save_index(const std::string& path, const piru::index::GraphStore& graph_st
 
   /* 7. Seeds (CSR format) */
 
-  write_string(out, hash_store->extractor_name());
-  const auto& params = hash_store->params();
+  // Write seed metadata (works for both HashSeedStore and FlatSeedStore)
+  write_string(out, seed_store.extractor_name());
+  const auto& params = seed_store.params();
   write_pod<uint64_t>(out, params.size());
   for (const auto& [key, value] : params) {
     write_string(out, key);
     write_string(out, value);
   }
-  write_pod<double>(out, hash_store->filter_fraction());
-  write_pod<uint64_t>(out, hash_store->max_hash_frequency());
-  write_pod<uint64_t>(out, hash_store->frequency_threshold());
+  write_pod<double>(out, seed_store.filter_fraction());
+  write_pod<uint64_t>(out, seed_store.max_hash_frequency());
+  write_pod<uint64_t>(out, seed_store.frequency_threshold());
 
-  // Build CSR from HashSeedStore: sort hashes, flatten hits
-  const auto& seed_data = hash_store->data();
-  std::vector<std::uint64_t> sorted_hashes;
-  sorted_hashes.reserve(seed_data.size());
-  for (const auto& [hash, hits] : seed_data) {
-    sorted_hashes.push_back(hash);
+  // Write CSR data -- FlatSeedStore already has it, HashSeedStore needs conversion
+  if (flat_store) {
+    const auto& sorted_hashes = flat_store->hashes();
+    const auto& csr_offsets = flat_store->offsets();
+    const auto& csr_entries = flat_store->entries();
+
+    uint64_t n_hashes = sorted_hashes.size();
+    uint64_t n_entries = csr_entries.size();
+    write_pod<uint64_t>(out, n_hashes);
+    write_pod<uint64_t>(out, n_entries);
+    out.write(reinterpret_cast<const char*>(sorted_hashes.data()),
+              static_cast<std::streamsize>(n_hashes * sizeof(uint64_t)));
+    out.write(reinterpret_cast<const char*>(csr_offsets.data()),
+              static_cast<std::streamsize>((n_hashes + 1) * sizeof(uint32_t)));
+    out.write(reinterpret_cast<const char*>(csr_entries.data()),
+              static_cast<std::streamsize>(n_entries * sizeof(piru::index::SeedEntry)));
+  } else {
+    // Build CSR from HashSeedStore: sort hashes, flatten hits
+    const auto& seed_data = hash_store->data();
+    std::vector<std::uint64_t> sorted_hashes;
+    sorted_hashes.reserve(seed_data.size());
+    for (const auto& [hash, hits] : seed_data) {
+      sorted_hashes.push_back(hash);
+    }
+    std::sort(sorted_hashes.begin(), sorted_hashes.end());
+
+    std::vector<std::uint32_t> csr_offsets;
+    csr_offsets.reserve(sorted_hashes.size() + 1);
+    std::vector<piru::index::SeedEntry> csr_entries;
+
+    std::uint32_t running_offset = 0;
+    for (auto h : sorted_hashes) {
+      csr_offsets.push_back(running_offset);
+      const auto& hits = seed_data.at(h);
+      csr_entries.insert(csr_entries.end(), hits.begin(), hits.end());
+      running_offset += static_cast<std::uint32_t>(hits.size());
+    }
+    csr_offsets.push_back(running_offset);  // sentinel
+
+    uint64_t n_hashes = sorted_hashes.size();
+    uint64_t n_entries = csr_entries.size();
+    write_pod<uint64_t>(out, n_hashes);
+    write_pod<uint64_t>(out, n_entries);
+    out.write(reinterpret_cast<const char*>(sorted_hashes.data()),
+              static_cast<std::streamsize>(n_hashes * sizeof(uint64_t)));
+    out.write(reinterpret_cast<const char*>(csr_offsets.data()),
+              static_cast<std::streamsize>((n_hashes + 1) * sizeof(uint32_t)));
+    out.write(reinterpret_cast<const char*>(csr_entries.data()),
+              static_cast<std::streamsize>(n_entries * sizeof(piru::index::SeedEntry)));
   }
-  std::sort(sorted_hashes.begin(), sorted_hashes.end());
-
-  std::vector<std::uint32_t> csr_offsets;
-  csr_offsets.reserve(sorted_hashes.size() + 1);
-  std::vector<piru::index::SeedEntry> csr_entries;
-
-  std::uint32_t running_offset = 0;
-  for (auto h : sorted_hashes) {
-    csr_offsets.push_back(running_offset);
-    const auto& hits = seed_data.at(h);
-    csr_entries.insert(csr_entries.end(), hits.begin(), hits.end());
-    running_offset += static_cast<std::uint32_t>(hits.size());
-  }
-  csr_offsets.push_back(running_offset);  // sentinel
-
-  uint64_t n_hashes = sorted_hashes.size();
-  uint64_t n_entries = csr_entries.size();
-  write_pod<uint64_t>(out, n_hashes);
-  write_pod<uint64_t>(out, n_entries);
-  out.write(reinterpret_cast<const char*>(sorted_hashes.data()),
-            static_cast<std::streamsize>(n_hashes * sizeof(uint64_t)));
-  out.write(reinterpret_cast<const char*>(csr_offsets.data()),
-            static_cast<std::streamsize>((n_hashes + 1) * sizeof(uint32_t)));
-  out.write(reinterpret_cast<const char*>(csr_entries.data()),
-            static_cast<std::streamsize>(n_entries * sizeof(piru::index::SeedEntry)));
 
   /* 8. 1D canonical coordinates (optional, float32 bulk write) */
 
@@ -210,7 +230,7 @@ void save_index(const std::string& path, const piru::index::GraphStore& graph_st
   auto sz_linear = pos_seeds - pos_linear;
   auto sz_seeds = pos_end - pos_seeds;
   LOG_INFO("Saved index: " + std::to_string(fg.nodeCount()) + " nodes, " +
-           std::to_string(n_hashes) + " seeds (" + std::to_string(n_entries) + " hits) -> " + path);
+           std::to_string(seed_store.size()) + " seeds -> " + path);
   LOG_INFO("Index breakdown: total=" + std::to_string(total / (1024*1024)) + "MB" +
            "  header+meta=" + std::to_string(sz_meta * 100 / total) + "%" +
            "  graph=" + std::to_string(sz_graph * 100 / total) + "%" +

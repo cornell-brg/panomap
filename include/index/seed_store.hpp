@@ -168,6 +168,11 @@ public:
   const std::string& extractor_name() const override { return extractor_name_; }
   const std::map<std::string, std::string>& params() const override { return params_; }
 
+  // Raw CSR access (for serialization)
+  const std::vector<std::uint64_t>& hashes() const { return hashes_; }
+  const std::vector<std::uint32_t>& offsets() const { return offsets_; }
+  const std::vector<SeedEntry>& entries() const { return entries_; }
+
 private:
   std::vector<std::uint64_t> hashes_;   // sorted, N elements
   std::vector<std::uint32_t> offsets_;  // N+1 elements (CSR row pointers)

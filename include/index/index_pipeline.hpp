@@ -37,9 +37,10 @@ namespace piru::index {
 struct IndexPipelineConfig {
   /* Indexer backend */
 
-  // "node-first" or "path-walk"
+  // "node-first", "path-walk", or "bucket"
   // - node-first: two-pass, global normalization (faster for shared nodes)
-  // - path-walk: per-path processing with per-path normalization
+  // - path-walk: per-path processing (default)
+  // - bucket: node-first + hash-bucket partitioning (low memory, for large genomes)
   std::string indexer_backend{"path-walk"};
 
   /* Signal processing */

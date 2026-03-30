@@ -93,6 +93,7 @@ add_executable(piru
     src/index/simple_expand.cpp
     src/index/path_walk_indexer.cpp
     src/index/node_first_indexer.cpp
+    src/index/bucket_indexer.cpp
     src/index/index_pipeline.cpp
     src/index/sort_1d.cpp
     src/mapping/batch_mapper.cpp
@@ -108,7 +109,8 @@ add_executable(piru
 )
 
 target_include_directories(piru PRIVATE include ${CMAKE_CURRENT_SOURCE_DIR}/src ${PIRU_GENERATED_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/dirtyzipf)
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/dirtyzipf
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/concurrentqueue)
 
 if(PIRU_ENABLE_WARNINGS)
     if(MSVC)

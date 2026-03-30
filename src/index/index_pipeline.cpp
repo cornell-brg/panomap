@@ -15,6 +15,7 @@
 #include <stdexcept>
 
 #include "index/flat_graph.hpp"
+#include "index/bucket_indexer.hpp"
 #include "index/node_first_indexer.hpp"
 #include "index/path_walk_indexer.hpp"
 #include "index/simple_expand.hpp"
@@ -94,6 +95,25 @@ IndexPipelineResult run_index_pipeline(const io::ImportedGraph& imported,
     path_lengths = std::move(nfi_result.path_lengths);
     result.seed_store = std::move(nfi_result.seed_store);
     result.linearization_coords = std::move(nfi_result.linearization_coords);
+  } else if (config.indexer_backend == "bucket") {
+    BucketIndexConfig bi_config;
+    bi_config.seed_k = config.seed_k;
+    bi_config.seed_stride = config.seed_stride;
+    bi_config.seed_freq_cutoff = config.seed_freq_cutoff;
+    bi_config.seed_freq_cap = config.seed_freq_cap;
+    bi_config.executor = config.executor;
+
+    auto bi_result = bucketIndex(flat_graph, model, *fuzzy_quantizer, *extractor, bi_config);
+
+    stage_elapsed =
+        std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - stage_start)
+            .count();
+    LOG_INFO("[2/2] bucket indexed: " + std::to_string(bi_result.seed_store->size()) +
+             " unique seeds [" + std::to_string(stage_elapsed) + "s]");
+
+    path_lengths = std::move(bi_result.path_lengths);
+    result.seed_store = std::move(bi_result.seed_store);
+    result.linearization_coords = std::move(bi_result.linearization_coords);
   } else {
     PathWalkIndexConfig pwi_config;
     pwi_config.seed_k = config.seed_k;
