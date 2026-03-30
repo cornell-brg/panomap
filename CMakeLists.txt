@@ -88,7 +88,6 @@ add_executable(piru
     src/signal/seed_extractors/seed_extractor_factory.cpp
     src/signal/seed_extractors/kmer_seed_extractor.cpp
     src/signal/seed_extractors/minimizer_seed_extractor.cpp
-    src/index/aln_graph.cpp
     src/index/flat_graph.cpp
     src/index/simple_expand.cpp
     src/index/path_walk_indexer.cpp

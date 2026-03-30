@@ -139,14 +139,14 @@ int handle_annotate(const std::vector<std::string>& args) {
   LOG_INFO("Loaded graph: " + std::to_string(imported.nodes.size()) + " nodes, " +
            std::to_string(imported.paths.size()) + " paths");
 
-  auto aln_graph = piru::index::simpleExpandFlat(imported);
-  LOG_INFO("FlatGraph: " + std::to_string(aln_graph.nodeCount()) + " nodes, " +
-           std::to_string(aln_graph.pathCount()) + " paths");
+  auto graph = piru::index::simpleExpandFlat(imported);
+  LOG_INFO("FlatGraph: " + std::to_string(graph.nodeCount()) + " nodes, " +
+           std::to_string(graph.pathCount()) + " paths");
 
   /* Build path name -> id map */
   std::unordered_map<std::string, std::size_t> path_name_to_id;
-  for (std::uint32_t i = 0; i < aln_graph.pathCount(); ++i) {
-    path_name_to_id[std::string(aln_graph.pathName(i))] = i;
+  for (std::uint32_t i = 0; i < graph.pathCount(); ++i) {
+    path_name_to_id[std::string(graph.pathName(i))] = i;
   }
 
   /* Load 1D coords if provided */
@@ -154,7 +154,7 @@ int handle_annotate(const std::vector<std::string>& args) {
   bool has_1d = false;
   if (parsed.values.count("1d-coords-file")) {
     node_1d_coords = piru::index::import_1d_coords_odgi(
-        parsed.values.at("1d-coords-file"), aln_graph.nodeCount());
+        parsed.values.at("1d-coords-file"), graph.nodeCount());
     has_1d = true;
   }
 
@@ -180,7 +180,7 @@ int handle_annotate(const std::vector<std::string>& args) {
     std::uint32_t path_idx = static_cast<std::uint32_t>(it->second);
 
     /* Walk the path to get nodes in BED interval */
-    auto walk_nodes = walkInterval(aln_graph, path_idx, rec.start, rec.end);
+    auto walk_nodes = walkInterval(graph, path_idx, rec.start, rec.end);
     if (walk_nodes.empty()) {
       LOG_WARN("No nodes found for " + rec.path_name + ":" +
                std::to_string(rec.start) + "-" + std::to_string(rec.end));
@@ -195,7 +195,7 @@ int handle_annotate(const std::vector<std::string>& args) {
       for (std::size_t nid : walk_nodes) {
         if (nid < node_1d_coords.size()) {
           double node_start = node_1d_coords[nid];
-          double node_end = node_start + aln_graph.seqLen(nid);
+          double node_end = node_start + graph.seqLen(nid);
           coord_1d_start = std::min(coord_1d_start, node_start);
           coord_1d_end = std::max(coord_1d_end, node_end);
         }
@@ -219,7 +219,7 @@ int handle_annotate(const std::vector<std::string>& args) {
         }
         for (std::size_t nid = 0; nid < node_1d_coords.size(); ++nid) {
           double node_start = node_1d_coords[nid];
-          double node_end = node_start + aln_graph.seqLen(nid);
+          double node_end = node_start + graph.seqLen(nid);
           if (node_end > coord_1d_start && node_start < coord_1d_end) {
             roi_nodes.insert(nid);
           }

@@ -16,7 +16,7 @@
  * Memory per node: ~20 bytes (vs ~160 bytes for AlnNode)
  *
  * Related:
- *  - aln_graph.hpp (legacy, being replaced)
+ *  - graph_store.hpp (abstract interface, FlatGraph plugs in via FlatGraphStore)
  *  - graph_store.hpp (abstract interface, FlatGraph plugs in)
  *
  * SPDX-License-Identifier: MIT
@@ -30,14 +30,9 @@
 
 namespace piru::index {
 
-class AlnGraph;  // forward decl for converter
-
 class FlatGraph {
 public:
   FlatGraph() = default;
-
-  // Build from AlnGraph (conversion constructor)
-  static FlatGraph fromAlnGraph(const AlnGraph& aln);
 
   // Build from pre-assembled raw arrays (for deserialization)
   static FlatGraph fromRawArrays(

@@ -12,7 +12,6 @@
 #include <fstream>
 #include <stdexcept>
 
-#include "index/aln_graph.hpp"
 #include "index/flat_graph.hpp"
 #include "util/logging.hpp"
 
