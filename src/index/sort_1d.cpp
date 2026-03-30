@@ -41,7 +41,7 @@ struct PathStep {
 using PathStepIndex = std::vector<std::vector<PathStep>>;
 
 PathStepIndex build_path_step_index(
-    const AlnGraph& /*graph*/,
+    const FlatGraph& /*graph*/,
     const std::vector<std::vector<LinearCoordinate>>& coords) {
   // Determine number of paths
   std::size_t num_paths = 0;
@@ -96,7 +96,7 @@ std::vector<double> compute_schedule(double w_min, double w_max,
 }  // namespace
 
 std::vector<float> compute_1d_sort(
-    const AlnGraph& graph,
+    const FlatGraph& graph,
     const std::vector<std::vector<LinearCoordinate>>& coords,
     const std::vector<std::size_t>& /*path_lengths*/,
     const Sort1DConfig& config) {
@@ -112,7 +112,7 @@ std::vector<float> compute_1d_sort(
   std::uint64_t cumulative = 0;
   for (std::size_t i = 0; i < num_fwd; ++i) {
     X[i] = static_cast<double>(cumulative);
-    fwd_lengths[i] = graph.node(i * 2).sequence.size();
+    fwd_lengths[i] = graph.seqLen(i * 2);
     cumulative += fwd_lengths[i];
   }
 
@@ -353,11 +353,11 @@ std::vector<float> import_1d_coords_odgi(const std::string& path,
 
 void dump_1d_coords_tsv(const std::string& path,
                          const std::vector<float>& coords,
-                         const AlnGraph& graph) {
+                         const FlatGraph& graph) {
   std::ofstream ofs(path);
   ofs << "node_id\tstart_pos\tend_pos\tseq_len\n";
   for (std::size_t i = 0; i < coords.size(); ++i) {
-    std::size_t seq_len = graph.node(i).sequence.size();
+    std::size_t seq_len = graph.seqLen(i);
     ofs << i << "\t" << coords[i] << "\t" << (coords[i] + seq_len) << "\t" << seq_len << "\n";
   }
 }

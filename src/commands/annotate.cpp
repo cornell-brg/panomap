@@ -27,7 +27,7 @@
 #include <vector>
 
 #include "cli/parse.hpp"
-#include "index/aln_graph.hpp"
+#include "index/flat_graph.hpp"
 #include "index/linearizer.hpp"
 #include "index/simple_expand.hpp"
 #include "index/sort_1d.hpp"
@@ -38,16 +38,18 @@
 namespace {
 
 // Walk a path to collect node IDs overlapping [bed_start, bed_end).
-std::vector<std::size_t> walkInterval(const piru::index::AlnGraph& graph,
-                                       const piru::index::AlnPath& path,
+std::vector<std::size_t> walkInterval(const piru::index::FlatGraph& graph,
+                                       std::uint32_t path_id,
                                        std::int64_t bed_start, std::int64_t bed_end) {
   std::vector<std::size_t> node_ids;
   std::int64_t offset = 0;
-  for (const auto& step : path.steps) {
-    std::size_t node_id = std::stoull(step.node_id);
+  const auto* steps = graph.pathStepsBegin(path_id);
+  std::size_t n = graph.pathStepCount(path_id);
+  for (std::size_t s = 0; s < n; ++s) {
+    std::uint32_t node_id = steps[s];
     if (node_id >= graph.nodeCount()) continue;
 
-    std::int64_t node_len = static_cast<std::int64_t>(graph.node(node_id).sequence.size());
+    std::int64_t node_len = static_cast<std::int64_t>(graph.seqLen(node_id));
     std::int64_t node_start = offset;
     std::int64_t node_end = offset + node_len;
 
@@ -137,14 +139,14 @@ int handle_annotate(const std::vector<std::string>& args) {
   LOG_INFO("Loaded graph: " + std::to_string(imported.nodes.size()) + " nodes, " +
            std::to_string(imported.paths.size()) + " paths");
 
-  auto aln_graph = piru::index::simpleExpand(imported);
-  LOG_INFO("AlnGraph: " + std::to_string(aln_graph.nodeCount()) + " nodes, " +
+  auto aln_graph = piru::index::simpleExpandFlat(imported);
+  LOG_INFO("FlatGraph: " + std::to_string(aln_graph.nodeCount()) + " nodes, " +
            std::to_string(aln_graph.pathCount()) + " paths");
 
   /* Build path name -> id map */
   std::unordered_map<std::string, std::size_t> path_name_to_id;
-  for (std::size_t i = 0; i < aln_graph.pathCount(); ++i) {
-    path_name_to_id[aln_graph.paths()[i].name] = i;
+  for (std::uint32_t i = 0; i < aln_graph.pathCount(); ++i) {
+    path_name_to_id[std::string(aln_graph.pathName(i))] = i;
   }
 
   /* Load 1D coords if provided */
@@ -175,11 +177,10 @@ int handle_annotate(const std::vector<std::string>& args) {
         continue;
       }
     }
-    std::size_t path_idx = it->second;
-    const auto& path = aln_graph.paths()[path_idx];
+    std::uint32_t path_idx = static_cast<std::uint32_t>(it->second);
 
     /* Walk the path to get nodes in BED interval */
-    auto walk_nodes = walkInterval(aln_graph, path, rec.start, rec.end);
+    auto walk_nodes = walkInterval(aln_graph, path_idx, rec.start, rec.end);
     if (walk_nodes.empty()) {
       LOG_WARN("No nodes found for " + rec.path_name + ":" +
                std::to_string(rec.start) + "-" + std::to_string(rec.end));
@@ -194,7 +195,7 @@ int handle_annotate(const std::vector<std::string>& args) {
       for (std::size_t nid : walk_nodes) {
         if (nid < node_1d_coords.size()) {
           double node_start = node_1d_coords[nid];
-          double node_end = node_start + aln_graph.node(nid).sequence.size();
+          double node_end = node_start + aln_graph.seqLen(nid);
           coord_1d_start = std::min(coord_1d_start, node_start);
           coord_1d_end = std::max(coord_1d_end, node_end);
         }
@@ -218,7 +219,7 @@ int handle_annotate(const std::vector<std::string>& args) {
         }
         for (std::size_t nid = 0; nid < node_1d_coords.size(); ++nid) {
           double node_start = node_1d_coords[nid];
-          double node_end = node_start + aln_graph.node(nid).sequence.size();
+          double node_end = node_start + aln_graph.seqLen(nid);
           if (node_end > coord_1d_start && node_start < coord_1d_end) {
             roi_nodes.insert(nid);
           }

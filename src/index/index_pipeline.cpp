@@ -14,6 +14,7 @@
 #include <memory>
 #include <stdexcept>
 
+#include "index/flat_graph.hpp"
 #include "index/node_first_indexer.hpp"
 #include "index/path_walk_indexer.hpp"
 #include "index/simple_expand.hpp"
@@ -31,15 +32,16 @@ IndexPipelineResult run_index_pipeline(const io::ImportedGraph& imported,
 
   /* 1. Expand graph (forward + reverse nodes) */
 
-  AlnGraph aln_graph = simpleExpand(imported);
+  auto flat_graph = simpleExpandFlat(imported);
+
 
   auto stage_elapsed =
       std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - stage_start)
           .count();
   LOG_INFO(
-      "[1/2] Transforming graph to directional graph: " + std::to_string(aln_graph.nodeCount()) +
-      " nodes, " + std::to_string(aln_graph.edgeCount()) + " edges, " +
-      std::to_string(aln_graph.pathCount()) + " paths [" + std::to_string(stage_elapsed) + "s]");
+      "[1/2] Transforming graph to directional graph: " + std::to_string(flat_graph.nodeCount()) +
+      " nodes, " + std::to_string(flat_graph.edgeCount()) + " edges, " +
+      std::to_string(flat_graph.pathCount()) + " paths [" + std::to_string(stage_elapsed) + "s]");
 
   /* 2. Index (squigglize + linearize + seed extraction) */
 
@@ -79,7 +81,7 @@ IndexPipelineResult run_index_pipeline(const io::ImportedGraph& imported,
     nfi_config.seed_freq_cutoff = config.seed_freq_cutoff;
     nfi_config.executor = config.executor;
 
-    auto nfi_result = nodeFirstIndex(aln_graph, model, *fuzzy_quantizer, *extractor, nfi_config);
+    auto nfi_result = nodeFirstIndex(flat_graph, model, *fuzzy_quantizer, *extractor, nfi_config);
 
     stage_elapsed =
         std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - stage_start)
@@ -101,7 +103,7 @@ IndexPipelineResult run_index_pipeline(const io::ImportedGraph& imported,
     pwi_config.dump_norm_stats_path = config.dump_norm_stats_path;
     pwi_config.executor = config.executor;
 
-    auto pwi_result = pathWalkIndex(aln_graph, model, *fuzzy_quantizer, *extractor, pwi_config);
+    auto pwi_result = pathWalkIndex(flat_graph, model, *fuzzy_quantizer, *extractor, pwi_config);
 
     stage_elapsed =
         std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - stage_start)
@@ -114,11 +116,20 @@ IndexPipelineResult run_index_pipeline(const io::ImportedGraph& imported,
     result.linearization_coords = std::move(pwi_result.linearization_coords);
   }
 
+  // Store path lengths in FlatGraph
+  for (std::size_t i = 0; i < flat_graph.pathCount(); ++i) {
+    flat_graph.setPathLength(static_cast<std::uint32_t>(i), path_lengths[i]);
+  }
+
+  // Package graph store
+  result.graph_store = std::make_unique<FlatGraphStore>(std::move(flat_graph));
+
   /* 3. Compute 1D sort coordinates (for SortChainer) */
 
   if (config.compute_1d_sort) {
     auto sort_start = std::chrono::high_resolution_clock::now();
-    result.node_1d_coords = compute_1d_sort(aln_graph, result.linearization_coords,
+    result.node_1d_coords = compute_1d_sort(result.graph_store->flat(),
+                                             result.linearization_coords,
                                              path_lengths, config.sort_1d_config);
     auto sort_elapsed =
         std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - sort_start)
@@ -126,15 +137,6 @@ IndexPipelineResult run_index_pipeline(const io::ImportedGraph& imported,
     LOG_INFO("[3/3] 1D sort: " + std::to_string(result.node_1d_coords.size()) +
              " node positions [" + std::to_string(sort_elapsed) + "s]");
   }
-
-  /* 4. Package result */
-
-  // Store path lengths in graph (for GafWriter coordinate flipping)
-  for (std::size_t i = 0; i < aln_graph.pathCount(); ++i) {
-    aln_graph.mutablePath(i).length = path_lengths[i];
-  }
-
-  result.graph_store = std::make_unique<AdjListGraphStore>(std::move(aln_graph));
   result.path_lengths = std::move(path_lengths);
   result.pore_k = model.k();
   result.model_name = model.name();

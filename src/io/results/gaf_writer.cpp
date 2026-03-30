@@ -20,7 +20,7 @@
 
 namespace piru::io {
 
-GafWriter::GafWriter(const std::string& path, const index::AlnGraph& graph,
+GafWriter::GafWriter(const std::string& path, const index::FlatGraph& graph,
                      GafWriterConfig config)
     : out_(path, std::ios::out | std::ios::trunc), graph_(graph), config_(std::move(config)) {
   if (!out_) {
@@ -177,50 +177,41 @@ std::string GafWriter::buildPathString(
   for (const auto& anchor : anchors) {
     if (anchor.node_id == last_node_id) continue;
 
-    const auto& node = graph_.node(anchor.node_id);
-    const std::string& original_id = node.original_id.empty() ? node.label : node.original_id;
-    char direction = node.is_reverse ? '<' : '>';
+    auto node_name = graph_.name(anchor.node_id);
+    char direction = graph_.isReverse(anchor.node_id) ? '<' : '>';
 
     path += direction;
-    path += original_id;
+    path.append(node_name.data(), node_name.size());
     last_node_id = anchor.node_id;
   }
 
   return path.empty() ? "*" : path;
 }
 
-const std::string& GafWriter::getPathName(std::size_t path_id) const {
-  static const std::string kUnknown = "unknown";
-  if (path_id >= graph_.pathCount()) return kUnknown;
-  return graph_.paths()[path_id].name;
+std::string GafWriter::getPathName(std::size_t path_id) const {
+  if (path_id >= graph_.pathCount()) return "unknown";
+  return std::string(graph_.pathName(path_id));
 }
 
 std::size_t GafWriter::getPathLength(std::size_t path_id) const {
-  if (path_id < graph_.pathCount() && graph_.paths()[path_id].length > 0) {
-    return graph_.paths()[path_id].length;
+  if (path_id < graph_.pathCount() && graph_.pathLength(static_cast<std::uint32_t>(path_id)) > 0) {
+    return graph_.pathLength(static_cast<std::uint32_t>(path_id));
   }
 
   if (!path_lengths_computed_) {
-    const auto& paths = graph_.paths();
-    path_lengths_.resize(paths.size());
+    path_lengths_.resize(graph_.pathCount());
 
-    std::unordered_map<std::string, std::size_t> label_to_idx;
-    for (std::size_t i = 0; i < graph_.nodeCount(); ++i) {
-      label_to_idx[graph_.node(i).label] = i;
-    }
-
-    for (std::size_t p = 0; p < paths.size(); ++p) {
-      if (paths[p].length > 0) {
-        path_lengths_[p] = paths[p].length;
+    for (std::uint32_t p = 0; p < graph_.pathCount(); ++p) {
+      if (graph_.pathLength(p) > 0) {
+        path_lengths_[p] = graph_.pathLength(p);
         continue;
       }
+      // Compute from step node lengths (no overlap tracking in FlatGraph)
       std::size_t len = 0;
-      for (std::size_t s = 0; s < paths[p].steps.size(); ++s) {
-        auto it = label_to_idx.find(paths[p].steps[s].node_id);
-        if (it == label_to_idx.end()) continue;
-        std::size_t node_len = graph_.node(it->second).sequence.size();
-        std::size_t overlap = (s < paths[p].overlaps.size()) ? paths[p].overlaps[s] : 0;
-        len += node_len - overlap;
+      const auto* steps = graph_.pathStepsBegin(p);
+      std::size_t num_steps = graph_.pathStepCount(p);
+      for (std::size_t s = 0; s < num_steps; ++s) {
+        len += graph_.seqLen(steps[s]);
       }
       path_lengths_[p] = len;
     }

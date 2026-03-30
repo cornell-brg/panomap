@@ -2,229 +2,64 @@
 
 #include <fstream>
 #include <iostream>
-#include <variant>
 
 #include "io/graphs/graph.hpp"
-#include "signal/signal_types.hpp"
 
 namespace piru {
 
 void GfaExporter::dumpImportedGraph(const io::ImportedGraph& graph, const std::string& path) {
   std::ofstream out(path);
-  if (!out) {
-    std::cerr << "Error: could not open file " << path << std::endl;
-    return;
-  }
-
   out << "H\tVN:Z:1.0" << std::endl;
 
   for (const auto& node : graph.nodes) {
-    out << "S\t" << node.id << "\t" << node.sequence << "\tLN:i:" << node.sequence.length()
-        << std::endl;
+    out << "S\t" << node.id << "\t" << node.sequence << std::endl;
   }
 
   for (const auto& edge : graph.edges) {
     out << "L\t" << edge.from << "\t" << (edge.from_reverse ? "-" : "+") << "\t" << edge.to << "\t"
-        << (edge.to_reverse ? "-" : "+") << "\t" << edge.overlap << "M" << std::endl;
-  }
-
-  for (const auto& path : graph.paths) {
-    out << "P\t" << path.name << "\t";
-    for (size_t i = 0; i < path.steps.size(); ++i) {
-      out << path.steps[i].segment_id << (path.steps[i].is_reverse ? "-" : "+");
-      if (i < path.steps.size() - 1) {
-        out << ",";
-      }
-    }
-    out << "\t";
-    if (!path.overlaps.empty()) {
-      for (size_t i = 0; i < path.overlaps.size(); ++i) {
-        out << path.overlaps[i];
-        if (i < path.overlaps.size() - 1) {
-          out << ",";
-        }
-      }
+        << (edge.to_reverse ? "-" : "+") << "\t";
+    if (edge.overlap_bases.has_value()) {
+      out << edge.overlap_bases.value() << "M";
     } else {
       out << "*";
     }
     out << std::endl;
+  }
+
+  for (const auto& path_entry : graph.paths) {
+    out << "P\t" << path_entry.name << "\t";
+    for (size_t i = 0; i < path_entry.steps.size(); ++i) {
+      if (i > 0) out << ",";
+      out << path_entry.steps[i].segment_id << (path_entry.steps[i].is_reverse ? "-" : "+");
+    }
+    out << "\t*" << std::endl;
   }
 }
 
-void GfaExporter::dumpAlnGraph(const index::AlnGraph& graph, const std::string& path,
-                               AlnGraphDumpMode mode, const void* data,
-                               const std::map<std::string, std::string>& header_tags) {
+void GfaExporter::dumpFlatGraph(const index::FlatGraph& graph, const std::string& path) {
   std::ofstream out(path);
-  if (!out) {
-    std::cerr << "Error: could not open file " << path << std::endl;
-    return;
+  out << "H\tVN:Z:1.0\n";
+
+  for (std::uint32_t i = 0; i < graph.nodeCount(); ++i) {
+    out << "S\t" << graph.name(i) << (graph.isReverse(i) ? "-" : "+")
+        << "\t" << graph.seq(i) << "\n";
   }
 
-  out << "H\tVN:Z:1.0";
-  for (const auto& tag : header_tags) {
-    out << "\t" << tag.first << ":" << tag.second;
-  }
-  out << std::endl;
-
-  if (mode == AlnGraphDumpMode::Bases) {
-    for (size_t i = 0; i < graph.nodeCount(); ++i) {
-      const auto& node = graph.node(i);
-      out << "S\t" << node.id << "\t" << node.sequence << "\tLN:i:" << node.sequence.length();
-      if (!node.original_id.empty()) {
-        out << "\toi:Z:" << node.original_id << (node.is_reverse ? "-" : "+");
-      }
-      if (node.chain_id) {
-        out << "\tci:i:" << *node.chain_id;
-      }
-      if (node.linear_position) {
-        out << "\tlc:i:" << *node.linear_position;
-      }
-      out << std::endl;
-    }
-  } else if (mode == AlnGraphDumpMode::RawSignal) {
-    const auto* signal_data = static_cast<const std::vector<std::vector<float>>*>(data);
-    if (!signal_data) {
-      return;
-    }
-    for (size_t i = 0; i < graph.nodeCount(); ++i) {
-      const auto& node = graph.node(i);
-      out << "S\t" << node.id << "\t";
-      const auto& signals = (*signal_data)[i];
-      for (size_t j = 0; j < signals.size(); ++j) {
-        out << signals[j];
-        if (j < signals.size() - 1) {
-          out << ",";
-        }
-      }
-      out << "\tLN:i:" << signals.size() << "\tst:Z:raw_signal";
-      if (!node.original_id.empty()) {
-        out << "\toi:Z:" << node.original_id << (node.is_reverse ? "-" : "+");
-      }
-      if (node.chain_id) {
-        out << "\tci:i:" << *node.chain_id;
-      }
-      if (node.linear_position) {
-        out << "\tlc:i:" << *node.linear_position;
-      }
-      out << std::endl;
-    }
-  } else if (mode == AlnGraphDumpMode::FuzzyQuantized) {
-    const auto* signal_data = static_cast<const std::vector<signal::FuzzyQuantizedSignal>*>(data);
-    if (!signal_data) {
-      return;
-    }
-    for (size_t i = 0; i < graph.nodeCount(); ++i) {
-      const auto& node = graph.node(i);
-      out << "S\t" << node.id << "\t";
-      const auto& signals = (*signal_data)[i].tokens;
-      for (size_t j = 0; j < signals.size(); ++j) {
-        out << signals[j];
-        if (j < signals.size() - 1) {
-          out << ",";
-        }
-      }
-      out << "\tLN:i:" << signals.size() << "\tst:Z:fuzzy_quant";
-      if (!node.original_id.empty()) {
-        out << "\toi:Z:" << node.original_id << (node.is_reverse ? "-" : "+");
-      }
-      if (node.chain_id) {
-        out << "\tci:i:" << *node.chain_id;
-      }
-      if (node.linear_position) {
-        out << "\tlc:i:" << *node.linear_position;
-      }
-      out << std::endl;
-    }
-  } else if (mode == AlnGraphDumpMode::AlnQuantized) {
-    const auto* signal_data =
-        static_cast<const std::vector<signal::AlignmentQuantizedSignal>*>(data);
-    if (!signal_data) {
-      return;
-    }
-    for (size_t i = 0; i < graph.nodeCount(); ++i) {
-      const auto& node = graph.node(i);
-      out << "S\t" << node.id << "\t";
-
-      const auto& aln_sig = (*signal_data)[i];
-      if (std::holds_alternative<std::vector<int16_t>>(aln_sig.data)) {
-        const auto& signals = std::get<std::vector<int16_t>>(aln_sig.data);
-        for (size_t j = 0; j < signals.size(); ++j) {
-          out << signals[j];
-          if (j < signals.size() - 1) {
-            out << ",";
-          }
-        }
-        out << "\tLN:i:" << signals.size();
-      } else if (std::holds_alternative<std::vector<int8_t>>(aln_sig.data)) {
-        const auto& signals = std::get<std::vector<int8_t>>(aln_sig.data);
-        for (size_t j = 0; j < signals.size(); ++j) {
-          out << static_cast<int>(signals[j]);
-          if (j < signals.size() - 1) {
-            out << ",";
-          }
-        }
-        out << "\tLN:i:" << signals.size();
-      } else if (std::holds_alternative<std::vector<float>>(aln_sig.data)) {
-        const auto& signals = std::get<std::vector<float>>(aln_sig.data);
-        for (size_t j = 0; j < signals.size(); ++j) {
-          out << signals[j];
-          if (j < signals.size() - 1) {
-            out << ",";
-          }
-        }
-        out << "\tLN:i:" << signals.size();
-      } else {
-        out << "\tLN:i:0";
-      }
-
-      out << "\tst:Z:aln_quant";
-      if (!node.original_id.empty()) {
-        out << "\toi:Z:" << node.original_id << (node.is_reverse ? "-" : "+");
-      }
-      if (node.chain_id) {
-        out << "\tci:i:" << *node.chain_id;
-      }
-      if (node.linear_position) {
-        out << "\tlc:i:" << *node.linear_position;
-      }
-      out << std::endl;
+  for (std::uint32_t i = 0; i < graph.nodeCount(); ++i) {
+    for (auto it = graph.outBegin(i); it != graph.outEnd(i); ++it) {
+      out << "L\t" << i << "\t+\t" << *it << "\t+\t0M\n";
     }
   }
 
-  for (const auto& edge : graph.edges()) {
-    out << "L\t" << edge.from << "\t+\t" << edge.to << "\t+\t" << edge.overlap_bases << "M";
-    const auto& from_node = graph.node(edge.from);
-    const auto& to_node = graph.node(edge.to);
-    if (!from_node.original_id.empty()) {
-      out << "\tof:Z:" << from_node.original_id << (from_node.is_reverse ? "-" : "+");
+  for (std::uint32_t p = 0; p < graph.pathCount(); ++p) {
+    out << "P\t" << graph.pathName(p) << "\t";
+    const auto* steps = graph.pathStepsBegin(p);
+    std::size_t n = graph.pathStepCount(p);
+    for (std::size_t j = 0; j < n; ++j) {
+      if (j > 0) out << ",";
+      out << steps[j] << "+";
     }
-    if (!to_node.original_id.empty()) {
-      out << "\tot:Z:" << to_node.original_id << (to_node.is_reverse ? "-" : "+");
-    }
-    out << std::endl;
-  }
-
-  for (const auto& path : graph.paths()) {
-    out << "P\t" << path.name << "\t";
-    for (size_t i = 0; i < path.steps.size(); ++i) {
-      const auto& step = path.steps[i];
-      out << step.node_id << (step.is_reverse ? "-" : "+");
-      if (i < path.steps.size() - 1) {
-        out << ",";
-      }
-    }
-    out << "\t";
-    if (!path.overlaps.empty()) {
-      for (size_t i = 0; i < path.overlaps.size(); ++i) {
-        out << path.overlaps[i] << "M";
-        if (i < path.overlaps.size() - 1) {
-          out << ",";
-        }
-      }
-    } else {
-      out << "*";
-    }
-    out << std::endl;
+    out << "\t*\n";
   }
 }
 

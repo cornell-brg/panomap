@@ -30,7 +30,7 @@ struct IndexMetadata {
 
 struct LoadedIndex {
   IndexMetadata metadata;
-  std::unique_ptr<piru::index::AdjListGraphStore> graph;
+  std::unique_ptr<piru::index::FlatGraphStore> graph;
   std::unique_ptr<piru::index::SeedStore> seeds;
   std::vector<std::vector<piru::index::LinearCoordinate>> linearization_coords;
   std::vector<float> node_1d_coords;  // empty if not computed at index time

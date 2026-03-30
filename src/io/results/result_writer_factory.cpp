@@ -24,13 +24,13 @@ std::string extension_of(const std::string& path) {
 }  // namespace
 
 ResultWriterPtr make_result_writer(const std::string& path,
-                                    const index::AlnGraph& graph) {
+                                    const index::FlatGraph& graph) {
   return make_result_writer(path, extension_of(path), graph);
 }
 
 ResultWriterPtr make_result_writer(const std::string& path,
                                     const std::string& format,
-                                    const index::AlnGraph& graph) {
+                                    const index::FlatGraph& graph) {
   const std::string fmt = to_lower(format);
   if (fmt == "paf") {
     return std::make_unique<PafWriter>(path);

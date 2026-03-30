@@ -60,7 +60,9 @@ std::pair<std::size_t, std::size_t> signalPositionToNodeOffset(
 
 }  // namespace
 
-PathWalkIndexResult pathWalkIndex(const AlnGraph& graph, const io::KmerModel& model,
+// --- FlatGraph implementation ---
+
+PathWalkIndexResult pathWalkIndex(const FlatGraph& graph, const io::KmerModel& model,
                                   const signal::FuzzyQuantizer& fuzzy_quantizer,
                                   const signal::SeedExtractor& extractor,
                                   const PathWalkIndexConfig& config) {
@@ -71,7 +73,6 @@ PathWalkIndexResult pathWalkIndex(const AlnGraph& graph, const io::KmerModel& mo
 
   const int pore_k = model.k();
 
-  // Store extractor metadata for serialization
   result.seed_store->set_extractor_name(extractor.name());
   std::map<std::string, std::string> params;
   const auto& cfg = extractor.config();
@@ -83,63 +84,40 @@ PathWalkIndexResult pathWalkIndex(const AlnGraph& graph, const io::KmerModel& mo
   result.seed_store->set_params(std::move(params));
   result.seed_store->set_filter_fraction(config.seed_freq_cutoff);
 
-  // Optional: dump per-path normalization stats to file
-  // NOTE: Disabled in parallel mode (would need mutex protection)
-  std::ofstream norm_stats_file;
-  if (!config.dump_norm_stats_path.empty()) {
-    if (config.executor) {
-      LOG_WARN("--dump-norm-stats disabled in parallel mode");
-    } else {
-      norm_stats_file.open(config.dump_norm_stats_path);
-      if (norm_stats_file) {
-        norm_stats_file << "path_name\tmean\tstddev\tnum_kmers\n";
-      } else {
-        LOG_WARN("Could not open norm stats file: " + config.dump_norm_stats_path);
-      }
-    }
-  }
-
-  // Atomic counters for parallel execution
   std::atomic<std::size_t> atomic_seeds_extracted{0};
   std::atomic<std::size_t> atomic_total_path_length{0};
 
-  // Thread-local linearization coords, merged after parallel execution
   using LinearCoordVec = std::vector<std::vector<index::LinearCoordinate>>;
 
-  // Lambda to process a single path
   auto process_path = [&](std::size_t path_idx, HashSeedStore& thread_store,
                           LinearCoordVec& thread_coords) {
-    const auto& path = graph.paths()[path_idx];
-
-    // Step 1: Concatenate node sequences, track boundaries
+    // Step 1: Concatenate node sequences via FlatGraph accessors
     std::string path_sequence;
     std::vector<NodeBoundary> boundaries;
 
-    for (const auto& step : path.steps) {
-      std::size_t node_id = std::stoull(step.node_id);
+    const auto* steps = graph.pathStepsBegin(static_cast<std::uint32_t>(path_idx));
+    std::size_t num_steps = graph.pathStepCount(static_cast<std::uint32_t>(path_idx));
+
+    for (std::size_t s = 0; s < num_steps; ++s) {
+      std::uint32_t node_id = steps[s];
       if (node_id >= graph.nodeCount()) continue;
 
-      const auto& node = graph.node(node_id);
       boundaries.push_back({node_id, path_sequence.size()});
-      path_sequence += node.sequence;
+      auto sv = graph.seq(node_id);
+      path_sequence.append(sv.data(), sv.size());
     }
 
-    if (path_sequence.size() < static_cast<std::size_t>(pore_k)) {
-      return;  // Path too short
-    }
+    if (path_sequence.size() < static_cast<std::size_t>(pore_k)) return;
 
-    // Step 2: Squigglize with single-pass variance (sum and sum_sq)
+    // Step 2: Squigglize
     std::vector<float> raw_signal;
     raw_signal.reserve(path_sequence.size() - pore_k + 1);
 
-    double sum = 0.0;
-    double sum_sq = 0.0;
     std::size_t count = 0;
     std::string kmer_buf(static_cast<std::size_t>(pore_k), '\0');
 
     for (std::size_t i = 0; i + static_cast<std::size_t>(pore_k) <= path_sequence.size(); ++i) {
       std::copy_n(path_sequence.data() + i, static_cast<std::size_t>(pore_k), kmer_buf.begin());
-      // Uppercase for pore model lookup (GFA segments can be lowercase)
       for (auto& c : kmer_buf) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
 
       if (hasNBase(kmer_buf)) {
@@ -148,56 +126,28 @@ PathWalkIndexResult pathWalkIndex(const AlnGraph& graph, const io::KmerModel& mo
       }
 
       double mean = 0.0;
-      if (!model.lookup(kmer_buf, mean)) {
-        mean = 0.0;
-      }
-      float val = static_cast<float>(mean);
-      raw_signal.push_back(val);
-      sum += val;
-      sum_sq += static_cast<double>(val) * static_cast<double>(val);
+      if (!model.lookup(kmer_buf, mean)) mean = 0.0;
+      raw_signal.push_back(static_cast<float>(mean));
       ++count;
     }
 
     if (count == 0) return;
 
-    // Model values are already globally z-normalized at load time (matching RH2).
-    // Skip per-path normalization -- pass through directly.
     signal::NormalizedSignal normalized;
-    normalized.samples.reserve(raw_signal.size());
-    for (float val : raw_signal) {
-      normalized.samples.push_back(val);
-    }
+    normalized.samples = std::move(raw_signal);
 
     auto fuzzy = fuzzy_quantizer.quantize(normalized);
 
-#if 1  // DEV-62: dump index tokens per path (for debugging token comparison)
-    {
-      const auto& path = graph.paths()[path_idx];
-      {
-        // Sanitize path name for filename (replace :: and other chars)
-        std::string safe_name = path.name;
-        for (auto& c : safe_name) {
-          if (c == ':' || c == '/' || c == ' ') c = '_';
-        }
-        std::string fname = "/tmp/index_tokens/" + safe_name + ".txt";
-        std::ofstream ofs(fname);
-        for (std::size_t i = 0; i < fuzzy.tokens.size(); ++i)
-          ofs << fuzzy.tokens[i] << "\n";
-      }
-    }
-#endif
-
-    // Update path length (each path writes to its own slot)
     result.path_lengths[path_idx] = path_sequence.size();
     atomic_total_path_length.fetch_add(fuzzy.tokens.size(), std::memory_order_relaxed);
 
-    // Step 5: Record linear coordinates (thread-local, merged later)
+    // Step 5: Linear coordinates
     for (const auto& boundary : boundaries) {
       thread_coords[boundary.node_id].emplace_back(
           path_idx, static_cast<std::int64_t>(boundary.base_start));
     }
 
-    // Step 6: Extract seeds into per-path store
+    // Step 6: Extract seeds
     const auto seeds = extractor.extract(fuzzy);
     atomic_seeds_extracted.fetch_add(seeds.seeds.size(), std::memory_order_relaxed);
 
@@ -208,9 +158,7 @@ PathWalkIndexResult pathWalkIndex(const AlnGraph& graph, const io::KmerModel& mo
           static_cast<std::uint32_t>(node_id), static_cast<std::uint32_t>(local_offset)});
     }
 
-    // Step 7: Per-path frequency subsampling
-    // - Below threshold (seed_freq_cutoff percentile): pass through
-    // - Above threshold: subsample down to seed_freq_cap percentile freq
+    // Step 7: Frequency subsampling
     std::size_t threshold = std::numeric_limits<std::size_t>::max();
     std::size_t subsample_cap = std::numeric_limits<std::size_t>::max();
     if (!path_seed_store.data().empty() && config.seed_freq_cutoff < 1.0) {
@@ -231,20 +179,17 @@ PathWalkIndexResult pathWalkIndex(const AlnGraph& graph, const io::KmerModel& mo
         subsample_cap =
             std::max<std::size_t>(1, freq_at(std::clamp(config.seed_freq_cap, 0.0, 1.0)));
       } else {
-        subsample_cap = 0;  // harddrop mode
+        subsample_cap = 0;
       }
     }
 
-    // Merge seeds into thread-local store
     std::mt19937 rng(static_cast<unsigned>(path_idx));
     for (auto& [hash, hits] : path_seed_store.mutableData()) {
       if (hits.size() <= threshold) {
-        // Below threshold -- merge all
         for (const auto& hit : hits) {
           thread_store.insert(hash, hit);
         }
       } else if (subsample_cap > 0) {
-        // Above threshold -- subsample to subsample_cap
         std::size_t target = std::min(subsample_cap, hits.size());
         std::size_t n = hits.size();
         for (std::size_t i = 0; i < target; ++i) {
@@ -255,7 +200,6 @@ PathWalkIndexResult pathWalkIndex(const AlnGraph& graph, const io::KmerModel& mo
           thread_store.insert(hash, hits[i]);
         }
       }
-      // else: subsample_cap == 0 -> harddrop (discard entirely)
     }
   };
 
@@ -263,7 +207,6 @@ PathWalkIndexResult pathWalkIndex(const AlnGraph& graph, const io::KmerModel& mo
 
 #ifdef PIRU_USE_TBB
   if (config.executor) {
-    // Parallel execution with thread-local stores and linearization
     tbb::enumerable_thread_specific<HashSeedStore> thread_stores;
     tbb::enumerable_thread_specific<LinearCoordVec> thread_coords(
         [&]() { return LinearCoordVec(graph.nodeCount()); });
@@ -272,11 +215,9 @@ PathWalkIndexResult pathWalkIndex(const AlnGraph& graph, const io::KmerModel& mo
       process_path(path_idx, thread_stores.local(), thread_coords.local());
     });
 
-    // Merge thread-local stores into result
     for (auto& store : thread_stores) {
       result.seed_store->merge(store);
     }
-    // Merge thread-local linearization coords into result
     for (auto& coords : thread_coords) {
       for (std::size_t i = 0; i < coords.size(); ++i) {
         auto& dst = result.linearization_coords[i];
@@ -286,40 +227,29 @@ PathWalkIndexResult pathWalkIndex(const AlnGraph& graph, const io::KmerModel& mo
   } else
 #endif
   {
-    // Sequential execution
     for (std::size_t path_idx = 0; path_idx < num_paths; ++path_idx) {
       process_path(path_idx, *result.seed_store, result.linearization_coords);
-
-      if (!config.executor) {
-        const auto& path = graph.paths()[path_idx];
-        LOG_DEBUG("Processed path " + path.name);
-      }
     }
   }
 
   result.seeds_extracted = atomic_seeds_extracted.load();
   result.total_path_length = atomic_total_path_length.load();
 
-  // Dedup seeds from shared regions across paths
   result.seed_store->deduplicate();
   result.seeds_unique = result.seed_store->size();
 
-  // Compute max frequency
   std::size_t max_freq = 0;
   for (const auto& [hash, hits] : result.seed_store->data()) {
     max_freq = std::max(max_freq, hits.size());
   }
   result.seed_store->set_max_hash_frequency(max_freq);
 
-  // Set frequency threshold to max_freq + 1 (no query-time filtering).
-  // Per-path filtering already removed high-frequency seeds during indexing,
-  // so we don't need a second round of filtering at query time.
   std::size_t threshold = max_freq + 1;
   result.seed_store->set_frequency_threshold(threshold);
 
-  LOG_INFO("PathWalkIndex: " + std::to_string(result.seeds_extracted) + " seeds extracted, " +
-           std::to_string(result.seeds_unique) + " unique (max_freq=" + std::to_string(max_freq) +
-           ", global_threshold=" + std::to_string(threshold) + ")");
+  LOG_INFO("PathWalkIndex [FlatGraph]: " + std::to_string(result.seeds_extracted) +
+           " seeds extracted, " + std::to_string(result.seeds_unique) +
+           " unique (max_freq=" + std::to_string(max_freq) + ")");
 
   return result;
 }

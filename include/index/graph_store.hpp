@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: MIT
-// GraphStore interface and simple adjacency-list backend.
+// GraphStore interface and FlatGraph-backed implementation.
 
 #pragma once
 
 #include <cstddef>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
-#include "index/aln_graph.hpp"
+#include "index/flat_graph.hpp"
 
 namespace piru::index {
 
@@ -17,32 +18,31 @@ public:
   virtual ~GraphStore() = default;
 
   virtual std::size_t nodeCount() const = 0;
-  virtual const std::string& sequence(std::size_t node_id) const = 0;
-  virtual const std::vector<std::size_t>& outgoing(std::size_t node_id) const = 0;
-  virtual const std::vector<std::size_t>& incoming(std::size_t node_id) const = 0;
+  virtual std::string_view sequence(std::size_t node_id) const = 0;
+  virtual std::size_t sequenceLen(std::size_t node_id) const = 0;
+  virtual const FlatGraph& flat() const = 0;
 };
 
-class AdjListGraphStore : public GraphStore {
+class FlatGraphStore : public GraphStore {
 public:
-  AdjListGraphStore() = default;
-  explicit AdjListGraphStore(AlnGraph graph) : graph_(std::move(graph)) {}
+  FlatGraphStore() = default;
+  explicit FlatGraphStore(FlatGraph graph) : graph_(std::move(graph)) {}
 
-  const AlnGraph& graph() const { return graph_; }
-  AlnGraph& mutableGraph() { return graph_; }
+  const FlatGraph& flat() const override { return graph_; }
 
   std::size_t nodeCount() const override { return graph_.nodeCount(); }
-  const std::string& sequence(std::size_t node_id) const override {
-    return graph_.node(node_id).sequence;
+  std::string_view sequence(std::size_t node_id) const override {
+    return graph_.seq(static_cast<std::uint32_t>(node_id));
   }
-  const std::vector<std::size_t>& outgoing(std::size_t node_id) const override {
-    return graph_.outgoing(node_id);
-  }
-  const std::vector<std::size_t>& incoming(std::size_t node_id) const override {
-    return graph_.incoming(node_id);
+  std::size_t sequenceLen(std::size_t node_id) const override {
+    return graph_.seqLen(static_cast<std::uint32_t>(node_id));
   }
 
 private:
-  AlnGraph graph_;
+  FlatGraph graph_;
 };
+
+// Legacy alias during migration
+using AdjListGraphStore = FlatGraphStore;
 
 }  // namespace piru::index

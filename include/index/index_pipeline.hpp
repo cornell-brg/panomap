@@ -22,7 +22,6 @@
 #include <vector>
 
 #include "concurrency/executor.hpp"
-#include "index/aln_graph.hpp"
 #include "index/graph_store.hpp"
 #include "index/linearizer.hpp"
 #include "index/seed_store.hpp"

@@ -13,6 +13,7 @@
 #include <stdexcept>
 
 #include "index/aln_graph.hpp"
+#include "index/flat_graph.hpp"
 #include "util/logging.hpp"
 
 namespace piru::io::index {
@@ -75,7 +76,7 @@ void save_index(const std::string& path, const piru::index::GraphStore& graph_st
     throw std::runtime_error("Failed to open file for writing: " + path);
   }
 
-  const auto& graph = adj_store->graph();
+  const auto& fg = adj_store->flat();
 
   /* 1. Header */
 
@@ -90,43 +91,46 @@ void save_index(const std::string& path, const piru::index::GraphStore& graph_st
   write_string(out, metadata.model_name);
   write_pod<uint32_t>(out, metadata.pore_k);
   write_string(out, metadata.fuzzy_quantizer);
-  // Legacy: graph_flavor was "vg" vs "dbg", now unused. Write empty string
-  // to preserve .pirx binary layout. Remove on next format version bump.
+  // Legacy: graph_flavor was "vg" vs "dbg", now unused.
   write_string(out, std::string{});
   auto pos_graph = out.tellp();
 
-  /* 3. Graph - nodes */
+  /* 3. Graph - nodes (from FlatGraph) */
 
-  write_pod<uint64_t>(out, graph.nodeCount());
-  for (std::size_t i = 0; i < graph.nodeCount(); ++i) {
-    const auto& node = graph.node(i);
-    write_string(out, node.original_id);
-    write_pod<uint8_t>(out, node.is_reverse ? 1 : 0);
+  write_pod<uint64_t>(out, fg.nodeCount());
+  for (std::uint32_t i = 0; i < fg.nodeCount(); ++i) {
+    auto name = fg.name(i);
+    write_string(out, std::string(name));
+    write_pod<uint8_t>(out, fg.isReverse(i) ? 1 : 0);
     if (flags & kFlagHasSequences) {
-      write_string(out, node.sequence);
+      auto seq = fg.seq(i);
+      write_string(out, std::string(seq));
     }
   }
 
-  /* 4. Graph - edges */
+  /* 4. Graph - edges (from FlatGraph CSR) */
 
-  write_pod<uint64_t>(out, graph.edgeCount());
-  for (const auto& edge : graph.edges()) {
-    write_pod<uint64_t>(out, edge.from);
-    write_pod<uint64_t>(out, edge.to);
-    write_pod<uint64_t>(out, edge.overlap_bases);
+  write_pod<uint64_t>(out, fg.edgeCount());
+  for (std::uint32_t i = 0; i < fg.nodeCount(); ++i) {
+    for (auto it = fg.outBegin(i); it != fg.outEnd(i); ++it) {
+      write_pod<uint64_t>(out, i);
+      write_pod<uint64_t>(out, *it);
+      write_pod<uint64_t>(out, uint64_t{0});  // overlap_bases (not stored in FlatGraph)
+    }
   }
 
-  /* 5. Graph - paths */
+  /* 5. Graph - paths (from FlatGraph CSR) */
 
-  write_pod<uint64_t>(out, graph.pathCount());
-  for (std::size_t i = 0; i < graph.pathCount(); ++i) {
-    const auto& path = graph.paths()[i];
-    write_string(out, path.name);
-    write_pod<uint64_t>(out, path.length);
-    write_pod<uint64_t>(out, path.steps.size());
-    for (const auto& step : path.steps) {
-      uint64_t node_id = std::stoull(step.node_id);
-      write_pod<uint64_t>(out, node_id);
+  write_pod<uint64_t>(out, fg.pathCount());
+  for (std::uint32_t i = 0; i < fg.pathCount(); ++i) {
+    auto pname = fg.pathName(i);
+    write_string(out, std::string(pname));
+    write_pod<uint64_t>(out, fg.pathLength(i));
+    std::size_t step_count = fg.pathStepCount(i);
+    write_pod<uint64_t>(out, step_count);
+    const auto* steps = fg.pathStepsBegin(i);
+    for (std::size_t j = 0; j < step_count; ++j) {
+      write_pod<uint64_t>(out, static_cast<uint64_t>(steps[j]));
     }
   }
 
@@ -207,7 +211,7 @@ void save_index(const std::string& path, const piru::index::GraphStore& graph_st
   auto sz_graph = pos_linear - pos_graph;
   auto sz_linear = pos_seeds - pos_linear;
   auto sz_seeds = pos_end - pos_seeds;
-  LOG_INFO("Saved index: " + std::to_string(graph.nodeCount()) + " nodes, " +
+  LOG_INFO("Saved index: " + std::to_string(fg.nodeCount()) + " nodes, " +
            std::to_string(n_hashes) + " seeds (" + std::to_string(n_entries) + " hits) -> " + path);
   LOG_INFO("Index breakdown: total=" + std::to_string(total / (1024*1024)) + "MB" +
            "  header+meta=" + std::to_string(sz_meta * 100 / total) + "%" +
@@ -254,59 +258,101 @@ LoadedIndex load_index(const std::string& path) {
   // Legacy: graph_flavor, read and discard
   read_string(in);
 
-  /* 3. Graph - nodes */
+  /* 3-5. Graph - build FlatGraph directly from pirx */
 
+  piru::index::FlatGraph fg;
+
+  // Temporary builder vectors (moved into FlatGraph at the end)
   uint64_t node_count;
   read_pod(in, node_count);
 
-  auto graph = std::make_unique<piru::index::AlnGraph>();
-  graph->reserveNodes(node_count);
+  std::vector<char> seq_data, name_data;
+  std::vector<std::uint32_t> seq_offset(node_count), seq_len(node_count);
+  std::vector<std::uint32_t> name_offset_nodes(node_count);
+  std::vector<std::uint16_t> name_len_nodes(node_count);
+  std::vector<std::uint8_t> is_reverse(node_count);
 
   for (uint64_t i = 0; i < node_count; ++i) {
-    piru::index::AlnNode node;
-    node.original_id = read_string(in);
-    uint8_t is_reverse;
-    read_pod(in, is_reverse);
-    node.is_reverse = (is_reverse != 0);
+    std::string orig_id = read_string(in);
+    uint8_t rev;
+    read_pod(in, rev);
+    is_reverse[i] = rev;
+
+    name_offset_nodes[i] = static_cast<std::uint32_t>(name_data.size());
+    name_len_nodes[i] = static_cast<std::uint16_t>(orig_id.size());
+    name_data.insert(name_data.end(), orig_id.begin(), orig_id.end());
+
     if (flags & kFlagHasSequences) {
-      node.sequence = read_string(in);
+      std::string seq = read_string(in);
+      seq_offset[i] = static_cast<std::uint32_t>(seq_data.size());
+      seq_len[i] = static_cast<std::uint32_t>(seq.size());
+      seq_data.insert(seq_data.end(), seq.begin(), seq.end());
     }
-    graph->setNode(i, std::move(node));
   }
 
-  /* 4. Graph - edges */
-
+  /* 4. Edges */
   uint64_t edge_count;
   read_pod(in, edge_count);
+
+  // Build CSR from edge list
+  std::vector<std::vector<std::uint32_t>> adj(node_count);
   for (uint64_t i = 0; i < edge_count; ++i) {
-    piru::index::AlnEdge edge;
-    read_pod(in, edge.from);
-    read_pod(in, edge.to);
-    read_pod(in, edge.overlap_bases);
-    graph->addEdge(edge);
+    uint64_t from, to, overlap;
+    read_pod(in, from);
+    read_pod(in, to);
+    read_pod(in, overlap);
+    if (from < node_count) {
+      adj[from].push_back(static_cast<std::uint32_t>(to));
+    }
   }
 
-  /* 5. Graph - paths */
+  std::vector<std::uint32_t> edge_target;
+  std::vector<std::uint32_t> out_edge_offset(node_count + 1);
+  for (uint64_t i = 0; i < node_count; ++i) {
+    out_edge_offset[i] = static_cast<std::uint32_t>(edge_target.size());
+    edge_target.insert(edge_target.end(), adj[i].begin(), adj[i].end());
+  }
+  out_edge_offset[node_count] = static_cast<std::uint32_t>(edge_target.size());
+  adj.clear();
 
+  /* 5. Paths */
   uint64_t path_count;
   read_pod(in, path_count);
+
+  std::vector<std::uint32_t> step_data;
+  std::vector<std::uint32_t> path_step_offset(path_count + 1);
+  std::vector<std::uint32_t> path_name_offset(path_count);
+  std::vector<std::uint16_t> path_name_len(path_count);
+  std::vector<std::uint64_t> path_length(path_count);
+
   for (uint64_t i = 0; i < path_count; ++i) {
-    piru::index::AlnPath aln_path;
-    aln_path.name = read_string(in);
-    read_pod(in, aln_path.length);
+    std::string pname = read_string(in);
+    path_name_offset[i] = static_cast<std::uint32_t>(name_data.size());
+    path_name_len[i] = static_cast<std::uint16_t>(pname.size());
+    name_data.insert(name_data.end(), pname.begin(), pname.end());
+
+    read_pod(in, path_length[i]);
 
     uint64_t step_count;
     read_pod(in, step_count);
-    aln_path.steps.reserve(step_count);
+    path_step_offset[i] = static_cast<std::uint32_t>(step_data.size());
     for (uint64_t j = 0; j < step_count; ++j) {
-      uint64_t node_id;
-      read_pod(in, node_id);
-      piru::index::AlnPathStep step;
-      step.node_id = std::to_string(node_id);
-      aln_path.steps.push_back(std::move(step));
+      uint64_t nid;
+      read_pod(in, nid);
+      step_data.push_back(static_cast<std::uint32_t>(nid));
     }
-    graph->addPath(std::move(aln_path));
   }
+  path_step_offset[path_count] = static_cast<std::uint32_t>(step_data.size());
+
+  // Assemble FlatGraph
+  fg = piru::index::FlatGraph::fromRawArrays(
+      static_cast<std::uint32_t>(node_count), static_cast<std::uint32_t>(path_count),
+      std::move(seq_data), std::move(seq_offset), std::move(seq_len),
+      std::move(name_data), std::move(name_offset_nodes), std::move(name_len_nodes),
+      std::move(is_reverse),
+      std::move(edge_target), std::move(out_edge_offset),
+      std::move(step_data), std::move(path_step_offset),
+      std::move(path_name_offset), std::move(path_name_len), std::move(path_length));
 
   /* 6. Linearization */
 
@@ -388,7 +434,8 @@ LoadedIndex load_index(const std::string& path) {
   LOG_INFO("Loaded index: " + std::to_string(node_count) + " nodes, " +
            std::to_string(n_hashes) + " seeds (" + std::to_string(n_entries) + " hits) ← " + path);
 
-  return {std::move(metadata), std::make_unique<piru::index::AdjListGraphStore>(std::move(*graph)),
+  return {std::move(metadata),
+          std::make_unique<piru::index::FlatGraphStore>(std::move(fg)),
           std::move(seeds), std::move(linearization_coords), std::move(node_1d_coords)};
 }
 

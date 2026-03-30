@@ -1,18 +1,18 @@
 // SPDX-License-Identifier: MIT
-// Simple ±expand transformation: ImportedGraph -> AlnGraph with exactly 2x nodes.
+// Simple +-expand transformation: ImportedGraph -> FlatGraph with exactly 2x nodes.
 
 #pragma once
 
-#include "index/aln_graph.hpp"
+#include "index/flat_graph.hpp"
 #include "io/graphs/graph.hpp"
 
 namespace piru::index {
 
-// Simple expansion of ImportedGraph to AlnGraph.
-// Each original node becomes exactly 2 AlnGraph nodes (forward + reverse).
+// Expand ImportedGraph to FlatGraph.
+// Each original node becomes 2 nodes (forward + reverse).
 // Node ID scheme: original_index * 2 = forward, original_index * 2 + 1 = reverse.
-// Paths are duplicated: forward path + reverse path for each original path.
-AlnGraph simpleExpand(const piru::io::ImportedGraph& imported);
+// Paths are duplicated: forward + reverse for each original path.
+FlatGraph simpleExpandFlat(const piru::io::ImportedGraph& imported);
 
 // Helper functions for node ID arithmetic
 inline std::size_t forwardNodeId(std::size_t original_index) { return original_index * 2; }

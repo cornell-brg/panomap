@@ -24,7 +24,7 @@
 #include <string>
 #include <vector>
 
-#include "index/aln_graph.hpp"
+#include "index/flat_graph.hpp"
 #include "index/linearizer.hpp"
 
 namespace piru::index {
@@ -51,7 +51,7 @@ struct Sort1DConfig {
  * @return            node_1d_coord[node_id] = 1D position (double)
  */
 std::vector<float> compute_1d_sort(
-    const AlnGraph& graph,
+    const FlatGraph& graph,
     const std::vector<std::vector<LinearCoordinate>>& coords,
     const std::vector<std::size_t>& path_lengths,
     const Sort1DConfig& config = {});
@@ -74,6 +74,6 @@ std::vector<float> import_1d_coords_odgi(const std::string& path,
  */
 void dump_1d_coords_tsv(const std::string& path,
                          const std::vector<float>& coords,
-                         const AlnGraph& graph);
+                         const FlatGraph& graph);
 
 }  // namespace piru::index

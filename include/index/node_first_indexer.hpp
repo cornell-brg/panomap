@@ -20,7 +20,7 @@
 #include <vector>
 
 #include "concurrency/executor.hpp"
-#include "index/aln_graph.hpp"
+#include "index/flat_graph.hpp"
 #include "index/linearizer.hpp"
 #include "index/seed_store.hpp"
 #include "io/models/model.hpp"
@@ -78,7 +78,7 @@ struct NodeFirstIndexResult {
  *   - Hash and index until end of node
  *   - Record linearization coordinates
  *
- * @param graph AlnGraph from simpleExpand() (2x nodes: forward + reverse)
+ * @param graph FlatGraph from simpleExpand() (2x nodes: forward + reverse)
  * @param model Pore model for squigglization (k-mer -> expected signal)
  * @param fuzzy_quantizer Converts normalized signal to discrete tokens
  * @param extractor Extracts seeds from fuzzy-quantized tokens
@@ -87,7 +87,7 @@ struct NodeFirstIndexResult {
  * @return NodeFirstIndexResult with seed_store, linearization_coords,
  *         global normalization params, and stats
  */
-NodeFirstIndexResult nodeFirstIndex(const AlnGraph& graph, const io::KmerModel& model,
+NodeFirstIndexResult nodeFirstIndex(const FlatGraph& graph, const io::KmerModel& model,
                                     const signal::FuzzyQuantizer& fuzzy_quantizer,
                                     const signal::SeedExtractor& extractor,
                                     const NodeFirstIndexConfig& config = {});

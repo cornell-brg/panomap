@@ -16,7 +16,7 @@
 #include <vector>
 
 #include "concurrency/executor.hpp"
-#include "index/aln_graph.hpp"
+#include "index/flat_graph.hpp"
 #include "index/linearizer.hpp"
 #include "index/seed_store.hpp"
 #include "io/models/model.hpp"
@@ -65,7 +65,7 @@ struct PathWalkIndexResult {
  *   Pass 1: Squigglize each node's sequence, accumulate normalization stats
  *   Pass 2: Normalize, fuzzy quantize, extract seeds, track linear coordinates
  *
- * @param graph AlnGraph from simpleExpand() (2x nodes: forward + reverse)
+ * @param graph FlatGraph from simpleExpandFlat() (2x nodes: forward + reverse)
  * @param model Pore model for squigglization (k-mer -> expected signal)
  * @param fuzzy_quantizer Converts normalized signal to discrete tokens
  * @param extractor Extracts seeds from fuzzy-quantized tokens
@@ -76,7 +76,7 @@ struct PathWalkIndexResult {
  *
  * @note No SignalStore output - the simple pipeline doesn't store per-node signals.
  */
-PathWalkIndexResult pathWalkIndex(const AlnGraph& graph, const io::KmerModel& model,
+PathWalkIndexResult pathWalkIndex(const FlatGraph& graph, const io::KmerModel& model,
                                   const signal::FuzzyQuantizer& fuzzy_quantizer,
                                   const signal::SeedExtractor& extractor,
                                   const PathWalkIndexConfig& config = {});

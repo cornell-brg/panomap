@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#include "index/aln_graph.hpp"
+#include "index/flat_graph.hpp"
 #include "io/results/result_writer.hpp"
 
 namespace piru::io {
@@ -21,7 +21,7 @@ struct GafWriterConfig {
 
 class GafWriter : public ResultWriter {
  public:
-  GafWriter(const std::string& path, const index::AlnGraph& graph,
+  GafWriter(const std::string& path, const index::FlatGraph& graph,
             GafWriterConfig config = {});
   ~GafWriter() override;
 
@@ -34,11 +34,11 @@ class GafWriter : public ResultWriter {
   std::string buildPathString(const std::vector<mapping::ChainedAnchor>& anchors) const;
 
   // Get path name and length from graph
-  const std::string& getPathName(std::size_t path_id) const;
+  std::string getPathName(std::size_t path_id) const;
   std::size_t getPathLength(std::size_t path_id) const;
 
   std::ofstream out_;
-  const index::AlnGraph& graph_;
+  const index::FlatGraph& graph_;
   GafWriterConfig config_;
 
   mutable std::vector<std::size_t> path_lengths_;

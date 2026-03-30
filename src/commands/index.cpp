@@ -227,7 +227,7 @@ int handle_index(const std::vector<std::string>& args) {
     if (adj_store) {
       piru::index::dump_1d_coords_tsv(parsed.values.at("dump-1d-coords"),
                                        result.node_1d_coords,
-                                       adj_store->graph());
+                                       adj_store->flat());
     }
   }
 

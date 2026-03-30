@@ -275,22 +275,21 @@ int handle_map(const std::vector<std::string>& args) {
   // Extract path lengths from loaded graph BEFORE moving (AdjListGraphStore has path access)
   std::vector<std::size_t> path_lengths;
   {
-    const auto& aln_graph = loaded.graph->graph();
-    const auto& paths = aln_graph.paths();
-    path_lengths.resize(paths.size());
-    for (std::size_t i = 0; i < paths.size(); ++i) {
-      path_lengths[i] = paths[i].length;
+    const auto& fg = loaded.graph->flat();
+    path_lengths.resize(fg.pathCount());
+    for (std::uint32_t i = 0; i < fg.pathCount(); ++i) {
+      path_lengths[i] = fg.pathLength(i);
     }
   }
 
   // Create result writer (needs graph for GAF path lookups)
   piru::io::ResultWriterPtr result_writer;
   if (!output_path.empty()) {
-    const auto& aln_graph = loaded.graph->graph();
+    const auto& flat_graph = loaded.graph->flat();
     if (!output_format.empty()) {
-      result_writer = piru::io::make_result_writer(output_path, output_format, aln_graph);
+      result_writer = piru::io::make_result_writer(output_path, output_format, flat_graph);
     } else {
-      result_writer = piru::io::make_result_writer(output_path, aln_graph);
+      result_writer = piru::io::make_result_writer(output_path, flat_graph);
     }
     if (!result_writer) {
       LOG_ERROR("map: failed to create output writer for '" + output_path + "'");

@@ -62,20 +62,16 @@ float safeNormalize(float value, float mean, float stddev) {
  *
  * @return Vector of fuzzy tokens (size = window_size if successful, empty if insufficient context)
  */
-std::vector<std::int16_t> getHashWindow(const AlnGraph& graph, const io::KmerModel& model,
+std::vector<std::int16_t> getHashWindow(const FlatGraph& graph, const io::KmerModel& model,
                                         const signal::FuzzyQuantizer& fuzzy_quantizer,
                                         std::size_t path_idx, std::size_t node_idx,
                                         std::size_t offset, int pore_k, std::size_t window_size,
                                         float global_mean, float global_std) {
-  const auto& path = graph.paths()[path_idx];
-  const std::size_t num_steps = path.steps.size();
+  const auto* steps = graph.pathStepsBegin(static_cast<std::uint32_t>(path_idx));
+  const std::size_t num_steps = graph.pathStepCount(static_cast<std::uint32_t>(path_idx));
 
-  // We need (window_size) fuzzy samples
-  // Each fuzzy sample requires (pore_k) bases
-  // So we need (window_size + pore_k - 1) bases total starting from offset
   const std::size_t bases_needed = window_size + static_cast<std::size_t>(pore_k) - 1;
 
-  // Collect bases from current node and subsequent nodes
   std::string context;
   context.reserve(bases_needed);
 
@@ -83,22 +79,21 @@ std::vector<std::int16_t> getHashWindow(const AlnGraph& graph, const io::KmerMod
   std::size_t current_offset = offset;
 
   while (context.size() < bases_needed && current_node_idx < num_steps) {
-    std::size_t node_id = std::stoull(path.steps[current_node_idx].node_id);
+    std::uint32_t node_id = steps[current_node_idx];
     if (node_id >= graph.nodeCount()) {
       ++current_node_idx;
       current_offset = 0;
       continue;
     }
 
-    const auto& node = graph.node(node_id);
-    const std::size_t node_len = node.sequence.size();
+    auto seq = graph.seq(node_id);
+    const std::size_t node_len = seq.size();
 
-    // How many bases can we take from this node?
     std::size_t available = (current_offset < node_len) ? (node_len - current_offset) : 0;
     std::size_t to_take = std::min(available, bases_needed - context.size());
 
     if (to_take > 0) {
-      context.append(node.sequence, current_offset, to_take);
+      context.append(seq.data() + current_offset, to_take);
     }
 
     ++current_node_idx;
@@ -145,7 +140,7 @@ std::vector<std::int16_t> getHashWindow(const AlnGraph& graph, const io::KmerMod
 
 }  // namespace
 
-NodeFirstIndexResult nodeFirstIndex(const AlnGraph& graph, const io::KmerModel& model,
+NodeFirstIndexResult nodeFirstIndex(const FlatGraph& graph, const io::KmerModel& model,
                                     const signal::FuzzyQuantizer& fuzzy_quantizer,
                                     const signal::SeedExtractor& extractor,
                                     const NodeFirstIndexConfig& config) {
@@ -187,12 +182,11 @@ NodeFirstIndexResult nodeFirstIndex(const AlnGraph& graph, const io::KmerModel& 
   const std::size_t grain = 100;  // Process nodes in batches
 
   auto squigglize_node = [&](std::size_t node_id) {
-    const auto& node = graph.node(node_id);
-    const std::size_t node_len = node.sequence.size();
+    auto seq = graph.seq(static_cast<std::uint32_t>(node_id));
+    const std::size_t node_len = seq.size();
 
-    // Can only squigglize positions [0, node_len - pore_k]
     if (node_len < static_cast<std::size_t>(pore_k)) {
-      return;  // Node too short to produce any k-mer values
+      return;
     }
 
     const std::size_t num_kmers = node_len - static_cast<std::size_t>(pore_k) + 1;
@@ -201,13 +195,12 @@ NodeFirstIndexResult nodeFirstIndex(const AlnGraph& graph, const io::KmerModel& 
 
     std::string kmer_buf(static_cast<std::size_t>(pore_k), '\0');
 
-    // Accumulate locally, then do single atomic update
     double local_sum = 0.0;
     double local_sum_sq = 0.0;
     std::size_t local_count = 0;
 
     for (std::size_t i = 0; i < num_kmers; ++i) {
-      std::copy_n(node.sequence.data() + i, static_cast<std::size_t>(pore_k), kmer_buf.begin());
+      std::copy_n(seq.data() + i, static_cast<std::size_t>(pore_k), kmer_buf.begin());
       for (auto& c : kmer_buf) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
 
       if (hasNBase(kmer_buf)) {
@@ -362,17 +355,17 @@ NodeFirstIndexResult nodeFirstIndex(const AlnGraph& graph, const io::KmerModel& 
   std::vector<std::mutex> node_mutexes(graph.nodeCount());
 
   auto process_path = [&](std::size_t path_idx, HashSeedStore& local_store) {
-    const auto& path = graph.paths()[path_idx];
+    const auto* steps = graph.pathStepsBegin(static_cast<std::uint32_t>(path_idx));
+    const std::size_t num_steps = graph.pathStepCount(static_cast<std::uint32_t>(path_idx));
 
-    std::size_t path_base_pos = 0;  // Running base position in linearized path
+    std::size_t path_base_pos = 0;
     std::size_t local_seed_count = 0;
 
-    for (std::size_t step_idx = 0; step_idx < path.steps.size(); ++step_idx) {
-      std::size_t node_id = std::stoull(path.steps[step_idx].node_id);
+    for (std::size_t step_idx = 0; step_idx < num_steps; ++step_idx) {
+      std::uint32_t node_id = steps[step_idx];
       if (node_id >= graph.nodeCount()) continue;
 
-      const auto& node = graph.node(node_id);
-      const std::size_t node_len = node.sequence.size();
+      const std::size_t node_len = graph.seqLen(node_id);
 
       // Record linear coordinate for this node on this path (base position)
       // Protected by per-node mutex since multiple paths may touch same node
