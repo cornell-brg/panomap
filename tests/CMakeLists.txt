@@ -52,6 +52,7 @@ if(DOCTEST_AVAILABLE)
         test_gfa_exporter.cpp
         test_seed_merger.cpp
         test_path_chainer.cpp
+        test_bucket_indexer.cpp
     )
 
     target_include_directories(piru_tests PRIVATE
@@ -60,6 +61,7 @@ if(DOCTEST_AVAILABLE)
         ${CMAKE_BINARY_DIR}/generated
         ${CMAKE_SOURCE_DIR}/third_party/slow5lib/include
         ${CMAKE_SOURCE_DIR}/third_party/dirtyzipf
+        ${CMAKE_SOURCE_DIR}/third_party/concurrentqueue
     )
 
     target_sources(piru_tests PRIVATE
@@ -87,6 +89,15 @@ if(DOCTEST_AVAILABLE)
         ${CMAKE_SOURCE_DIR}/src/signal/seed_extractors/kmer_seed_extractor.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/seed_extractors/minimizer_seed_extractor.cpp
         ${CMAKE_SOURCE_DIR}/src/index/flat_graph.cpp
+        ${CMAKE_SOURCE_DIR}/src/index/simple_expand.cpp
+        ${CMAKE_SOURCE_DIR}/src/index/path_walk_indexer.cpp
+        ${CMAKE_SOURCE_DIR}/src/index/node_first_indexer.cpp
+        ${CMAKE_SOURCE_DIR}/src/index/bucket_indexer.cpp
+        ${CMAKE_SOURCE_DIR}/src/index/index_pipeline.cpp
+        ${CMAKE_SOURCE_DIR}/src/index/sort_1d.cpp
+        ${CMAKE_SOURCE_DIR}/src/io/index/serialization.cpp
+        ${CMAKE_SOURCE_DIR}/src/io/models/model.cpp
+        ${CMAKE_SOURCE_DIR}/src/io/models/builtin_models.cpp
         ${CMAKE_SOURCE_DIR}/src/mapping/batch_mapper.cpp
         ${CMAKE_SOURCE_DIR}/src/mapping/seed_merger.cpp
         ${CMAKE_SOURCE_DIR}/src/mapping/path_chainer.cpp
