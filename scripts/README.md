@@ -2,6 +2,67 @@
 
 Utility scripts for debugging and analysis.
 
+## plot_anchor_cloud.py
+
+Visualize anchor clouds (query_pos vs ref_coord) from trace dumps.
+Shows the seed hit scatter and best chain for each read. Key diagnostic
+for understanding why reads map or fail to map -- true matches show
+colinear diagonals, noise shows random scatter.
+
+### Prerequisites
+
+```bash
+pip install matplotlib numpy
+```
+
+### Enable tracing
+
+Build with trace support and run with chain stage enabled:
+
+```bash
+cmake -S repo -B repo/build -DCMAKE_CXX_FLAGS="-DPIRU_TRACE_ENABLED"
+cmake --build repo/build -j8
+
+PIRU_TRACE_STAGES=0x40 PIRU_TRACE_DIR=/tmp/trace \
+    piru map --index ref.pirx reads.blow5 --no-map-filter -o out.gaf
+```
+
+### Usage
+
+```bash
+# List available reads in a trace directory:
+python scripts/plot_anchor_cloud.py /tmp/trace/
+
+# Plot specific reads:
+python scripts/plot_anchor_cloud.py /tmp/trace/ --reads S1_1 S1_5 S1_12
+
+# Compare two groups (e.g., human noise vs microbe noise):
+python scripts/plot_anchor_cloud.py /tmp/trace/ \
+    --reads S1_1 S1_4 S1_6 --label "human (noise floor)" \
+    --reads2 M1_1 M1_2 M1_3 --label2 "microbe (noise)" \
+    --out noise_comparison.png
+
+# Plot all reads (one PNG each):
+python scripts/plot_anchor_cloud.py /tmp/trace/ --all
+
+# Plot a specific chunk (default: last/highest):
+python scripts/plot_anchor_cloud.py /tmp/trace/ --reads S1_1 --chunk 3
+
+# Plot a single trace file directly:
+python scripts/plot_anchor_cloud.py /tmp/trace/6_anchors_S1_1_chunk4
+```
+
+### Output
+
+Each panel shows:
+- Gray dots: full anchor cloud (all seed hits)
+- Colored dots + line: best chain anchors
+- Title: read ID, chunk number, chain score, anchor count, ws (if available)
+
+Comparison mode (--reads + --reads2) shows two rows for side-by-side analysis.
+
+---
+
 ## plot_signal_alignment.py
 
 Visualization tool for debugging signal processing and mapping.
