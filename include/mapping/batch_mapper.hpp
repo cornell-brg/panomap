@@ -78,7 +78,7 @@ struct BatchMapperConfig {
 
   /* ROI classification */
   const std::unordered_set<std::size_t>* roi_nodes{nullptr};  // non-owning
-  std::string classify_mode{};  // "enrich" or "deplete", empty = disabled
+  std::string classify_mode{};        // "enrich" or "deplete", empty = disabled
   bool roi_filter_anchors{false};     // --chain-target: filter anchors to ROI nodes
   double roi_score_threshold{30.0};   // --chain-target: min chain score for accept
   double roi_overlap_threshold{0.5};  // --chain-genome: min ROI overlap for accept
@@ -94,7 +94,6 @@ struct BatchMapperConfig {
   double map_min_score{30.0};       // Noise floor: min primary chain score
   float map_standout_ratio{0.17f};  // Fraction of mapq from standout (rest from score)
   int map_min_mapq_exit{12};        // Min mapq to call mapped / early exit
-
 };
 
 struct BatchMapperStats {

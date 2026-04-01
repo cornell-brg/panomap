@@ -41,8 +41,8 @@ void GfaExporter::dumpFlatGraph(const index::FlatGraph& graph, const std::string
   out << "H\tVN:Z:1.0\n";
 
   for (std::uint32_t i = 0; i < graph.nodeCount(); ++i) {
-    out << "S\t" << graph.name(i) << (graph.isReverse(i) ? "-" : "+")
-        << "\t" << graph.seqDecoded(i) << "\n";
+    out << "S\t" << graph.name(i) << (graph.isReverse(i) ? "-" : "+") << "\t" << graph.seqDecoded(i)
+        << "\n";
   }
 
   for (std::uint32_t i = 0; i < graph.nodeCount(); ++i) {

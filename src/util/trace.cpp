@@ -61,8 +61,7 @@ bool match_read(const std::string& read_id) {
   return false;
 }
 
-std::string trace_path(const std::string& tag, const std::string& read_id,
-                        std::size_t chunk_idx) {
+std::string trace_path(const std::string& tag, const std::string& read_id, std::size_t chunk_idx) {
   static std::string dir = get_trace_dir();
 
   std::string gene = "unknown";

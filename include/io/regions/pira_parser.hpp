@@ -11,11 +11,11 @@ namespace piru::io {
 
 /// A single annotated region with optional 1D interval.
 struct PiraRegion {
-  std::string label;                       // e.g. "path:start-end"
+  std::string label;                      // e.g. "path:start-end"
   double coord_1d_start{0.0};             // 1D canonical interval start (* = not set)
   double coord_1d_end{0.0};               // 1D canonical interval end
-  bool has_1d{false};                      // whether 1D coords are present
-  std::unordered_set<std::size_t> nodes;   // ROI node IDs
+  bool has_1d{false};                     // whether 1D coords are present
+  std::unordered_set<std::size_t> nodes;  // ROI node IDs
 };
 
 /// Parsed .pira file contents.

@@ -88,9 +88,9 @@ TEST_CASE("SeedMerger: Gap within tolerance merges seeds") {
   // Should merge (gap=5 <= tolerance=10)
   REQUIRE(merged.size() == 1);
   CHECK(merged[0].node_id == 1);
-  CHECK(merged[0].offset == 10);  // Use earlier offset
-  CHECK(merged[0].read_pos == 100);      // Use earlier query pos
-  CHECK(merged[0].span == 25);           // Covers 100 to 125 (105+20)
+  CHECK(merged[0].offset == 10);     // Use earlier offset
+  CHECK(merged[0].read_pos == 100);  // Use earlier query pos
+  CHECK(merged[0].span == 25);       // Covers 100 to 125 (105+20)
 }
 
 TEST_CASE("SeedMerger: Gap exceeds tolerance keeps seeds separate") {
@@ -141,9 +141,9 @@ TEST_CASE("SeedMerger: Merges multiple adjacent seeds (A+B+C)") {
   // All three should merge into one
   REQUIRE(merged.size() == 1);
   CHECK(merged[0].node_id == 1);
-  CHECK(merged[0].offset == 10);  // Earliest offset
-  CHECK(merged[0].read_pos == 100);      // Earliest query pos
-  CHECK(merged[0].span == 18);           // Covers 100 to 118
+  CHECK(merged[0].offset == 10);     // Earliest offset
+  CHECK(merged[0].read_pos == 100);  // Earliest query pos
+  CHECK(merged[0].span == 18);       // Covers 100 to 118
 }
 
 TEST_CASE("SeedMerger: Handles unsorted input correctly") {

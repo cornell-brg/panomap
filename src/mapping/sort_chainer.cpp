@@ -105,10 +105,10 @@ void apply_permutation(DPBuffers& dp, std::size_t n) {
 
 }  // namespace
 
-SortChainer::SortChainer(SortChainerConfig config,
-                         const std::vector<float>& node_1d_coords,
+SortChainer::SortChainer(SortChainerConfig config, const std::vector<float>& node_1d_coords,
                          std::vector<std::uint32_t> node_bp_lens)
-    : config_(std::move(config)), node_1d_coords_(node_1d_coords),
+    : config_(std::move(config)),
+      node_1d_coords_(node_1d_coords),
       node_bp_lens_(std::move(node_bp_lens)) {}
 
 ChainResult SortChainer::chain(const std::vector<NodeAnchor>& hits) const {
@@ -129,8 +129,8 @@ ChainResult SortChainer::chain(const std::vector<NodeAnchor>& hits) const {
     double node_end = node_1d_coords_[h.node_id | 1];
     double node_1d_span = node_end - node_start;
     double ref;
-    if (!node_bp_lens_.empty() && h.node_id < node_bp_lens_.size()
-        && node_bp_lens_[h.node_id] > 0 && node_1d_span > 0) {
+    if (!node_bp_lens_.empty() && h.node_id < node_bp_lens_.size() &&
+        node_bp_lens_[h.node_id] > 0 && node_1d_span > 0) {
       ref = node_start + static_cast<double>(h.offset) * (node_1d_span / node_bp_lens_[h.node_id]);
     } else {
       ref = node_start + static_cast<double>(h.offset);
@@ -148,12 +148,10 @@ ChainResult SortChainer::chain(const std::vector<NodeAnchor>& hits) const {
 
   /* 2. Sort by (ref_coord, query_pos) via index permutation */
 
-  std::sort(dp.order.begin(), dp.order.begin() + na,
-            [&dp](std::uint32_t a, std::uint32_t b) {
-              if (dp.ref_coord[a] != dp.ref_coord[b])
-                return dp.ref_coord[a] < dp.ref_coord[b];
-              return dp.query_pos[a] < dp.query_pos[b];
-            });
+  std::sort(dp.order.begin(), dp.order.begin() + na, [&dp](std::uint32_t a, std::uint32_t b) {
+    if (dp.ref_coord[a] != dp.ref_coord[b]) return dp.ref_coord[a] < dp.ref_coord[b];
+    return dp.query_pos[a] < dp.query_pos[b];
+  });
   apply_permutation(dp, na);
 
   /* 3. Precompute q_span (scoring span per anchor) */
@@ -212,14 +210,23 @@ ChainResult SortChainer::chain(const std::vector<NodeAnchor>& hits) const {
       if (max_iter > 0 && ++num_iter > max_iter) break;
 
       auto dq = static_cast<std::int32_t>(qp[i]) - static_cast<std::int32_t>(qp[j]);
-      if (dq <= 0 || dq > max_dist_query) { ++num_skipped; continue; }
+      if (dq <= 0 || dq > max_dist_query) {
+        ++num_skipped;
+        continue;
+      }
 
       double dr_d = rc[i] - rc[j];
-      if (dr_d <= 0.0 || dr_d > max_dist_ref) { ++num_skipped; continue; }
+      if (dr_d <= 0.0 || dr_d > max_dist_ref) {
+        ++num_skipped;
+        continue;
+      }
       auto dr = static_cast<std::int32_t>(dr_d + 0.5);  // round to nearest
 
       auto dd_raw = dr > dq ? dr - dq : dq - dr;
-      if (dd_raw > bw) { ++num_skipped; continue; }
+      if (dd_raw > bw) {
+        ++num_skipped;
+        continue;
+      }
 
       /* Compute score for j -> i transition */
       auto dg = dr < dq ? dr : dq;
@@ -228,8 +235,8 @@ ChainResult SortChainer::chain(const std::vector<NodeAnchor>& hits) const {
       auto dd = dd_raw > dd_tol ? dd_raw - dd_tol : 0;
       std::int32_t sc = qs[j] < dg ? qs[j] : dg;
       if (dd || dg > qs[j]) {
-        float lin_pen = chn_pen_gap * static_cast<float>(dd)
-                      + chn_pen_skip * static_cast<float>(dg);
+        float lin_pen =
+            chn_pen_gap * static_cast<float>(dd) + chn_pen_skip * static_cast<float>(dg);
         float log_pen = dd >= 1 ? mg_log2(static_cast<float>(dd + 1)) : 0.0f;
         sc -= static_cast<std::int32_t>(lin_pen + 0.5f * log_pen);
       }
@@ -256,7 +263,10 @@ ChainResult SortChainer::chain(const std::vector<NodeAnchor>& hits) const {
       std::int32_t best = std::numeric_limits<std::int32_t>::min();
       max_ii = -1;
       for (std::size_t j = st; j < i; ++j) {
-        if (f[j] > best) { best = f[j]; max_ii = static_cast<std::int64_t>(j); }
+        if (f[j] > best) {
+          best = f[j];
+          max_ii = static_cast<std::int64_t>(j);
+        }
       }
     }
 
@@ -264,8 +274,7 @@ ChainResult SortChainer::chain(const std::vector<NodeAnchor>& hits) const {
       auto dq_m = static_cast<std::int32_t>(qp[i]) - static_cast<std::int32_t>(qp[max_ii]);
       double dr_m_d = rc[i] - rc[max_ii];
       std::int32_t tmp = std::numeric_limits<std::int32_t>::min();
-      if (dq_m > 0 && dq_m <= max_dist_query &&
-          dr_m_d > 0.0 && dr_m_d <= max_dist_ref) {
+      if (dq_m > 0 && dq_m <= max_dist_query && dr_m_d > 0.0 && dr_m_d <= max_dist_ref) {
         auto dr_m = static_cast<std::int32_t>(dr_m_d + 0.5);
         auto dd_m_raw = dr_m > dq_m ? dr_m - dq_m : dq_m - dr_m;
         if (dd_m_raw <= bw) {
@@ -274,14 +283,15 @@ ChainResult SortChainer::chain(const std::vector<NodeAnchor>& hits) const {
           auto dd_m = dd_m_raw > dd_m_tol ? dd_m_raw - dd_m_tol : 0;
           tmp = qs[max_ii] < dg_m ? qs[max_ii] : dg_m;
           if (dd_m || dg_m > qs[max_ii]) {
-            float lin_pen = chn_pen_gap * static_cast<float>(dd_m)
-                          + chn_pen_skip * static_cast<float>(dg_m);
+            float lin_pen =
+                chn_pen_gap * static_cast<float>(dd_m) + chn_pen_skip * static_cast<float>(dg_m);
             float log_pen = dd_m >= 1 ? mg_log2(static_cast<float>(dd_m + 1)) : 0.0f;
             tmp -= static_cast<std::int32_t>(lin_pen + 0.5f * log_pen);
           }
           if (chn_pen_ratio > 0.0f && pred[max_ii] >= 0) {
             float ratio_mi = static_cast<float>(dr_m) / static_cast<float>(dq_m);
-            float ratio_dev = ratio_mi > ratio[max_ii] ? ratio_mi - ratio[max_ii] : ratio[max_ii] - ratio_mi;
+            float ratio_dev =
+                ratio_mi > ratio[max_ii] ? ratio_mi - ratio[max_ii] : ratio[max_ii] - ratio_mi;
             tmp -= static_cast<std::int32_t>(chn_pen_ratio * ratio_dev * static_cast<float>(dg_m));
           }
         }
@@ -301,8 +311,7 @@ ChainResult SortChainer::chain(const std::vector<NodeAnchor>& hits) const {
       ratio[i] = (dq_i > 0) ? static_cast<float>(dr_i) / static_cast<float>(dq_i) : 0.0f;
     }
     v[i] = (max_j >= 0 && v[max_j] > max_f) ? v[max_j] : max_f;
-    if (max_ii < 0 ||
-        (rc[i] <= rc[max_ii] + max_dist_ref && f[max_ii] < f[i])) {
+    if (max_ii < 0 || (rc[i] <= rc[max_ii] + max_dist_ref && f[max_ii] < f[i])) {
       max_ii = static_cast<std::int64_t>(i);
     }
   }
@@ -319,8 +328,8 @@ ChainResult SortChainer::chain(const std::vector<NodeAnchor>& hits) const {
     std::size_t best_idx = 0;
     std::int32_t best_score = std::numeric_limits<std::int32_t>::min();
     for (std::size_t i = 0; i < na; ++i) {
-      if (!used[i] && f[i] >= static_cast<std::int32_t>(config_.min_chain_score)
-          && v[i] <= f[i] && f[i] > best_score) {
+      if (!used[i] && f[i] >= static_cast<std::int32_t>(config_.min_chain_score) && v[i] <= f[i] &&
+          f[i] > best_score) {
         best_score = f[i];
         best_idx = i;
       }
@@ -334,7 +343,10 @@ ChainResult SortChainer::chain(const std::vector<NodeAnchor>& hits) const {
       std::int32_t cur = static_cast<std::int32_t>(best_idx);
       while (cur != -1) {
         auto ci = static_cast<std::size_t>(cur);
-        if (used[ci]) { shared_prefix = true; break; }
+        if (used[ci]) {
+          shared_prefix = true;
+          break;
+        }
         used[ci] = true;
         chain_indices.push_back(ci);
         cur = pred[cur];
@@ -381,8 +393,7 @@ SortChainerConfig SortChainerConfig::from_parsed(const cli::Parsed& parsed) {
     cfg.max_dist_ref = val;
     cfg.max_dist_query = val;
   }
-  if (parsed.values.count("chain-bw"))
-    cfg.bw = std::stoull(parsed.values.at("chain-bw"));
+  if (parsed.values.count("chain-bw")) cfg.bw = std::stoull(parsed.values.at("chain-bw"));
   if (parsed.values.count("chain-pen-gap"))
     cfg.chn_pen_gap = std::stof(parsed.values.at("chain-pen-gap"));
   if (parsed.values.count("chain-pen-skip"))

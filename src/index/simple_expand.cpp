@@ -92,11 +92,25 @@ FlatGraph simpleExpandFlat(const piru::io::ImportedGraph& imported) {
       char c = orig.sequence[slen - 1 - j];
       char rc_c;
       switch (c) {
-        case 'A': case 'a': rc_c = 'T'; break;
-        case 'T': case 't': rc_c = 'A'; break;
-        case 'C': case 'c': rc_c = 'G'; break;
-        case 'G': case 'g': rc_c = 'C'; break;
-        default: rc_c = 'N'; break;
+        case 'A':
+        case 'a':
+          rc_c = 'T';
+          break;
+        case 'T':
+        case 't':
+          rc_c = 'A';
+          break;
+        case 'C':
+        case 'c':
+          rc_c = 'G';
+          break;
+        case 'G':
+        case 'g':
+          rc_c = 'C';
+          break;
+        default:
+          rc_c = 'N';
+          break;
       }
       pack_base(base_cursor + j, rc_c);
     }
@@ -123,8 +137,8 @@ FlatGraph simpleExpandFlat(const piru::io::ImportedGraph& imported) {
     // Forward edge
     std::uint32_t from_id = static_cast<std::uint32_t>(
         orig_edge.from_reverse ? reverseNodeId(from_idx) : forwardNodeId(from_idx));
-    std::uint32_t to_id = static_cast<std::uint32_t>(
-        orig_edge.to_reverse ? reverseNodeId(to_idx) : forwardNodeId(to_idx));
+    std::uint32_t to_id = static_cast<std::uint32_t>(orig_edge.to_reverse ? reverseNodeId(to_idx)
+                                                                          : forwardNodeId(to_idx));
     adj[from_id].push_back(to_id);
 
     // Reverse complement edge
@@ -170,8 +184,8 @@ FlatGraph simpleExpandFlat(const piru::io::ImportedGraph& imported) {
     for (const auto& step : orig_path.steps) {
       auto it = id_to_index.find(step.segment_id);
       if (it == id_to_index.end()) continue;
-      std::uint32_t nid = static_cast<std::uint32_t>(
-          step.is_reverse ? reverseNodeId(it->second) : forwardNodeId(it->second));
+      std::uint32_t nid = static_cast<std::uint32_t>(step.is_reverse ? reverseNodeId(it->second)
+                                                                     : forwardNodeId(it->second));
       step_data.push_back(nid);
     }
 
@@ -186,20 +200,18 @@ FlatGraph simpleExpandFlat(const piru::io::ImportedGraph& imported) {
       auto idx_it = id_to_index.find(it->segment_id);
       if (idx_it == id_to_index.end()) continue;
       bool flipped = !it->is_reverse;
-      std::uint32_t nid = static_cast<std::uint32_t>(
-          flipped ? reverseNodeId(idx_it->second) : forwardNodeId(idx_it->second));
+      std::uint32_t nid = static_cast<std::uint32_t>(flipped ? reverseNodeId(idx_it->second)
+                                                             : forwardNodeId(idx_it->second));
       step_data.push_back(nid);
     }
   }
   path_step_offset[num_paths] = static_cast<std::uint32_t>(step_data.size());
 
   return FlatGraph::fromPackedArrays(
-      num_nodes, num_paths, total_bases,
-      std::move(seq_packed), std::move(seq_n_mask), std::move(seq_base_offset), std::move(seq_len),
-      std::move(name_data), std::move(name_offset), std::move(name_len),
-      std::move(is_reverse),
-      std::move(edge_target), std::move(out_edge_offset),
-      std::move(step_data), std::move(path_step_offset),
+      num_nodes, num_paths, total_bases, std::move(seq_packed), std::move(seq_n_mask),
+      std::move(seq_base_offset), std::move(seq_len), std::move(name_data), std::move(name_offset),
+      std::move(name_len), std::move(is_reverse), std::move(edge_target),
+      std::move(out_edge_offset), std::move(step_data), std::move(path_step_offset),
       std::move(path_name_offset), std::move(path_name_len), std::move(path_length));
 }
 

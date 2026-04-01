@@ -37,10 +37,9 @@ public:
   // coords[node_id] = linearization coordinates for that node (non-owning)
   // path_lengths[path_id] = length of that path for bounds checking (non-owning)
   GraphChainer(const std::vector<std::vector<index::LinearCoordinate>>& coords,
-               const std::vector<std::size_t>& path_lengths,
-               std::size_t max_dist = 500, std::size_t max_diag_dev = 500,
-               std::size_t min_chain_score = 12, std::size_t max_chains = 10,
-               std::size_t max_skip = 25);
+               const std::vector<std::size_t>& path_lengths, std::size_t max_dist = 500,
+               std::size_t max_diag_dev = 500, std::size_t min_chain_score = 12,
+               std::size_t max_chains = 10, std::size_t max_skip = 25);
 
   ChainResult chain(const std::vector<NodeAnchor>& hits) const override;
   std::string name() const override { return "graph-chain"; }
@@ -59,9 +58,9 @@ private:
   /* DP state per anchor */
   struct DPEntry {
     double score{0.0};
-    int pred{-1};              // predecessor index (-1 = chain start)
-    std::size_t path_id{0};    // chosen path for this anchor
-    std::int64_t ref_coord{0}; // chosen ref_coord on that path
+    int pred{-1};               // predecessor index (-1 = chain start)
+    std::size_t path_id{0};     // chosen path for this anchor
+    std::int64_t ref_coord{0};  // chosen ref_coord on that path
   };
 
   /* Find best transition from anchor j to anchor i across all shared paths.
@@ -78,8 +77,7 @@ private:
                             std::size_t prev_path_id) const;
 
   double anchorScore(const NodeAnchor& anchor) const;
-  std::vector<std::size_t> backtrack(const std::vector<DPEntry>& dp,
-                                     std::size_t best_idx) const;
+  std::vector<std::size_t> backtrack(const std::vector<DPEntry>& dp, std::size_t best_idx) const;
 };
 
 }  // namespace piru::mapping

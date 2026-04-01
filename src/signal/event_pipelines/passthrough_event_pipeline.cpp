@@ -94,7 +94,7 @@ NormalizedSignal PassthroughEventPipeline::process(const io::RawRead& read) cons
 }
 
 NormalizedSignal PassthroughEventPipeline::process_chunk(const float* /*pA*/, std::size_t /*len*/,
-                                                          NormState& /*norm_state*/) const {
+                                                         NormState& /*norm_state*/) const {
   // Passthrough doesn't support chunked processing
   return {};
 }

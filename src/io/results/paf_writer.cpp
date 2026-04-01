@@ -16,8 +16,7 @@ PafWriter::PafWriter(const std::string& path) : out_(path, std::ios::out | std::
 
 PafWriter::~PafWriter() { out_.flush(); }
 
-void PafWriter::write(const mapping::ReadMapResult& result,
-                      const std::string& read_id,
+void PafWriter::write(const mapping::ReadMapResult& result, const std::string& read_id,
                       std::size_t read_length) {
   if (!out_ || result.mappings.empty()) return;
 
@@ -42,9 +41,9 @@ void PafWriter::write(const mapping::ReadMapResult& result,
   for (const auto& a : mapping.anchors) total_anchor_len += a.length;
 
   std::stringstream ss;
-  ss << read_id << '\t' << read_length << '\t' << min_query << '\t' << max_query
-     << "\t+\t*\t0\t" << min_ref << '\t' << max_ref
-     << '\t' << total_anchor_len << '\t' << (max_ref - min_ref) << '\t' << mapping.mapq;
+  ss << read_id << '\t' << read_length << '\t' << min_query << '\t' << max_query << "\t+\t*\t0\t"
+     << min_ref << '\t' << max_ref << '\t' << total_anchor_len << '\t' << (max_ref - min_ref)
+     << '\t' << mapping.mapq;
   ss << "\tcs:i:" << static_cast<int>(mapping.chain_score);
 
   out_ << ss.str() << '\n';

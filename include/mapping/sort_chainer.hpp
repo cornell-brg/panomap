@@ -27,19 +27,19 @@
 namespace piru::mapping {
 
 struct SortChainerConfig {
-  std::size_t max_dist_ref{5000};     // wider than PathChainer (2500) for 1D distortion
+  std::size_t max_dist_ref{5000};  // wider than PathChainer (2500) for 1D distortion
   std::size_t max_dist_query{5000};
-  std::size_t bw{1000};              // wider bandwidth for 1D distortion
+  std::size_t bw{1000};  // wider bandwidth for 1D distortion
   std::size_t min_chain_score{15};
   std::size_t min_chain_anchors{2};
   std::size_t max_chains{10};
   std::size_t max_skip{25};
   std::size_t max_iterations{0};
 
-  float chn_pen_gap{0.4f};           // lower than PathChainer (0.8) for 1D distortion
+  float chn_pen_gap{0.4f};  // lower than PathChainer (0.8) for 1D distortion
   float chn_pen_skip{0.0f};
-  float dd_tolerance_frac{0.0f};     // dead zone: dd below tolerance_frac * dg is penalty-free
-  float chn_pen_ratio{0.5f};         // penalty for ratio inconsistency between consecutive transitions
+  float dd_tolerance_frac{0.0f};  // dead zone: dd below tolerance_frac * dg is penalty-free
+  float chn_pen_ratio{0.5f};      // penalty for ratio inconsistency between consecutive transitions
 
   std::size_t pore_k{0};
 
@@ -53,14 +53,14 @@ struct SortChainerConfig {
  * (1d_ref_coord, read_pos) pairs. Single colinear DP pass.
  */
 class SortChainer : public Chainer {
- public:
+public:
   SortChainer(SortChainerConfig config, const std::vector<float>& node_1d_coords,
               std::vector<std::uint32_t> node_bp_lens);
 
   ChainResult chain(const std::vector<NodeAnchor>& hits) const override;
   std::string name() const override { return "sort-chain"; }
 
- private:
+private:
   SortChainerConfig config_;
   const std::vector<float>& node_1d_coords_;
   std::vector<std::uint32_t> node_bp_lens_;

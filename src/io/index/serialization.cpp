@@ -61,8 +61,7 @@ std::string read_string(std::istream& in) {
 void save_index(const std::string& path, const piru::index::GraphStore& graph_store,
                 const piru::index::SeedStore& seed_store,
                 const std::vector<std::vector<piru::index::LinearCoordinate>>& linearization_coords,
-                const IndexMetadata& metadata,
-                const std::vector<float>& node_1d_coords) {
+                const IndexMetadata& metadata, const std::vector<float>& node_1d_coords) {
   const auto* adj_store = dynamic_cast<const piru::index::AdjListGraphStore*>(&graph_store);
   if (!adj_store) {
     throw std::runtime_error("Unsupported GraphStore backend for serialization");
@@ -205,14 +204,14 @@ void save_index(const std::string& path, const piru::index::GraphStore& graph_st
   auto sz_seeds = pos_end - pos_seeds;
   LOG_INFO("Saved index: " + std::to_string(fg.nodeCount()) + " nodes, " +
            std::to_string(seed_store.size()) + " seeds -> " + path);
-  LOG_INFO("Index breakdown: total=" + std::to_string(total / (1024*1024)) + "MB" +
+  LOG_INFO("Index breakdown: total=" + std::to_string(total / (1024 * 1024)) + "MB" +
            "  header+meta=" + std::to_string(sz_meta * 100 / total) + "%" +
-           "  graph=" + std::to_string(sz_graph * 100 / total) + "%" +
-           " (" + std::to_string(sz_graph / (1024*1024)) + "MB)" +
-           "  linearization=" + std::to_string(sz_linear * 100 / total) + "%" +
-           " (" + std::to_string(sz_linear / (1024*1024)) + "MB)" +
-           "  seeds=" + std::to_string(sz_seeds * 100 / total) + "%" +
-           " (" + std::to_string(sz_seeds / (1024*1024)) + "MB)");
+           "  graph=" + std::to_string(sz_graph * 100 / total) + "%" + " (" +
+           std::to_string(sz_graph / (1024 * 1024)) + "MB)" +
+           "  linearization=" + std::to_string(sz_linear * 100 / total) + "%" + " (" +
+           std::to_string(sz_linear / (1024 * 1024)) + "MB)" +
+           "  seeds=" + std::to_string(sz_seeds * 100 / total) + "%" + " (" +
+           std::to_string(sz_seeds / (1024 * 1024)) + "MB)");
 }
 
 LoadedIndex load_index(const std::string& path) {
@@ -233,9 +232,9 @@ LoadedIndex load_index(const std::string& path) {
   read_pod(in, version);
   uint32_t major = version >> 16;
   if (major != kVersionMajor) {
-    throw std::runtime_error("Incompatible index version " +
-        std::to_string(major) + "." + std::to_string(version & 0xFFFF) +
-        " (expected " + std::to_string(kVersionMajor) + ".x)");
+    throw std::runtime_error("Incompatible index version " + std::to_string(major) + "." +
+                             std::to_string(version & 0xFFFF) + " (expected " +
+                             std::to_string(kVersionMajor) + ".x)");
   }
 
   uint32_t flags;
@@ -339,12 +338,11 @@ LoadedIndex load_index(const std::string& path) {
   // Assemble FlatGraph
   fg = piru::index::FlatGraph::fromRawArrays(
       static_cast<std::uint32_t>(node_count), static_cast<std::uint32_t>(path_count),
-      std::move(seq_data), std::move(seq_offset), std::move(seq_len),
-      std::move(name_data), std::move(name_offset_nodes), std::move(name_len_nodes),
-      std::move(is_reverse),
-      std::move(edge_target), std::move(out_edge_offset),
-      std::move(step_data), std::move(path_step_offset),
-      std::move(path_name_offset), std::move(path_name_len), std::move(path_length));
+      std::move(seq_data), std::move(seq_offset), std::move(seq_len), std::move(name_data),
+      std::move(name_offset_nodes), std::move(name_len_nodes), std::move(is_reverse),
+      std::move(edge_target), std::move(out_edge_offset), std::move(step_data),
+      std::move(path_step_offset), std::move(path_name_offset), std::move(path_name_len),
+      std::move(path_length));
 
   /* 6. Linearization */
 
@@ -422,8 +420,7 @@ LoadedIndex load_index(const std::string& path) {
   }
 
   auto seeds = std::make_unique<piru::index::BucketSeedStore>(
-      std::move(buckets), bucket_bits,
-      std::move(seed_extractor_name), std::move(seed_params),
+      std::move(buckets), bucket_bits, std::move(seed_extractor_name), std::move(seed_params),
       max_freq, freq_threshold, filter_fraction);
 
   /* 8. 1D canonical coordinates (optional, backwards-compatible) */
@@ -441,11 +438,10 @@ LoadedIndex load_index(const std::string& path) {
   }
 
   LOG_INFO("Loaded index: " + std::to_string(node_count) + " nodes, " +
-           std::to_string(seeds->size()) + " seeds (" + std::to_string(total_hits) +
-           " hits) ← " + path);
+           std::to_string(seeds->size()) + " seeds (" + std::to_string(total_hits) + " hits) ← " +
+           path);
 
-  return {std::move(metadata),
-          std::make_unique<piru::index::FlatGraphStore>(std::move(fg)),
+  return {std::move(metadata), std::make_unique<piru::index::FlatGraphStore>(std::move(fg)),
           std::move(seeds), std::move(linearization_coords), std::move(node_1d_coords)};
 }
 

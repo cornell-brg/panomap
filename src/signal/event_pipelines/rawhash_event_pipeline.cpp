@@ -253,7 +253,7 @@ NormalizedSignal RawHashEventPipeline::process(const io::RawRead& read) const {
 }
 
 NormalizedSignal RawHashEventPipeline::process_chunk(const float* pA, std::size_t len,
-                                                      NormState& norm_state) const {
+                                                     NormState& norm_state) const {
   NormalizedSignal result;
   if (len == 0) return result;
 
@@ -265,7 +265,8 @@ NormalizedSignal RawHashEventPipeline::process_chunk(const float* pA, std::size_
   norm_state.n += len;
 
   const double mean = norm_state.sum / static_cast<double>(norm_state.n);
-  const double stddev = std::sqrt(norm_state.sum_sq / static_cast<double>(norm_state.n) - mean * mean);
+  const double stddev =
+      std::sqrt(norm_state.sum_sq / static_cast<double>(norm_state.n) - mean * mean);
   if (stddev < 1e-12) return result;
 
   /* Normalize this chunk and filter outliers */

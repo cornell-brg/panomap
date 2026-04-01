@@ -95,9 +95,8 @@ bool anchors_can_merge(const PathAnchor& a, const PathAnchor& b) {
 }
 
 void anchors_merge_into(PathAnchor& a, const PathAnchor& b) {
-  auto merged_end =
-      std::max(static_cast<std::uint32_t>(a.query_pos + a.length),
-               static_cast<std::uint32_t>(b.query_pos + b.length));
+  auto merged_end = std::max(static_cast<std::uint32_t>(a.query_pos + a.length),
+                             static_cast<std::uint32_t>(b.query_pos + b.length));
   a.length = static_cast<std::uint16_t>(std::min(merged_end - a.query_pos, 0xFFFFu));
 }
 
@@ -169,8 +168,8 @@ std::size_t hash_node_walk(const std::vector<ChainedAnchor>& anchors) {
 }  // namespace
 
 PathChainer::PathChainer(PathChainerConfig config,
-                     const std::vector<std::vector<index::LinearCoordinate>>& coords,
-                     const std::vector<std::size_t>& path_lengths)
+                         const std::vector<std::vector<index::LinearCoordinate>>& coords,
+                         const std::vector<std::size_t>& path_lengths)
     : config_(std::move(config)), coords_(coords), path_lengths_(path_lengths) {}
 
 /* Expand NodeAnchors to PathAnchors grouped by path_id. */
@@ -228,7 +227,7 @@ ChainResult PathChainer::chain(const std::vector<NodeAnchor>& hits) const {
   /* Run DP per path, dedup chains by node walk hash. */
   std::unordered_map<std::size_t, Chain> walk_map;
   std::vector<bool> input_used(hits.size(), false);  // track which input hits are chained
-  DPBuffers dp;  // Reused across paths within this call
+  DPBuffers dp;                                      // Reused across paths within this call
 
   for (std::size_t path_id = 0; path_id < groups.size(); ++path_id) {
     const auto& anchors = groups[path_id];
@@ -247,12 +246,10 @@ ChainResult PathChainer::chain(const std::vector<NodeAnchor>& hits) const {
     }
 
     /* 2. Sort via index permutation, then apply to all SoA arrays */
-    std::sort(dp.order.begin(), dp.order.begin() + n,
-              [&dp](std::uint32_t a, std::uint32_t b) {
-                if (dp.ref_coord[a] != dp.ref_coord[b])
-                  return dp.ref_coord[a] < dp.ref_coord[b];
-                return dp.query_pos[a] < dp.query_pos[b];
-              });
+    std::sort(dp.order.begin(), dp.order.begin() + n, [&dp](std::uint32_t a, std::uint32_t b) {
+      if (dp.ref_coord[a] != dp.ref_coord[b]) return dp.ref_coord[a] < dp.ref_coord[b];
+      return dp.query_pos[a] < dp.query_pos[b];
+    });
     apply_permutation(dp, n);
 
     /* 3. Precompute q_span per anchor */
@@ -324,8 +321,8 @@ ChainResult PathChainer::chain(const std::vector<NodeAnchor>& hits) const {
         auto dg = dr < dq ? dr : dq;
         std::int32_t sc = qs[j] < dg ? qs[j] : dg;
         if (dd || dg > qs[j]) {
-          float lin_pen = chn_pen_gap * static_cast<float>(dd)
-                        + chn_pen_skip * static_cast<float>(dg);
+          float lin_pen =
+              chn_pen_gap * static_cast<float>(dd) + chn_pen_skip * static_cast<float>(dg);
           float log_pen = dd >= 1 ? mg_log2(static_cast<float>(dd + 1)) : 0.0f;
           sc -= static_cast<std::int32_t>(lin_pen + 0.5f * log_pen);
         }
@@ -361,15 +358,15 @@ ChainResult PathChainer::chain(const std::vector<NodeAnchor>& hits) const {
         auto dq_m = static_cast<std::int32_t>(qp[i]) - static_cast<std::int32_t>(qp[max_ii]);
         auto dr_m = static_cast<std::int32_t>(rc[i]) - static_cast<std::int32_t>(rc[max_ii]);
         std::int32_t tmp = std::numeric_limits<std::int32_t>::min();
-        if (dq_m > 0 && dq_m <= max_dist_query &&
-            dr_m > 0 && dr_m <= static_cast<std::int32_t>(max_dist_ref)) {
+        if (dq_m > 0 && dq_m <= max_dist_query && dr_m > 0 &&
+            dr_m <= static_cast<std::int32_t>(max_dist_ref)) {
           auto dd_m = dr_m > dq_m ? dr_m - dq_m : dq_m - dr_m;
           if (dd_m <= bw) {
             auto dg_m = dr_m < dq_m ? dr_m : dq_m;
             tmp = qs[max_ii] < dg_m ? qs[max_ii] : dg_m;
             if (dd_m || dg_m > qs[max_ii]) {
-              float lin_pen = chn_pen_gap * static_cast<float>(dd_m)
-                            + chn_pen_skip * static_cast<float>(dg_m);
+              float lin_pen =
+                  chn_pen_gap * static_cast<float>(dd_m) + chn_pen_skip * static_cast<float>(dg_m);
               float log_pen = dd_m >= 1 ? mg_log2(static_cast<float>(dd_m + 1)) : 0.0f;
               tmp -= static_cast<std::int32_t>(lin_pen + 0.5f * log_pen);
             }
@@ -384,8 +381,7 @@ ChainResult PathChainer::chain(const std::vector<NodeAnchor>& hits) const {
       f[i] = max_f;
       pred[i] = max_j;
       v[i] = (max_j >= 0 && v[max_j] > max_f) ? v[max_j] : max_f;
-      if (max_ii < 0 ||
-          (rc[i] <= rc[max_ii] + max_dist_ref && f[max_ii] < f[i])) {
+      if (max_ii < 0 || (rc[i] <= rc[max_ii] + max_dist_ref && f[max_ii] < f[i])) {
         max_ii = static_cast<std::int64_t>(i);
       }
     }
@@ -514,9 +510,11 @@ std::vector<cli::Option> PathChainerConfig::cli_options() {
       {'\0', "chain-min-score", true, "DP chain: minimum chain score (default: 15)"},
       {'\0', "chain-min-anchors", true, "DP chain: minimum anchors per chain (default: 2)"},
       {'\0', "chain-max-chains", true, "DP chain: max chains to extract (default: 10)"},
-      {'\0', "chain-max-survivor-chains", true, "DP chain: max chains for cross-chunk survivor marking (default: 0 = unlimited)"},
+      {'\0', "chain-max-survivor-chains", true,
+       "DP chain: max chains for cross-chunk survivor marking (default: 0 = unlimited)"},
       {'\0', "chain-max-skip", true, "DP chain: stop after N consecutive skips (default: 25)"},
-      {'\0', "chain-max-iter", true, "DP chain: max predecessors to check per anchor (default: 0 = unlimited)"},
+      {'\0', "chain-max-iter", true,
+       "DP chain: max predecessors to check per anchor (default: 0 = unlimited)"},
       {'\0', "chain-merge", true, "DP chain: merge overlapping chains (default: false)"},
   };
 }
@@ -528,8 +526,7 @@ PathChainerConfig PathChainerConfig::from_parsed(const cli::Parsed& parsed) {
     cfg.max_dist_ref = val;
     cfg.max_dist_query = val;
   }
-  if (parsed.values.count("chain-bw"))
-    cfg.bw = std::stoull(parsed.values.at("chain-bw"));
+  if (parsed.values.count("chain-bw")) cfg.bw = std::stoull(parsed.values.at("chain-bw"));
   if (parsed.values.count("chain-pen-gap"))
     cfg.chn_pen_gap = std::stof(parsed.values.at("chain-pen-gap"));
   if (parsed.values.count("chain-pen-skip"))

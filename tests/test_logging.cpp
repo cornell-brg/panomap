@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MIT
 #include <doctest/doctest.h>
-
 #include <sstream>
 #include <string>
 
@@ -8,9 +7,7 @@
 
 namespace {
 
-bool contains_ansi_escape(const std::string& s) {
-  return s.find("\033[") != std::string::npos;
-}
+bool contains_ansi_escape(const std::string& s) { return s.find("\033[") != std::string::npos; }
 
 struct EnvVarGuard {
   explicit EnvVarGuard(const char* name) : name(name) {

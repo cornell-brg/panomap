@@ -37,8 +37,7 @@ namespace {
 // (2) Relative standout vs next chain (0 to standout_range)
 // (3) Anchor count robustness (caps everything)
 // standout_ratio controls the split: standout gets ratio*60, score gets (1-ratio)*60.
-int computeMapq(double pri_score, double sec_score, std::size_t anchors,
-                float standout_ratio) {
+int computeMapq(double pri_score, double sec_score, std::size_t anchors, float standout_ratio) {
   if (pri_score <= 0.0) return 0;
 
   double score_range = 60.0 * (1.0 - standout_ratio);
@@ -48,8 +47,8 @@ int computeMapq(double pri_score, double sec_score, std::size_t anchors,
   double score_bonus = std::min(score_range, pri_score / 10.0);
 
   // Standout: 0 to standout_range based on primary/secondary ratio
-  double standout = (sec_score <= 0.0) ? standout_range
-      : standout_range * (1.0 - sec_score / pri_score);
+  double standout =
+      (sec_score <= 0.0) ? standout_range : standout_range * (1.0 - sec_score / pri_score);
   standout = std::clamp(standout, 0.0, standout_range);
 
   // Anchor robustness: caps total mapq. <=1 anchor=0, 10+=full
@@ -148,22 +147,25 @@ PipelineComponents BatchMapper::create_components() const {
     if (!config_.path_lengths) {
       throw std::runtime_error("GraphChainer requires path_lengths for bounds checking");
     }
-    comps.chainer = std::make_unique<GraphChainer>(*config_.linearization_coords,
-                                                   *config_.path_lengths);
+    comps.chainer =
+        std::make_unique<GraphChainer>(*config_.linearization_coords, *config_.path_lengths);
   } else if (config_.chainer_backend == "sort-chain") {
     if (!config_.node_1d_coords) {
-      throw std::runtime_error("SortChainer requires node_1d_coords (use --compute-1d-sort or --1d-coords-file at index time)");
+      throw std::runtime_error(
+          "SortChainer requires node_1d_coords (use --compute-1d-sort or --1d-coords-file at index "
+          "time)");
     }
     auto sort_config = SortChainerConfig::from_parsed(config_.chainer_parsed);
     sort_config.pore_k = config_.pore_k;
     std::vector<std::uint32_t> bp_lens(config_.graph_store->nodeCount());
     for (std::size_t i = 0; i < bp_lens.size(); ++i)
       bp_lens[i] = static_cast<std::uint32_t>(config_.graph_store->sequenceLen(i));
-    comps.chainer = std::make_unique<SortChainer>(sort_config, *config_.node_1d_coords,
-                                                   std::move(bp_lens));
+    comps.chainer =
+        std::make_unique<SortChainer>(sort_config, *config_.node_1d_coords, std::move(bp_lens));
   } else if (config_.chainer_backend == "pan-chain") {
     if (!config_.node_1d_coords) {
-      throw std::runtime_error("PanChainer requires node_1d_coords (use --compute-1d-sort or --1d-coords-file)");
+      throw std::runtime_error(
+          "PanChainer requires node_1d_coords (use --compute-1d-sort or --1d-coords-file)");
     }
     if (!config_.linearization_coords) {
       throw std::runtime_error("PanChainer requires linearization_coords");
@@ -173,9 +175,8 @@ PipelineComponents BatchMapper::create_components() const {
     }
     auto pan_config = PanChainerConfig::from_parsed(config_.chainer_parsed);
     pan_config.pore_k = config_.pore_k;
-    comps.chainer = std::make_unique<PanChainer>(pan_config, *config_.node_1d_coords,
-                                                  *config_.linearization_coords,
-                                                  *config_.path_lengths);
+    comps.chainer = std::make_unique<PanChainer>(
+        pan_config, *config_.node_1d_coords, *config_.linearization_coords, *config_.path_lengths);
   } else {
     throw std::runtime_error("Unknown chainer backend: " + config_.chainer_backend);
   }
@@ -304,8 +305,8 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
       std::size_t chunk_len = std::min(chunk_size, total_samples - chunk_start);
 
       /* Per-chunk DSP: event detection, quantization, seed extraction */
-      auto events = components_.event_pipeline->process_chunk(
-          pA.data() + chunk_start, chunk_len, norm_state);
+      auto events =
+          components_.event_pipeline->process_chunk(pA.data() + chunk_start, chunk_len, norm_state);
       auto tokens = components_.fuzzy_quantizer->quantize(events);
       auto seeds = components_.seed_extractor->extract(tokens);
 
@@ -359,17 +360,17 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
           double ref_1d = 0.0;
           if (config_.node_1d_coords && h.node_id < config_.node_1d_coords->size())
             ref_1d = (*config_.node_1d_coords)[h.node_id] + static_cast<double>(h.offset);
-          ofs << h.read_pos << "\t" << ref_1d << "\t" << h.node_id << "\t"
-              << h.offset << "\t" << h.span << "\n";
+          ofs << h.read_pos << "\t" << ref_1d << "\t" << h.node_id << "\t" << h.offset << "\t"
+              << h.span << "\n";
         }
         ofs << "# Chains: " << chunk_chains.chains.size() << "\n";
         for (std::size_t ci = 0; ci < chunk_chains.chains.size(); ++ci) {
           const auto& chain = chunk_chains.chains[ci];
-          ofs << "# chain " << ci << " score=" << chain.score
-              << " anchors=" << chain.anchors.size() << "\n";
+          ofs << "# chain " << ci << " score=" << chain.score << " anchors=" << chain.anchors.size()
+              << "\n";
           for (const auto& a : chain.anchors) {
-            ofs << a.read_pos << "\t" << a.ref_coord << "\t" << a.node_id << "\t"
-                << a.offset << "\t" << a.length << "\tCHAIN=" << ci << "\n";
+            ofs << a.read_pos << "\t" << a.ref_coord << "\t" << a.node_id << "\t" << a.offset
+                << "\t" << a.length << "\tCHAIN=" << ci << "\n";
           }
         }
       });
@@ -392,12 +393,12 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
       /* Early exit: real chain + confident mapq -> stop chunking */
       if (!chunk_chains.chains.empty()) {
         const auto& primary = chunk_chains.chains[0];
-        bool is_real = primary.anchors.size() >= config_.map_min_anchors
-                    && primary.score >= config_.map_min_score;
+        bool is_real = primary.anchors.size() >= config_.map_min_anchors &&
+                       primary.score >= config_.map_min_score;
         if (is_real) {
           double sec = (chunk_chains.chains.size() > 1) ? chunk_chains.chains[1].score : 0.0;
-          int mapq = computeMapq(primary.score, sec, primary.anchors.size(),
-                                config_.map_standout_ratio);
+          int mapq =
+              computeMapq(primary.score, sec, primary.anchors.size(), config_.map_standout_ratio);
           if (mapq >= config_.map_min_mapq_exit) break;
         }
       }
@@ -410,11 +411,10 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
   /* ROI anchor filtering */
   if (config_.roi_filter_anchors && config_.roi_nodes) {
     const auto& roi = *config_.roi_nodes;
-    all_hits.erase(std::remove_if(all_hits.begin(), all_hits.end(),
-                                   [&roi](const NodeAnchor& a) {
-                                     return roi.count(a.node_id) == 0;
-                                   }),
-                   all_hits.end());
+    all_hits.erase(
+        std::remove_if(all_hits.begin(), all_hits.end(),
+                       [&roi](const NodeAnchor& a) { return roi.count(a.node_id) == 0; }),
+        all_hits.end());
   }
 
   /* Final chain with all accumulated hits */
@@ -430,8 +430,7 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
   result.expanded_anchor_count = chain_result.expanded_anchor_count;
   result.chunks_processed = chunks_processed;
   const auto t_end = std::chrono::high_resolution_clock::now();
-  result.processing_time_sec =
-      std::chrono::duration<double>(t_end - t_start).count();
+  result.processing_time_sec = std::chrono::duration<double>(t_end - t_start).count();
 
   for (const auto& chain : chain_result.chains) {
     Mapping mapping;
@@ -445,8 +444,8 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
   /* Mapping decision: noise floor then mapq */
   if (!result.mappings.empty()) {
     // Step 1: noise floor
-    bool is_real = result.mappings[0].anchors.size() >= config_.map_min_anchors
-                && result.mappings[0].chain_score >= config_.map_min_score;
+    bool is_real = result.mappings[0].anchors.size() >= config_.map_min_anchors &&
+                   result.mappings[0].chain_score >= config_.map_min_score;
     if (!is_real) {
       result.mappings.clear();
     }
@@ -456,9 +455,9 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
     // Compute mapq for all mappings
     for (std::size_t i = 0; i < result.mappings.size(); ++i) {
       double sec = (i + 1 < result.mappings.size()) ? result.mappings[i + 1].chain_score : 0.0;
-      result.mappings[i].mapq = computeMapq(
-          result.mappings[i].chain_score, sec, result.mappings[i].anchors.size(),
-          config_.map_standout_ratio);
+      result.mappings[i].mapq =
+          computeMapq(result.mappings[i].chain_score, sec, result.mappings[i].anchors.size(),
+                      config_.map_standout_ratio);
     }
 
     // Step 2: mapq threshold
@@ -486,8 +485,7 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
       double total_bases = 0.0;
 
       for (std::size_t i = 0; i + 1 < anchors.size(); ++i) {
-        double segment_len =
-            static_cast<double>(anchors[i + 1].read_pos - anchors[i].read_pos);
+        double segment_len = static_cast<double>(anchors[i + 1].read_pos - anchors[i].read_pos);
         total_bases += segment_len;
 
         bool cur_in_roi = roi.count(anchors[i].node_id) > 0;
@@ -531,8 +529,7 @@ BatchMapperStats BatchMapper::output_batch(const BatchBuffer& batch) const {
     /* Per-read decision log (to stderr when verbose) */
     double pri_score = is_mapped ? map_result.mappings[0].chain_score : 0.0;
     std::size_t pri_anchors = is_mapped ? map_result.mappings[0].anchors.size() : 0;
-    LOG_DEBUG("DECISION\t" + read.read_id + "\t" +
-              (is_mapped ? "MAP" : "UNMAP") + "\t" +
+    LOG_DEBUG("DECISION\t" + read.read_id + "\t" + (is_mapped ? "MAP" : "UNMAP") + "\t" +
               "chunks=" + std::to_string(map_result.chunks_processed) + "\t" +
               "score=" + std::to_string(static_cast<int>(pri_score)) + "\t" +
               "anchors=" + std::to_string(pri_anchors));

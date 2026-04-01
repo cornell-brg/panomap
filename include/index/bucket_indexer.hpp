@@ -30,28 +30,28 @@
 namespace piru::index {
 
 struct BucketIndexConfig {
-    /* Seed extraction params (must match extractor config) */
-    std::size_t seed_k{6};
-    std::size_t seed_stride{1};
+  /* Seed extraction params (must match extractor config) */
+  std::size_t seed_k{6};
+  std::size_t seed_stride{1};
 
-    /* Parallelization */
-    concurrency::Executor* executor{nullptr};
+  /* Parallelization */
+  concurrency::Executor* executor{nullptr};
 };
 
 struct BucketIndexResult {
-    // BucketSeedStore: per-bucket sorted keys + entries
-    std::unique_ptr<SeedStore> seed_store;
+  // BucketSeedStore: per-bucket sorted keys + entries
+  std::unique_ptr<SeedStore> seed_store;
 
-    // Linear coordinates per node (indexed by node_id)
-    std::vector<std::vector<LinearCoordinate>> linearization_coords;
+  // Linear coordinates per node (indexed by node_id)
+  std::vector<std::vector<LinearCoordinate>> linearization_coords;
 
-    // Path lengths in base pairs (indexed by path_id)
-    std::vector<std::size_t> path_lengths;
+  // Path lengths in base pairs (indexed by path_id)
+  std::vector<std::size_t> path_lengths;
 
-    // Stats
-    std::size_t seeds_interior{0};
-    std::size_t seeds_boundary{0};
-    std::size_t seeds_total{0};
+  // Stats
+  std::size_t seeds_interior{0};
+  std::size_t seeds_boundary{0};
+  std::size_t seeds_total{0};
 };
 
 /**

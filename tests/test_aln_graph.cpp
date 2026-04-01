@@ -22,10 +22,9 @@ TEST_CASE("FlatGraph 2-bit encoding round-trip") {
   std::vector<std::uint64_t> path_length;
 
   auto fg = FlatGraph::fromRawArrays(
-      2, 0, std::move(seq_data), std::move(seq_offset), std::move(seq_len),
-      std::move(name_data), std::move(name_offset), std::move(name_len),
-      std::move(is_reverse), std::move(edge_target), std::move(out_edge_offset),
-      std::move(step_data), std::move(path_step_offset),
+      2, 0, std::move(seq_data), std::move(seq_offset), std::move(seq_len), std::move(name_data),
+      std::move(name_offset), std::move(name_len), std::move(is_reverse), std::move(edge_target),
+      std::move(out_edge_offset), std::move(step_data), std::move(path_step_offset),
       std::move(path_name_offset), std::move(path_name_len), std::move(path_length));
 
   CHECK(fg.nodeCount() == 2);
@@ -68,10 +67,9 @@ TEST_CASE("FlatGraph path accessors") {
   std::vector<std::uint64_t> path_length = {4};
 
   auto fg = FlatGraph::fromRawArrays(
-      2, 1, std::move(seq_data), std::move(seq_offset), std::move(seq_len),
-      std::move(name_data), std::move(name_offset), std::move(name_len),
-      std::move(is_reverse), std::move(edge_target), std::move(out_edge_offset),
-      std::move(step_data), std::move(path_step_offset),
+      2, 1, std::move(seq_data), std::move(seq_offset), std::move(seq_len), std::move(name_data),
+      std::move(name_offset), std::move(name_len), std::move(is_reverse), std::move(edge_target),
+      std::move(out_edge_offset), std::move(step_data), std::move(path_step_offset),
       std::move(path_name_offset), std::move(path_name_len), std::move(path_length));
 
   CHECK(fg.pathCount() == 1);

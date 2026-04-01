@@ -33,12 +33,10 @@ public:
 
   // Build from pre-assembled raw arrays (ASCII sequences -- packed internally)
   static FlatGraph fromRawArrays(
-      std::uint32_t node_count, std::uint32_t path_count,
-      std::vector<char> seq_data, std::vector<std::uint32_t> seq_offset,
-      std::vector<std::uint32_t> seq_len,
+      std::uint32_t node_count, std::uint32_t path_count, std::vector<char> seq_data,
+      std::vector<std::uint32_t> seq_offset, std::vector<std::uint32_t> seq_len,
       std::vector<char> name_data, std::vector<std::uint32_t> name_offset,
-      std::vector<std::uint16_t> name_len,
-      std::vector<std::uint8_t> is_reverse,
+      std::vector<std::uint16_t> name_len, std::vector<std::uint8_t> is_reverse,
       std::vector<std::uint32_t> edge_target, std::vector<std::uint32_t> out_edge_offset,
       std::vector<std::uint32_t> step_data, std::vector<std::uint32_t> path_step_offset,
       std::vector<std::uint32_t> path_name_offset, std::vector<std::uint16_t> path_name_len,
@@ -50,8 +48,7 @@ public:
       std::vector<std::uint8_t> seq_packed, std::vector<std::uint8_t> seq_n_mask,
       std::vector<std::uint32_t> seq_base_offset, std::vector<std::uint32_t> seq_len,
       std::vector<char> name_data, std::vector<std::uint32_t> name_offset,
-      std::vector<std::uint16_t> name_len,
-      std::vector<std::uint8_t> is_reverse,
+      std::vector<std::uint16_t> name_len, std::vector<std::uint8_t> is_reverse,
       std::vector<std::uint32_t> edge_target, std::vector<std::uint32_t> out_edge_offset,
       std::vector<std::uint32_t> step_data, std::vector<std::uint32_t> path_step_offset,
       std::vector<std::uint32_t> path_name_offset, std::vector<std::uint16_t> path_name_len,
@@ -63,10 +60,17 @@ public:
   static constexpr std::uint8_t encode2bit(char c) {
     // Lookup table approach for speed
     switch (c) {
-      case 'C': case 'c': return 1;
-      case 'G': case 'g': return 2;
-      case 'T': case 't': return 3;
-      default: return 0;  // A, N, and anything else
+      case 'C':
+      case 'c':
+        return 1;
+      case 'G':
+      case 'g':
+        return 2;
+      case 'T':
+      case 't':
+        return 3;
+      default:
+        return 0;  // A, N, and anything else
     }
   }
 
@@ -79,9 +83,7 @@ public:
 
   std::uint32_t nodeCount() const { return node_count_; }
 
-  std::size_t seqLen(std::uint32_t node_id) const {
-    return seq_len_[node_id];
-  }
+  std::size_t seqLen(std::uint32_t node_id) const { return seq_len_[node_id]; }
 
   // Get 2-bit encoded base at position within node (0-3, check isN for ambiguity)
   std::uint8_t base2bit(std::uint32_t node_id, std::uint32_t pos) const {
@@ -115,9 +117,7 @@ public:
     return {name_data_.data() + name_offset_[node_id], name_len_[node_id]};
   }
 
-  bool isReverse(std::uint32_t node_id) const {
-    return is_reverse_[node_id] != 0;
-  }
+  bool isReverse(std::uint32_t node_id) const { return is_reverse_[node_id] != 0; }
 
   // Label = original_id + direction suffix (e.g., "42+", "42-")
   std::string label(std::uint32_t node_id) const {
@@ -147,13 +147,9 @@ public:
     return {name_data_.data() + path_name_offset_[path_id], path_name_len_[path_id]};
   }
 
-  std::uint64_t pathLength(std::uint32_t path_id) const {
-    return path_length_[path_id];
-  }
+  std::uint64_t pathLength(std::uint32_t path_id) const { return path_length_[path_id]; }
 
-  void setPathLength(std::uint32_t path_id, std::uint64_t len) {
-    path_length_[path_id] = len;
-  }
+  void setPathLength(std::uint32_t path_id, std::uint64_t len) { path_length_[path_id] = len; }
 
   const std::uint32_t* pathStepsBegin(std::uint32_t path_id) const {
     return step_data_.data() + path_step_offset_[path_id];
@@ -190,10 +186,10 @@ private:
   std::size_t total_bases_{0};
 
   // 2-bit packed sequence arena (4 bases per byte)
-  std::vector<std::uint8_t> seq_packed_;     // ceil(total_bases / 4) bytes
-  std::vector<std::uint8_t> seq_n_mask_;     // 1 bit per base (ceil(total_bases / 8) bytes)
-  std::vector<std::uint32_t> seq_base_offset_; // [node_count] offset in bases
-  std::vector<std::uint32_t> seq_len_;         // [node_count] length in bases
+  std::vector<std::uint8_t> seq_packed_;        // ceil(total_bases / 4) bytes
+  std::vector<std::uint8_t> seq_n_mask_;        // 1 bit per base (ceil(total_bases / 8) bytes)
+  std::vector<std::uint32_t> seq_base_offset_;  // [node_count] offset in bases
+  std::vector<std::uint32_t> seq_len_;          // [node_count] length in bases
 
   // Name arena (shared by nodes and paths)
   std::vector<char> name_data_;
@@ -201,7 +197,7 @@ private:
   std::vector<std::uint16_t> name_len_;     // [node_count] for nodes
 
   // Node metadata
-  std::vector<std::uint8_t> is_reverse_;    // [node_count]
+  std::vector<std::uint8_t> is_reverse_;  // [node_count]
 
   // Edges (CSR: out_edge_offset[node_count+1], edge_target[edge_count])
   std::vector<std::uint32_t> edge_target_;

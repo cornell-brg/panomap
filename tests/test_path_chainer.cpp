@@ -24,15 +24,14 @@ NodeAnchor make_hit(std::size_t node_id, std::size_t offset, std::size_t query_p
 // Helper to create a PathChainer with linearization data.
 // Tests default to min_chain_anchors=1 so single-anchor chains are preserved.
 PathChainer make_chainer(const std::vector<std::vector<LinearCoordinate>>& coords,
-                       const std::vector<std::size_t>& path_lengths, PathChainerConfig config = {}) {
+                         const std::vector<std::size_t>& path_lengths,
+                         PathChainerConfig config = {}) {
   config.min_chain_anchors = 1;
   return PathChainer(std::move(config), coords, path_lengths);
 }
 
 // Convenience accessors for best chain from ChainResult
-const std::vector<ChainedAnchor>& best_anchors(const ChainResult& r) {
-  return r.chains[0].anchors;
-}
+const std::vector<ChainedAnchor>& best_anchors(const ChainResult& r) { return r.chains[0].anchors; }
 double best_score(const ChainResult& r) { return r.chains[0].score; }
 
 }  // namespace

@@ -37,7 +37,7 @@ struct EventPipelineConfig {
   std::optional<float> override_peak_height;
 
   // Chunked processing
-  std::size_t chunk_size{4000};   // Samples per chunk (0 = no chunking, process all at once)
+  std::size_t chunk_size{4000};  // Samples per chunk (0 = no chunking, process all at once)
   std::size_t max_chunks{10};    // Max chunks to process (0 = unlimited, RH2 default: 10)
 
   // Signal trimming parameters

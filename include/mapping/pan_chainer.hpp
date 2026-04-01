@@ -30,19 +30,19 @@
 namespace piru::mapping {
 
 struct PanChainerConfig {
-  std::size_t band_1d{5000};           // 1D band width for candidate selection
-  std::size_t max_dist_ref{2500};      // max ref distance on shared path
-  std::size_t max_dist_query{2500};    // max query distance between anchors
-  std::size_t bw{500};                 // max diagonal deviation |dr - dq|
+  std::size_t band_1d{5000};         // 1D band width for candidate selection
+  std::size_t max_dist_ref{2500};    // max ref distance on shared path
+  std::size_t max_dist_query{2500};  // max query distance between anchors
+  std::size_t bw{500};               // max diagonal deviation |dr - dq|
   std::size_t min_chain_score{15};
   std::size_t min_chain_anchors{2};
   std::size_t max_chains{10};
   std::size_t max_skip{25};
   std::size_t max_iterations{0};
 
-  float chn_pen_gap{0.8f};            // same as PathChainer (exact path coords)
+  float chn_pen_gap{0.8f};  // same as PathChainer (exact path coords)
   float chn_pen_skip{0.0f};
-  float chn_pen_switch{50.0f};       // penalty for switching haplotype path between transitions
+  float chn_pen_switch{50.0f};  // penalty for switching haplotype path between transitions
 
   std::size_t pore_k{0};
 
@@ -57,16 +57,15 @@ struct PanChainerConfig {
  * use different shared paths.
  */
 class PanChainer : public Chainer {
- public:
-  PanChainer(PanChainerConfig config,
-             const std::vector<float>& node_1d_coords,
+public:
+  PanChainer(PanChainerConfig config, const std::vector<float>& node_1d_coords,
              const std::vector<std::vector<index::LinearCoordinate>>& linearization_coords,
              const std::vector<std::size_t>& path_lengths);
 
   ChainResult chain(const std::vector<NodeAnchor>& hits) const override;
   std::string name() const override { return "pan-chain"; }
 
- private:
+private:
   PanChainerConfig config_;
   const std::vector<float>& node_1d_coords_;
   const std::vector<std::vector<index::LinearCoordinate>>& coords_;

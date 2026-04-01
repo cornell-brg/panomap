@@ -16,8 +16,8 @@
 #include <memory>
 #include <stdexcept>
 
-#include "index/flat_graph.hpp"
 #include "index/bucket_indexer.hpp"
+#include "index/flat_graph.hpp"
 #include "index/simple_expand.hpp"
 #include "index/sort_1d.hpp"
 #include "signal/fuzzy_quantizers/fuzzy_quantizer_factory.hpp"
@@ -26,8 +26,7 @@
 
 namespace piru::index {
 
-IndexPipelineResult run_index_pipeline(io::ImportedGraph imported,
-                                       const io::KmerModel& model,
+IndexPipelineResult run_index_pipeline(io::ImportedGraph imported, const io::KmerModel& model,
                                        const IndexPipelineConfig& config) {
   auto stage_start = std::chrono::high_resolution_clock::now();
 
@@ -87,8 +86,8 @@ IndexPipelineResult run_index_pipeline(io::ImportedGraph imported,
   stage_elapsed =
       std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - stage_start)
           .count();
-  LOG_INFO("[2/2] indexed: " + std::to_string(bi_result.seed_store->size()) +
-           " unique seeds [" + std::to_string(stage_elapsed) + "s]");
+  LOG_INFO("[2/2] indexed: " + std::to_string(bi_result.seed_store->size()) + " unique seeds [" +
+           std::to_string(stage_elapsed) + "s]");
 
   path_lengths = std::move(bi_result.path_lengths);
   result.seed_store = std::move(bi_result.seed_store);
@@ -106,9 +105,8 @@ IndexPipelineResult run_index_pipeline(io::ImportedGraph imported,
 
   if (config.compute_1d_sort) {
     auto sort_start = std::chrono::high_resolution_clock::now();
-    result.node_1d_coords = compute_1d_sort(result.graph_store->flat(),
-                                             result.linearization_coords,
-                                             path_lengths, config.sort_1d_config);
+    result.node_1d_coords = compute_1d_sort(result.graph_store->flat(), result.linearization_coords,
+                                            path_lengths, config.sort_1d_config);
     auto sort_elapsed =
         std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - sort_start)
             .count();

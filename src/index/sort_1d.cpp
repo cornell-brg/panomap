@@ -40,9 +40,8 @@ struct PathStep {
 };
 using PathStepIndex = std::vector<std::vector<PathStep>>;
 
-PathStepIndex build_path_step_index(
-    const FlatGraph& /*graph*/,
-    const std::vector<std::vector<LinearCoordinate>>& coords) {
+PathStepIndex build_path_step_index(const FlatGraph& /*graph*/,
+                                    const std::vector<std::vector<LinearCoordinate>>& coords) {
   // Determine number of paths
   std::size_t num_paths = 0;
   for (const auto& node_coords : coords) {
@@ -66,19 +65,15 @@ PathStepIndex build_path_step_index(
   // Sort each path's steps by ref_pos
   for (auto& steps : index) {
     std::sort(steps.begin(), steps.end(),
-              [](const PathStep& a, const PathStep& b) {
-                return a.ref_pos < b.ref_pos;
-              });
+              [](const PathStep& a, const PathStep& b) { return a.ref_pos < b.ref_pos; });
   }
 
   return index;
 }
 
 // Compute learning rate schedule (matches odgi's path_linear_sgd_schedule).
-std::vector<double> compute_schedule(double w_min, double w_max,
-                                     std::uint64_t iter_max,
-                                     std::uint64_t iter_with_max_lr,
-                                     double eps) {
+std::vector<double> compute_schedule(double w_min, double w_max, std::uint64_t iter_max,
+                                     std::uint64_t iter_with_max_lr, double eps) {
   double eta_max = 1.0 / w_min;
   double eta_min = eps / w_max;
   double lambda = std::log(eta_max / eta_min) / static_cast<double>(iter_max - 1);
@@ -86,8 +81,8 @@ std::vector<double> compute_schedule(double w_min, double w_max,
   std::vector<double> etas;
   etas.reserve(iter_max + 1);
   for (std::uint64_t t = 0; t <= iter_max; ++t) {
-    double exp_arg = -lambda * std::abs(static_cast<int64_t>(t) -
-                                        static_cast<int64_t>(iter_with_max_lr));
+    double exp_arg =
+        -lambda * std::abs(static_cast<int64_t>(t) - static_cast<int64_t>(iter_with_max_lr));
     etas.push_back(eta_max * std::exp(exp_arg));
   }
   return etas;
@@ -95,11 +90,10 @@ std::vector<double> compute_schedule(double w_min, double w_max,
 
 }  // namespace
 
-std::vector<float> compute_1d_sort(
-    const FlatGraph& graph,
-    const std::vector<std::vector<LinearCoordinate>>& coords,
-    const std::vector<std::size_t>& /*path_lengths*/,
-    const Sort1DConfig& config) {
+std::vector<float> compute_1d_sort(const FlatGraph& graph,
+                                   const std::vector<std::vector<LinearCoordinate>>& coords,
+                                   const std::vector<std::size_t>& /*path_lengths*/,
+                                   const Sort1DConfig& config) {
   const std::size_t num_nodes = graph.nodeCount();
 
   /* 1. Initialize positions: cumulative sequence length (matches odgi).
@@ -148,9 +142,8 @@ std::vector<float> compute_1d_sort(
   /* 4. Precompute zeta values for Zipfian distributions.
    * Matches odgi: precompute for all jump distances up to space,
    * with quantization beyond space_max. */
-  std::uint64_t num_zetas = (space <= space_max)
-      ? space
-      : space_max + (space - space_max) / space_max + 1;
+  std::uint64_t num_zetas =
+      (space <= space_max) ? space : space_max + (space - space_max) / space_max + 1;
   std::vector<double> zetas(num_zetas + 1, 0.0);
   {
     double zeta_tmp = 0.0;
@@ -169,8 +162,7 @@ std::vector<float> compute_1d_sort(
   double eta_max_val = static_cast<double>(max_path_steps) * static_cast<double>(max_path_steps);
   double w_min = 1.0 / eta_max_val;
   double w_max = 1.0;
-  auto etas = compute_schedule(w_min, w_max, config.iter_max,
-                                config.iter_with_max_lr, config.eps);
+  auto etas = compute_schedule(w_min, w_max, config.iter_max, config.iter_with_max_lr, config.eps);
 
   /* 6. SGD loop */
   std::uint64_t min_term_updates = total_steps;
@@ -257,9 +249,8 @@ std::vector<float> compute_1d_sort(
       std::uint32_t node_j = steps[s_rank_b].node_id;
       if (node_i == node_j) continue;
 
-      double target_dist = std::abs(
-          static_cast<double>(steps[s_rank].ref_pos) -
-          static_cast<double>(steps[s_rank_b].ref_pos));
+      double target_dist = std::abs(static_cast<double>(steps[s_rank].ref_pos) -
+                                    static_cast<double>(steps[s_rank_b].ref_pos));
       if (target_dist == 0) continue;
 
       // Current distance in layout
@@ -298,15 +289,15 @@ std::vector<float> compute_1d_sort(
   // Expand to full node count and convert double -> float32
   std::vector<float> X_full(num_nodes);
   for (std::size_t i = 0; i < num_fwd; ++i) {
-    X_full[i * 2] = static_cast<float>(X[i]);                                   // forward: start
-    X_full[i * 2 + 1] = static_cast<float>(X[i] + static_cast<double>(fwd_lengths[i]));  // reverse: end
+    X_full[i * 2] = static_cast<float>(X[i]);  // forward: start
+    X_full[i * 2 + 1] =
+        static_cast<float>(X[i] + static_cast<double>(fwd_lengths[i]));  // reverse: end
   }
 
   return X_full;
 }
 
-std::vector<float> import_1d_coords_odgi(const std::string& path,
-                                          std::size_t num_nodes) {
+std::vector<float> import_1d_coords_odgi(const std::string& path, std::size_t num_nodes) {
   // odgi TSV: idx\tX\tY, two rows per node (start, end). Y=0 for 1D layout.
   // odgi has N original nodes, we have 2N directional nodes.
   std::size_t num_orig = num_nodes / 2;
@@ -345,15 +336,14 @@ std::vector<float> import_1d_coords_odgi(const std::string& path,
     ++orig_idx;
   }
 
-  LOG_INFO("Imported 1D coords: " + std::to_string(orig_idx) +
-           " original nodes -> " + std::to_string(num_nodes) + " directional nodes");
+  LOG_INFO("Imported 1D coords: " + std::to_string(orig_idx) + " original nodes -> " +
+           std::to_string(num_nodes) + " directional nodes");
 
   return result;
 }
 
-void dump_1d_coords_tsv(const std::string& path,
-                         const std::vector<float>& coords,
-                         const FlatGraph& graph) {
+void dump_1d_coords_tsv(const std::string& path, const std::vector<float>& coords,
+                        const FlatGraph& graph) {
   std::ofstream ofs(path);
   ofs << "node_id\tstart_pos\tend_pos\tseq_len\n";
   for (std::size_t i = 0; i < coords.size(); ++i) {

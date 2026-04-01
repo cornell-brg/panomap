@@ -78,8 +78,7 @@ FuzzyQuantizedSignal Rh2FuzzyQuantizer::quantize(const NormalizedSignal& signal)
     }
 
     // Diff filter: drop events too similar to last emitted
-    if (has_diff && !std::isnan(last_emitted) &&
-        std::fabs(sample - last_emitted) < diff) {
+    if (has_diff && !std::isnan(last_emitted) && std::fabs(sample - last_emitted) < diff) {
       continue;  // skip entirely, don't insert sentinel
     }
 

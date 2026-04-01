@@ -40,8 +40,7 @@ struct LoadedIndex {
 void save_index(const std::string& path, const piru::index::GraphStore& graph,
                 const piru::index::SeedStore& seeds,
                 const std::vector<std::vector<piru::index::LinearCoordinate>>& linearization_coords,
-                const IndexMetadata& metadata,
-                const std::vector<float>& node_1d_coords = {});
+                const IndexMetadata& metadata, const std::vector<float>& node_1d_coords = {});
 
 /** Load an index from a .pirx file. */
 LoadedIndex load_index(const std::string& path);

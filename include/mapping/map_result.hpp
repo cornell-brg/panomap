@@ -49,7 +49,6 @@ struct ReadMapResult {
   double roi_overlap{-1.0};  // -1 = not computed
   bool roi_keep{false};
 
-
   bool mapped() const { return !mappings.empty(); }
   const Mapping* primary() const { return mappings.empty() ? nullptr : &mappings[0]; }
 };

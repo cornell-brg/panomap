@@ -11,12 +11,11 @@
 namespace piru::io {
 
 class ResultWriter {
- public:
+public:
   virtual ~ResultWriter() = default;
 
   // Write results for a single read.
-  virtual void write(const mapping::ReadMapResult& result,
-                     const std::string& read_id,
+  virtual void write(const mapping::ReadMapResult& result, const std::string& read_id,
                      std::size_t read_length) = 0;
 };
 

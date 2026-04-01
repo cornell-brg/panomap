@@ -50,22 +50,22 @@ struct IndexPipelineConfig {
   float fuzzy_fine_min{-2.0f};
   float fuzzy_fine_max{2.0f};
   float fuzzy_fine_range{0.4f};
-  float fuzzy_diff{0.35f};         // Skip events within diff of last emitted (0 = disabled, RH2: 0.35)
+  float fuzzy_diff{0.35f};  // Skip events within diff of last emitted (0 = disabled, RH2: 0.35)
   std::uint32_t fuzzy_n_bins{0};  // 0 = use 2^qbits = 16
 
   /* Seed extraction */
 
-  std::string seed_type{"kmer"};       // "kmer" or "minimizer"
-  std::size_t minimizer_window{5};     // minimizer window (w=1 -> rolling k-mer)
-  std::size_t seed_k{8};               // tokens per seed hash
-  std::size_t seed_stride{1};          // spacing between seeds (1 = dense)
-  double seed_freq_cutoff{1.0};        // keep bottom N% by frequency (1.0 = no index-time filter)
-  double seed_freq_cap{0.25};          // subsample cap for seeds above cutoff
+  std::string seed_type{"kmer"};    // "kmer" or "minimizer"
+  std::size_t minimizer_window{5};  // minimizer window (w=1 -> rolling k-mer)
+  std::size_t seed_k{8};            // tokens per seed hash
+  std::size_t seed_stride{1};       // spacing between seeds (1 = dense)
+  double seed_freq_cutoff{1.0};     // keep bottom N% by frequency (1.0 = no index-time filter)
+  double seed_freq_cap{0.25};       // subsample cap for seeds above cutoff
 
   /* 1D sort (for SortChainer) */
 
-  bool compute_1d_sort{true};      // compute 1D canonical coordinates (always on)
-  Sort1DConfig sort_1d_config;     // SGD parameters
+  bool compute_1d_sort{true};   // compute 1D canonical coordinates (always on)
+  Sort1DConfig sort_1d_config;  // SGD parameters
 
   /* Debug */
 
@@ -102,8 +102,7 @@ struct IndexPipelineResult {
  * Stages: expand graph -> linearize -> squigglize -> quantize -> build seeds.
  */
 // Takes imported by value so it can be freed after graph expansion.
-IndexPipelineResult run_index_pipeline(io::ImportedGraph imported,
-                                       const io::KmerModel& model,
+IndexPipelineResult run_index_pipeline(io::ImportedGraph imported, const io::KmerModel& model,
                                        const IndexPipelineConfig& config);
 
 }  // namespace piru::index

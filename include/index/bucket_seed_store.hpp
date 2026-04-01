@@ -46,10 +46,10 @@ namespace piru::index {
  * thread_local. Singletons are just entries[offset] with count=1.
  */
 struct Bucket {
-  std::vector<std::uint64_t> keys;    // sorted unique hashes
-  std::vector<std::uint32_t> counts;  // hit count per hash
-  std::vector<std::uint32_t> offsets; // offset into entries per hash
-  std::vector<SeedEntry> entries;     // all hits, stable memory
+  std::vector<std::uint64_t> keys;     // sorted unique hashes
+  std::vector<std::uint32_t> counts;   // hit count per hash
+  std::vector<std::uint32_t> offsets;  // offset into entries per hash
+  std::vector<SeedEntry> entries;      // all hits, stable memory
 
   /* Lookup a hash in this bucket. Returns span of matching entries. */
   SeedHitSpan lookup(std::uint64_t hash) const {
@@ -63,10 +63,9 @@ struct Bucket {
 class BucketSeedStore : public SeedStore {
 public:
   BucketSeedStore(std::vector<Bucket> buckets, std::uint32_t bucket_bits,
-                  std::string extractor_name,
-                  std::map<std::string, std::string> params,
-                  std::size_t max_hash_frequency,
-                  std::size_t frequency_threshold, double filter_fraction)
+                  std::string extractor_name, std::map<std::string, std::string> params,
+                  std::size_t max_hash_frequency, std::size_t frequency_threshold,
+                  double filter_fraction)
       : buckets_(std::move(buckets)),
         bucket_bits_(bucket_bits),
         bucket_mask_((1ULL << bucket_bits) - 1),
@@ -93,9 +92,7 @@ public:
 
   std::size_t max_hash_frequency() const override { return max_hash_frequency_; }
   std::size_t frequency_threshold() const override { return frequency_threshold_; }
-  void set_frequency_threshold(std::size_t threshold) override {
-    frequency_threshold_ = threshold;
-  }
+  void set_frequency_threshold(std::size_t threshold) override { frequency_threshold_ = threshold; }
 
   void recompute_threshold_from_percentile(double percentile) override {
     std::vector<std::size_t> freqs;
@@ -107,8 +104,7 @@ public:
     if (freqs.empty()) return;
     std::sort(freqs.begin(), freqs.end());
     double frac = std::clamp(percentile, 0.0, 1.0);
-    auto pos = std::min(static_cast<std::size_t>(freqs.size() * frac),
-                        freqs.size() - 1);
+    auto pos = std::min(static_cast<std::size_t>(freqs.size() * frac), freqs.size() - 1);
     frequency_threshold_ = freqs[pos] + 1;
     filter_fraction_ = percentile;
   }
@@ -133,8 +129,7 @@ public:
     std::size_t n_unique = 0;
     for (std::size_t i = 0; i < sorted_pairs.size();) {
       std::size_t j = i + 1;
-      while (j < sorted_pairs.size() && sorted_pairs[j].first == sorted_pairs[i].first)
-        ++j;
+      while (j < sorted_pairs.size() && sorted_pairs[j].first == sorted_pairs[i].first) ++j;
       ++n_unique;
       i = j;
     }

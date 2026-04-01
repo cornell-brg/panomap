@@ -23,11 +23,11 @@
 #include <vector>
 
 #include "cli/parse.hpp"
+#include "index/sort_1d.hpp"
 #include "io/index/serialization.hpp"
 #include "io/reads/read_provider_factory.hpp"
 #include "io/regions/pira_parser.hpp"
 #include "io/results/result_writer_factory.hpp"
-#include "index/sort_1d.hpp"
 #include "mapping/batch_mapper.hpp"
 #include "mapping/path_chainer.hpp"
 #include "util/logging.hpp"
@@ -79,12 +79,12 @@ int handle_map(const std::vector<std::string>& args) {
        "Max seed hits per read before stopping lookup (default: 100000, 0 = unlimited)"},
       {'\0', "diff", true,
        "Event diff filter: skip events within diff of last emitted (default: 0, RH2: 0.35)"},
-      {'\0', "chunk-size", true,
-       "Signal chunk size in samples (default: 4000, 0 = no chunking)"},
-      {'\0', "max-chunks", true,
-       "Max chunks to process per read (default: 10, 0 = unlimited)"},
-      {'\0', "chainer", true, "Chainer backend: path-chain (default), graph-chain, sort-chain, pan-chain"},
-      {'\0', "1d-coords-file", true, "1D coords TSV for sort-chain/pan-chain (from odgi sort --path-sgd-layout)"},
+      {'\0', "chunk-size", true, "Signal chunk size in samples (default: 4000, 0 = no chunking)"},
+      {'\0', "max-chunks", true, "Max chunks to process per read (default: 10, 0 = unlimited)"},
+      {'\0', "chainer", true,
+       "Chainer backend: path-chain (default), graph-chain, sort-chain, pan-chain"},
+      {'\0', "1d-coords-file", true,
+       "1D coords TSV for sort-chain/pan-chain (from odgi sort --path-sgd-layout)"},
       {'\0', "", false, "\nSignal Processing Options:"},
       {'\0', "event-pipeline", true,
        "Event pipeline backend: rawhash (default), scrappie, passthrough"},
@@ -104,19 +104,14 @@ int handle_map(const std::vector<std::string>& args) {
       {'\0', "chain-genome", true,
        "Whole-genome chaining: classify by ROI overlap fraction >= threshold (default: 0.5)"},
       {'\0', "", false, "\nOutput Options:"},
-      {'o', "output", true,
-       "Output file path (format auto-detected from extension: .paf, .gaf)"},
+      {'o', "output", true, "Output file path (format auto-detected from extension: .paf, .gaf)"},
       {'\0', "output-format", true, "Override output format (paf, gaf)"},
       {'\0', "min-secondary-ratio", true,
        "Min chain score ratio vs primary for secondaries (default: 0.4)"},
-      {'\0', "map-min-anchors", true,
-       "Noise floor: min anchors in primary chain (default: 3)"},
-      {'\0', "map-min-score", true,
-       "Noise floor: min primary chain score (default: 30)"},
-      {'\0', "map-standout-ratio", true,
-       "Fraction of mapq from standout vs score (default: 0.17)"},
-      {'\0', "map-min-mapq-exit", true,
-       "Min mapq to call mapped and early exit (default: 12)"},
+      {'\0', "map-min-anchors", true, "Noise floor: min anchors in primary chain (default: 3)"},
+      {'\0', "map-min-score", true, "Noise floor: min primary chain score (default: 30)"},
+      {'\0', "map-standout-ratio", true, "Fraction of mapq from standout vs score (default: 0.17)"},
+      {'\0', "map-min-mapq-exit", true, "Min mapq to call mapped and early exit (default: 12)"},
   };
   // Append backend-specific CLI options
   auto chain_opts = piru::mapping::PathChainerConfig::cli_options();
@@ -124,15 +119,12 @@ int handle_map(const std::vector<std::string>& args) {
   config.options.push_back(
       {'\0', "chain-dd-tolerance", true,
        "SortChainer: dead zone fraction for diagonal deviation (default: 0.0)"});
-  config.options.push_back(
-      {'\0', "chain-pen-ratio", true,
-       "SortChainer: ratio consistency penalty factor (default: 0.5)"});
-  config.options.push_back(
-      {'\0', "chain-band-1d", true,
-       "PanChainer: 1D band width for candidate selection (default: 5000)"});
-  config.options.push_back(
-      {'\0', "chain-pen-switch", true,
-       "PanChainer: penalty for switching haplotype path (default: 50)"});
+  config.options.push_back({'\0', "chain-pen-ratio", true,
+                            "SortChainer: ratio consistency penalty factor (default: 0.5)"});
+  config.options.push_back({'\0', "chain-band-1d", true,
+                            "PanChainer: 1D band width for candidate selection (default: 5000)"});
+  config.options.push_back({'\0', "chain-pen-switch", true,
+                            "PanChainer: penalty for switching haplotype path (default: 50)"});
 
   config.on_error = [](const std::string&) { std::cerr << "map: invalid option\n"; };
 
@@ -346,8 +338,8 @@ int handle_map(const std::vector<std::string>& args) {
     map_config.node_1d_coords = &node_1d_coords;
   } else if (parsed.values.count("1d-coords-file")) {
     std::size_t num_nodes = graph_store->nodeCount();
-    node_1d_coords = piru::index::import_1d_coords_odgi(
-        parsed.values.at("1d-coords-file"), num_nodes);
+    node_1d_coords =
+        piru::index::import_1d_coords_odgi(parsed.values.at("1d-coords-file"), num_nodes);
     map_config.node_1d_coords = &node_1d_coords;
   }
 
@@ -362,7 +354,8 @@ int handle_map(const std::vector<std::string>& args) {
   map_config.fuzzy_config.fine_min = -2.0f;
   map_config.fuzzy_config.fine_max = 2.0f;
   map_config.fuzzy_config.fine_range = 0.4f;  // must match IndexPipelineConfig::fuzzy_fine_range
-  map_config.fuzzy_config.n_bins = 0;         // must match IndexPipelineConfig::fuzzy_n_bins (0 = use qbits)
+  map_config.fuzzy_config.n_bins =
+      0;  // must match IndexPipelineConfig::fuzzy_n_bins (0 = use qbits)
   if (parsed.values.count("diff")) {
     map_config.fuzzy_config.diff = std::stof(parsed.values.at("diff"));
   }
@@ -461,8 +454,8 @@ int handle_map(const std::vector<std::string>& args) {
       // Percentile mode
       double percentile = std::stod(freq_cap_str.substr(1));
       seed_store->recompute_threshold_from_percentile(percentile);
-      LOG_INFO("Seed freq cap: " + freq_cap_str + " -> threshold=" +
-               std::to_string(seed_store->frequency_threshold()));
+      LOG_INFO("Seed freq cap: " + freq_cap_str +
+               " -> threshold=" + std::to_string(seed_store->frequency_threshold()));
     } else {
       // Absolute mode
       seed_store->set_frequency_threshold(std::stoull(freq_cap_str));
@@ -496,10 +489,10 @@ int handle_map(const std::vector<std::string>& args) {
     map_config.map_standout_ratio = std::stof(parsed.values.at("map-standout-ratio"));
   if (parsed.values.count("map-min-mapq-exit"))
     map_config.map_min_mapq_exit = std::stoi(parsed.values.at("map-min-mapq-exit"));
-  LOG_INFO("Mapping decision: min-anchors=" + std::to_string(map_config.map_min_anchors)
-           + " min-score=" + std::to_string(map_config.map_min_score)
-           + " standout-ratio=" + std::to_string(map_config.map_standout_ratio)
-           + " min-mapq-exit=" + std::to_string(map_config.map_min_mapq_exit));
+  LOG_INFO("Mapping decision: min-anchors=" + std::to_string(map_config.map_min_anchors) +
+           " min-score=" + std::to_string(map_config.map_min_score) +
+           " standout-ratio=" + std::to_string(map_config.map_standout_ratio) +
+           " min-mapq-exit=" + std::to_string(map_config.map_min_mapq_exit));
 
   /* Read processing */
 

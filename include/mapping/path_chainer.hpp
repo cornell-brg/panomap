@@ -24,15 +24,15 @@ namespace piru::mapping {
 // Configuration for path-space chaining algorithm.
 // Scoring aligned with RawHash2/minimap2 (DEV061).
 struct PathChainerConfig {
-  std::size_t max_dist_ref{2500};   // Max ref distance between anchors
-  std::size_t max_dist_query{2500}; // Max query distance between anchors
-  std::size_t bw{500};              // Max diagonal deviation |dr - dq| (bandwidth)
-  std::size_t min_chain_score{15};  // Min score to report a chain
-  std::size_t min_chain_anchors{2}; // Min anchors per chain
-  std::size_t max_chains{10};       // Max chains to extract for decision/reporting
-  std::size_t max_survivor_chains{0}; // Max chains for survivor marking (0 = unlimited)
-  std::size_t max_skip{25};         // Stop after N consecutive failed chain attempts
-  std::size_t max_iterations{0};   // Max predecessors to check per anchor (0 = unlimited)
+  std::size_t max_dist_ref{2500};      // Max ref distance between anchors
+  std::size_t max_dist_query{2500};    // Max query distance between anchors
+  std::size_t bw{500};                 // Max diagonal deviation |dr - dq| (bandwidth)
+  std::size_t min_chain_score{15};     // Min score to report a chain
+  std::size_t min_chain_anchors{2};    // Min anchors per chain
+  std::size_t max_chains{10};          // Max chains to extract for decision/reporting
+  std::size_t max_survivor_chains{0};  // Max chains for survivor marking (0 = unlimited)
+  std::size_t max_skip{25};            // Stop after N consecutive failed chain attempts
+  std::size_t max_iterations{0};       // Max predecessors to check per anchor (0 = unlimited)
 
   float chn_pen_gap{0.8f};   // Gap penalty factor (applied to diagonal deviation)
   float chn_pen_skip{0.0f};  // Skip penalty factor (applied to gap distance)
@@ -60,8 +60,9 @@ class PathChainer : public Chainer {
 public:
   // coords[node_id] = linearization coordinates for that node (non-owning)
   // path_lengths[path_id] = length of that path for bounds checking (non-owning)
-  PathChainer(PathChainerConfig config, const std::vector<std::vector<index::LinearCoordinate>>& coords,
-            const std::vector<std::size_t>& path_lengths);
+  PathChainer(PathChainerConfig config,
+              const std::vector<std::vector<index::LinearCoordinate>>& coords,
+              const std::vector<std::size_t>& path_lengths);
 
   ChainResult chain(const std::vector<NodeAnchor>& hits) const override;
   std::string name() const override { return "path-chain"; }

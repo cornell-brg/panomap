@@ -20,8 +20,7 @@
 
 namespace piru::io {
 
-GafWriter::GafWriter(const std::string& path, const index::FlatGraph& graph,
-                     GafWriterConfig config)
+GafWriter::GafWriter(const std::string& path, const index::FlatGraph& graph, GafWriterConfig config)
     : out_(path, std::ios::out | std::ios::trunc), graph_(graph), config_(std::move(config)) {
   if (!out_) {
     LOG_ERROR("Failed to open GAF output: " + path);
@@ -34,8 +33,7 @@ GafWriter::GafWriter(const std::string& path, const index::FlatGraph& graph,
 
 GafWriter::~GafWriter() { out_.flush(); }
 
-void GafWriter::write(const mapping::ReadMapResult& result,
-                      const std::string& read_id,
+void GafWriter::write(const mapping::ReadMapResult& result, const std::string& read_id,
                       std::size_t read_length) {
   if (!out_ || result.mappings.empty()) return;
 
@@ -119,10 +117,9 @@ void GafWriter::write(const mapping::ReadMapResult& result,
     /* Build GAF line */
     std::stringstream ss;
     const std::string& path_col = graph_path.empty() ? target_path : graph_path;
-    ss << read_id << '\t' << read_length << '\t' << min_query << '\t' << max_query
-       << '\t' << strand << '\t' << path_col << '\t' << target_length
-       << '\t' << min_ref << '\t' << max_ref
-       << '\t' << total_anchor_len << '\t' << (max_ref - min_ref) << '\t' << mapping.mapq;
+    ss << read_id << '\t' << read_length << '\t' << min_query << '\t' << max_query << '\t' << strand
+       << '\t' << path_col << '\t' << target_length << '\t' << min_ref << '\t' << max_ref << '\t'
+       << total_anchor_len << '\t' << (max_ref - min_ref) << '\t' << mapping.mapq;
 
     // pn:Z: path name tag (when graph path is used in col 6)
     if (!graph_path.empty() && !target_path.empty() && target_path != "*") {
@@ -152,13 +149,11 @@ void GafWriter::write(const mapping::ReadMapResult& result,
       ss << "\trd:A:" << (result.roi_keep ? 'K' : 'R');
     }
 
-
     out_ << ss.str() << '\n';
   }
 }
 
-std::string GafWriter::buildPathString(
-    const std::vector<mapping::ChainedAnchor>& anchors) const {
+std::string GafWriter::buildPathString(const std::vector<mapping::ChainedAnchor>& anchors) const {
   if (anchors.empty()) return "*";
 
   std::string path;

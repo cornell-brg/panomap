@@ -38,9 +38,8 @@
 namespace {
 
 // Walk a path to collect node IDs overlapping [bed_start, bed_end).
-std::vector<std::size_t> walkInterval(const piru::index::FlatGraph& graph,
-                                       std::uint32_t path_id,
-                                       std::int64_t bed_start, std::int64_t bed_end) {
+std::vector<std::size_t> walkInterval(const piru::index::FlatGraph& graph, std::uint32_t path_id,
+                                      std::int64_t bed_start, std::int64_t bed_end) {
   std::vector<std::size_t> node_ids;
   std::int64_t offset = 0;
   const auto* steps = graph.pathStepsBegin(path_id);
@@ -110,8 +109,7 @@ int handle_annotate(const std::vector<std::string>& args) {
   const std::string output_path =
       parsed.values.count("output") ? parsed.values.at("output") : "annotate.pira";
   const bool with_nodes = parsed.values.count("with-nodes") > 0;
-  const std::string mode =
-      parsed.values.count("mode") ? parsed.values.at("mode") : "strict";
+  const std::string mode = parsed.values.count("mode") ? parsed.values.at("mode") : "strict";
 
   if (mode != "strict" && mode != "union") {
     LOG_ERROR("annotate: --mode must be 'strict' or 'union'");
@@ -153,8 +151,8 @@ int handle_annotate(const std::vector<std::string>& args) {
   std::vector<float> node_1d_coords;
   bool has_1d = false;
   if (parsed.values.count("1d-coords-file")) {
-    node_1d_coords = piru::index::import_1d_coords_odgi(
-        parsed.values.at("1d-coords-file"), graph.nodeCount());
+    node_1d_coords =
+        piru::index::import_1d_coords_odgi(parsed.values.at("1d-coords-file"), graph.nodeCount());
     has_1d = true;
   }
 
@@ -182,8 +180,8 @@ int handle_annotate(const std::vector<std::string>& args) {
     /* Walk the path to get nodes in BED interval */
     auto walk_nodes = walkInterval(graph, path_idx, rec.start, rec.end);
     if (walk_nodes.empty()) {
-      LOG_WARN("No nodes found for " + rec.path_name + ":" +
-               std::to_string(rec.start) + "-" + std::to_string(rec.end));
+      LOG_WARN("No nodes found for " + rec.path_name + ":" + std::to_string(rec.start) + "-" +
+               std::to_string(rec.end));
       continue;
     }
 
@@ -238,8 +236,7 @@ int handle_annotate(const std::vector<std::string>& args) {
       }
     }
 
-    LOG_INFO("  1d=[" + std::to_string(coord_1d_start) + ", " +
-             std::to_string(coord_1d_end) + ")" +
+    LOG_INFO("  1d=[" + std::to_string(coord_1d_start) + ", " + std::to_string(coord_1d_end) + ")" +
              (with_nodes ? " " + mode + " nodes: " + std::to_string(roi_with_rev.size()) : ""));
 
     /* Write output line */

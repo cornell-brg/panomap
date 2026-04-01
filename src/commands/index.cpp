@@ -74,8 +74,7 @@ int handle_index(const std::vector<std::string>& args) {
       {'\0', "1d-coords-file", true,
        "Import pre-computed 1D coords from TSV (overrides built-in PG-SGD)"},
       {'\0', "", false, "\nDebug Options:"},
-      {'\0', "dump-1d-coords", true,
-       "Dump 1D sort coordinates to TSV file"},
+      {'\0', "dump-1d-coords", true, "Dump 1D sort coordinates to TSV file"},
   };
   config.on_error = [](const std::string&) { std::cerr << "index: invalid option\n"; };
 
@@ -169,9 +168,8 @@ int handle_index(const std::vector<std::string>& args) {
   const double seed_freq_cap = parsed.values.count("seed-freq-cap")
                                    ? std::stod(parsed.values.at("seed-freq-cap"))
                                    : defaults.seed_freq_cap;
-  const float fuzzy_diff = parsed.values.count("diff")
-                               ? std::stof(parsed.values.at("diff"))
-                               : defaults.fuzzy_diff;
+  const float fuzzy_diff =
+      parsed.values.count("diff") ? std::stof(parsed.values.at("diff")) : defaults.fuzzy_diff;
 
   std::string output_base = std::filesystem::path(graph_path).stem().string();
   if (parsed.values.count("output")) {
@@ -208,17 +206,16 @@ int handle_index(const std::vector<std::string>& args) {
   // Import pre-computed 1D coords (overrides --compute-1d-sort)
   if (parsed.values.count("1d-coords-file")) {
     std::size_t num_nodes = result.graph_store->nodeCount();
-    result.node_1d_coords = piru::index::import_1d_coords_odgi(
-        parsed.values.at("1d-coords-file"), num_nodes);
+    result.node_1d_coords =
+        piru::index::import_1d_coords_odgi(parsed.values.at("1d-coords-file"), num_nodes);
   }
 
   // Dump 1D coordinates if requested
   if (parsed.values.count("dump-1d-coords") && !result.node_1d_coords.empty()) {
     auto* adj_store = dynamic_cast<piru::index::AdjListGraphStore*>(result.graph_store.get());
     if (adj_store) {
-      piru::index::dump_1d_coords_tsv(parsed.values.at("dump-1d-coords"),
-                                       result.node_1d_coords,
-                                       adj_store->flat());
+      piru::index::dump_1d_coords_tsv(parsed.values.at("dump-1d-coords"), result.node_1d_coords,
+                                      adj_store->flat());
     }
   }
 
@@ -236,8 +233,7 @@ int handle_index(const std::vector<std::string>& args) {
   metadata.pore_k = result.pore_k;
   metadata.fuzzy_quantizer = result.fuzzy_quantizer;
   piru::io::index::save_index(output_path, *result.graph_store, *result.seed_store,
-                              result.linearization_coords, metadata,
-                              result.node_1d_coords);
+                              result.linearization_coords, metadata, result.node_1d_coords);
 
   LOG_INFO("Index written to " + output_path);
 

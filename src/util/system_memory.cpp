@@ -2,9 +2,9 @@
 
 #include "util/system_memory.hpp"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
-#include <algorithm>
 
 namespace piru::util {
 
@@ -31,8 +31,8 @@ std::size_t getAvailableMemoryBytes() {
 std::size_t computeMemoryBudget(std::size_t max_memory, double fraction) {
   std::size_t available = getAvailableMemoryBytes();
   std::size_t budget = available > 0
-      ? static_cast<std::size_t>(static_cast<double>(available) * fraction)
-      : static_cast<std::size_t>(8ULL * 1024 * 1024 * 1024);  // 8 GB fallback
+                           ? static_cast<std::size_t>(static_cast<double>(available) * fraction)
+                           : static_cast<std::size_t>(8ULL * 1024 * 1024 * 1024);  // 8 GB fallback
 
   if (max_memory > 0) {
     budget = std::min(budget, max_memory);
@@ -94,11 +94,9 @@ void printProgress(std::size_t done, std::size_t total, const std::string& label
 
   char buf[256];
   if (!label.empty()) {
-    snprintf(buf, sizeof(buf), "\r       [%s] %zu/%zu %s",
-             bar.c_str(), done, total, label.c_str());
+    snprintf(buf, sizeof(buf), "\r       [%s] %zu/%zu %s", bar.c_str(), done, total, label.c_str());
   } else {
-    snprintf(buf, sizeof(buf), "\r       [%s] %zu/%zu",
-             bar.c_str(), done, total);
+    snprintf(buf, sizeof(buf), "\r       [%s] %zu/%zu", bar.c_str(), done, total);
   }
   fprintf(stderr, "%s", buf);
   if (done >= total) fprintf(stderr, "\n");

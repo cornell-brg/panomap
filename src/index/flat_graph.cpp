@@ -7,12 +7,10 @@
 namespace piru::index {
 
 FlatGraph FlatGraph::fromRawArrays(
-    std::uint32_t node_count, std::uint32_t path_count,
-    std::vector<char> seq_data, std::vector<std::uint32_t> seq_offset,
-    std::vector<std::uint32_t> seq_len,
+    std::uint32_t node_count, std::uint32_t path_count, std::vector<char> seq_data,
+    std::vector<std::uint32_t> seq_offset, std::vector<std::uint32_t> seq_len,
     std::vector<char> name_data, std::vector<std::uint32_t> name_offset,
-    std::vector<std::uint16_t> name_len,
-    std::vector<std::uint8_t> is_reverse,
+    std::vector<std::uint16_t> name_len, std::vector<std::uint8_t> is_reverse,
     std::vector<std::uint32_t> edge_target, std::vector<std::uint32_t> out_edge_offset,
     std::vector<std::uint32_t> step_data, std::vector<std::uint32_t> path_step_offset,
     std::vector<std::uint32_t> path_name_offset, std::vector<std::uint16_t> path_name_len,
@@ -84,8 +82,7 @@ FlatGraph FlatGraph::fromPackedArrays(
     std::vector<std::uint8_t> seq_packed, std::vector<std::uint8_t> seq_n_mask,
     std::vector<std::uint32_t> seq_base_offset, std::vector<std::uint32_t> seq_len,
     std::vector<char> name_data, std::vector<std::uint32_t> name_offset,
-    std::vector<std::uint16_t> name_len,
-    std::vector<std::uint8_t> is_reverse,
+    std::vector<std::uint16_t> name_len, std::vector<std::uint8_t> is_reverse,
     std::vector<std::uint32_t> edge_target, std::vector<std::uint32_t> out_edge_offset,
     std::vector<std::uint32_t> step_data, std::vector<std::uint32_t> path_step_offset,
     std::vector<std::uint32_t> path_name_offset, std::vector<std::uint16_t> path_name_len,

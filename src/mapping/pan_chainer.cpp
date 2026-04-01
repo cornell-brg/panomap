@@ -107,9 +107,7 @@ struct AnchorPathIndex {
           bitmap[k * words_per_anchor + pid / 64] |= (1ULL << (pid % 64));
         }
         std::sort(coords.data() + offsets[k], coords.data() + pos,
-                  [](const PathCoord& a, const PathCoord& b) {
-                    return a.path_id < b.path_id;
-                  });
+                  [](const PathCoord& a, const PathCoord& b) { return a.path_id < b.path_id; });
       }
     }
     offsets[na] = static_cast<std::uint32_t>(pos);
@@ -118,12 +116,12 @@ struct AnchorPathIndex {
 
 /* SoA buffers for canonical 1D coords, query pos, and DP state. */
 struct DPBuffers {
-  std::vector<double> canon_coord;    // canonical 1D position (for sort/band)
+  std::vector<double> canon_coord;  // canonical 1D position (for sort/band)
   std::vector<std::uint16_t> query_pos;
   std::vector<std::uint16_t> span;
-  std::vector<std::uint32_t> src_idx; // back-pointer to original hits[]
+  std::vector<std::uint32_t> src_idx;  // back-pointer to original hits[]
 
-  std::vector<std::int32_t> q_span;   // pore_k + span - 1
+  std::vector<std::int32_t> q_span;  // pore_k + span - 1
 
   std::vector<std::int32_t> f, v, pred;
   std::vector<std::uint32_t> chain_path;  // path_id of winning transition ending here
@@ -164,11 +162,9 @@ void apply_permutation(DPBuffers& dp, std::size_t n) {
 /* Score transition j->i on a specific shared path.
  * Returns net score (reward - penalty), or INT32_MIN if invalid.
  * reward = min(q_span_j, dg), penalty = gap cost. Same as minimap2/PathChainer. */
-inline std::int32_t score_transition(
-    std::int64_t ref_j, std::int64_t ref_i, std::int32_t dq,
-    std::int32_t q_span_j,
-    std::int32_t max_dist_ref, std::int32_t bw,
-    float chn_pen_gap, float chn_pen_skip) {
+inline std::int32_t score_transition(std::int64_t ref_j, std::int64_t ref_i, std::int32_t dq,
+                                     std::int32_t q_span_j, std::int32_t max_dist_ref,
+                                     std::int32_t bw, float chn_pen_gap, float chn_pen_skip) {
   auto dr = static_cast<std::int32_t>(ref_i - ref_j);
   if (dr <= 0 || dr > max_dist_ref) return std::numeric_limits<std::int32_t>::min();
 
@@ -178,8 +174,7 @@ inline std::int32_t score_transition(
   auto dg = dr < dq ? dr : dq;
   std::int32_t sc = q_span_j < dg ? q_span_j : dg;
   if (dd || dg > q_span_j) {
-    float lin_pen = chn_pen_gap * static_cast<float>(dd)
-                  + chn_pen_skip * static_cast<float>(dg);
+    float lin_pen = chn_pen_gap * static_cast<float>(dd) + chn_pen_skip * static_cast<float>(dg);
     float log_pen = dd >= 1 ? mg_log2(static_cast<float>(dd + 1)) : 0.0f;
     sc -= static_cast<std::int32_t>(lin_pen + 0.5f * log_pen);
   }
@@ -188,12 +183,14 @@ inline std::int32_t score_transition(
 
 }  // namespace
 
-PanChainer::PanChainer(PanChainerConfig config,
-                       const std::vector<float>& node_1d_coords,
-                       const std::vector<std::vector<index::LinearCoordinate>>& linearization_coords,
-                       const std::vector<std::size_t>& path_lengths)
-    : config_(std::move(config)), node_1d_coords_(node_1d_coords),
-      coords_(linearization_coords), path_lengths_(path_lengths) {}
+PanChainer::PanChainer(
+    PanChainerConfig config, const std::vector<float>& node_1d_coords,
+    const std::vector<std::vector<index::LinearCoordinate>>& linearization_coords,
+    const std::vector<std::size_t>& path_lengths)
+    : config_(std::move(config)),
+      node_1d_coords_(node_1d_coords),
+      coords_(linearization_coords),
+      path_lengths_(path_lengths) {}
 
 ChainResult PanChainer::chain(const std::vector<NodeAnchor>& hits) const {
   ChainResult result;
@@ -221,12 +218,10 @@ ChainResult PanChainer::chain(const std::vector<NodeAnchor>& hits) const {
 
   /* 2. Sort by canonical 1D coord */
 
-  std::sort(dp.order.begin(), dp.order.begin() + na,
-            [&dp](std::uint32_t a, std::uint32_t b) {
-              if (dp.canon_coord[a] != dp.canon_coord[b])
-                return dp.canon_coord[a] < dp.canon_coord[b];
-              return dp.query_pos[a] < dp.query_pos[b];
-            });
+  std::sort(dp.order.begin(), dp.order.begin() + na, [&dp](std::uint32_t a, std::uint32_t b) {
+    if (dp.canon_coord[a] != dp.canon_coord[b]) return dp.canon_coord[a] < dp.canon_coord[b];
+    return dp.query_pos[a] < dp.query_pos[b];
+  });
   apply_permutation(dp, na);
 
   /* 3. Build per-anchor path coord index (CSR-like, sorted by path_id) */
@@ -286,7 +281,10 @@ ChainResult PanChainer::chain(const std::vector<NodeAnchor>& hits) const {
       if (max_iter > 0 && ++num_iter > max_iter) break;
 
       auto dq = static_cast<std::int32_t>(qp[i]) - static_cast<std::int32_t>(qp[j]);
-      if (dq <= 0 || dq > max_dist_query) { ++num_skipped; continue; }
+      if (dq <= 0 || dq > max_dist_query) {
+        ++num_skipped;
+        continue;
+      }
 
       // Quick bitmap check: skip if no shared path possible
       if (!path_idx.shares_path(i, j)) continue;
@@ -302,22 +300,28 @@ ChainResult PanChainer::chain(const std::vector<NodeAnchor>& hits) const {
         while (ip < i_end && jp < j_end) {
           auto pid_i = path_idx.coords[ip].path_id;
           auto pid_j = path_idx.coords[jp].path_id;
-          if (pid_i < pid_j) { ++ip; continue; }
-          if (pid_j < pid_i) { ++jp; continue; }
+          if (pid_i < pid_j) {
+            ++ip;
+            continue;
+          }
+          if (pid_j < pid_i) {
+            ++jp;
+            continue;
+          }
           // Shared path found -- score transition (returns net = reward - penalty)
-          auto net = score_transition(
-              path_idx.coords[jp].ref_coord, path_idx.coords[ip].ref_coord,
-              dq, qs[j], max_dist_ref, bw, chn_pen_gap, chn_pen_skip);
+          auto net = score_transition(path_idx.coords[jp].ref_coord, path_idx.coords[ip].ref_coord,
+                                      dq, qs[j], max_dist_ref, bw, chn_pen_gap, chn_pen_skip);
           // Subtract switch penalty if chain at j was on a different path
-          if (net > std::numeric_limits<std::int32_t>::min()
-              && chain_path[j] != UINT32_MAX && chain_path[j] != pid_i) {
+          if (net > std::numeric_limits<std::int32_t>::min() && chain_path[j] != UINT32_MAX &&
+              chain_path[j] != pid_i) {
             net -= chn_pen_switch;
           }
           if (net > best_net) {
             best_net = net;
             best_pid = pid_i;
           }
-          ++ip; ++jp;
+          ++ip;
+          ++jp;
         }
       }
 
@@ -351,8 +355,8 @@ ChainResult PanChainer::chain(const std::vector<NodeAnchor>& hits) const {
     std::size_t best_idx = 0;
     std::int32_t best_score = std::numeric_limits<std::int32_t>::min();
     for (std::size_t i = 0; i < na; ++i) {
-      if (!used[i] && f[i] >= static_cast<std::int32_t>(config_.min_chain_score)
-          && v[i] <= f[i] && f[i] > best_score) {
+      if (!used[i] && f[i] >= static_cast<std::int32_t>(config_.min_chain_score) && v[i] <= f[i] &&
+          f[i] > best_score) {
         best_score = f[i];
         best_idx = i;
       }
@@ -366,7 +370,10 @@ ChainResult PanChainer::chain(const std::vector<NodeAnchor>& hits) const {
       std::int32_t cur = static_cast<std::int32_t>(best_idx);
       while (cur != -1) {
         auto ci = static_cast<std::size_t>(cur);
-        if (used[ci]) { shared_prefix = true; break; }
+        if (used[ci]) {
+          shared_prefix = true;
+          break;
+        }
         used[ci] = true;
         chain_indices.push_back(ci);
         cur = pred[cur];
@@ -393,10 +400,17 @@ ChainResult PanChainer::chain(const std::vector<NodeAnchor>& hits) const {
       while (ap < a_end && bp < b_end) {
         auto pa = path_idx.coords[ap].path_id;
         auto pb = path_idx.coords[bp].path_id;
-        if (pa < pb) { ++ap; continue; }
-        if (pb < pa) { ++bp; continue; }
+        if (pa < pb) {
+          ++ap;
+          continue;
+        }
+        if (pb < pa) {
+          ++bp;
+          continue;
+        }
         path_votes.push_back(pa);
-        ++ap; ++bp;
+        ++ap;
+        ++bp;
       }
     }
 
@@ -406,10 +420,15 @@ ChainResult PanChainer::chain(const std::vector<NodeAnchor>& hits) const {
       std::sort(path_votes.begin(), path_votes.end());
       std::uint32_t cur_pid = path_votes[0], cur_count = 1, best_count = 0;
       for (std::size_t k = 1; k < path_votes.size(); ++k) {
-        if (path_votes[k] == cur_pid) { ++cur_count; }
-        else {
-          if (cur_count > best_count) { best_count = cur_count; best_path = cur_pid; }
-          cur_pid = path_votes[k]; cur_count = 1;
+        if (path_votes[k] == cur_pid) {
+          ++cur_count;
+        } else {
+          if (cur_count > best_count) {
+            best_count = cur_count;
+            best_path = cur_pid;
+          }
+          cur_pid = path_votes[k];
+          cur_count = 1;
         }
       }
       if (cur_count > best_count) best_path = cur_pid;
@@ -460,8 +479,7 @@ PanChainerConfig PanChainerConfig::from_parsed(const cli::Parsed& parsed) {
     cfg.max_dist_ref = val;
     cfg.max_dist_query = val;
   }
-  if (parsed.values.count("chain-bw"))
-    cfg.bw = std::stoull(parsed.values.at("chain-bw"));
+  if (parsed.values.count("chain-bw")) cfg.bw = std::stoull(parsed.values.at("chain-bw"));
   if (parsed.values.count("chain-pen-gap"))
     cfg.chn_pen_gap = std::stof(parsed.values.at("chain-pen-gap"));
   if (parsed.values.count("chain-pen-skip"))

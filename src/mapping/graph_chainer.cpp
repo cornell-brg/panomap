@@ -62,7 +62,8 @@ GraphChainer::Transition GraphChainer::bestTransition(const NodeAnchor& j, const
       if (static_cast<std::size_t>(delta_ref) > max_dist_) continue;
 
       // already checked by caller, but compute for gap cost
-      auto delta_query = static_cast<std::int64_t>(i.read_pos) - static_cast<std::int64_t>(j.read_pos);
+      auto delta_query =
+          static_cast<std::int64_t>(i.read_pos) - static_cast<std::int64_t>(j.read_pos);
       if (delta_query <= 0) continue;
 
       /* Diagonal deviation */
@@ -113,7 +114,7 @@ double GraphChainer::anchorScore(const NodeAnchor& anchor) const {
 }
 
 std::vector<std::size_t> GraphChainer::backtrack(const std::vector<DPEntry>& dp,
-                                                  std::size_t best_idx) const {
+                                                 std::size_t best_idx) const {
   std::vector<std::size_t> indices;
   int idx = static_cast<int>(best_idx);
   while (idx >= 0) {
@@ -162,10 +163,8 @@ ChainResult GraphChainer::chain(const std::vector<NodeAnchor>& hits) const {
     for (const auto& lc : coords_[a.node_id]) {
       auto ref = lc.ref_coord + static_cast<std::int64_t>(a.offset);
       path_lists[lc.path_id].push_back(
-          {ref, a.read_pos, static_cast<std::uint32_t>(ii),
-           static_cast<std::uint16_t>(a.span)});
-      anchor_paths[ii].push_back(
-          {static_cast<std::uint32_t>(lc.path_id), ref});
+          {ref, a.read_pos, static_cast<std::uint32_t>(ii), static_cast<std::uint16_t>(a.span)});
+      anchor_paths[ii].push_back({static_cast<std::uint32_t>(lc.path_id), ref});
     }
   }
   for (auto& plist : path_lists) {
@@ -204,15 +203,21 @@ ChainResult GraphChainer::chain(const std::vector<NodeAnchor>& hits) const {
         ++dbg_candidates;
 
         // Must be a predecessor (earlier in read_pos order)
-        auto delta_query = static_cast<std::int64_t>(anchor_i.read_pos) -
-                           static_cast<std::int64_t>(it->read_pos);
+        auto delta_query =
+            static_cast<std::int64_t>(anchor_i.read_pos) - static_cast<std::int64_t>(it->read_pos);
         if (delta_query <= 0) continue;
-        if (static_cast<std::size_t>(delta_query) > max_dist_) { ++num_skipped; continue; }
+        if (static_cast<std::size_t>(delta_query) > max_dist_) {
+          ++num_skipped;
+          continue;
+        }
 
         auto delta_ref = pi.ref_coord - it->ref_coord;
 
         auto diag_dev = std::abs(delta_ref - delta_query);
-        if (static_cast<std::size_t>(diag_dev) > max_diag_dev_) { ++num_skipped; continue; }
+        if (static_cast<std::size_t>(diag_dev) > max_diag_dev_) {
+          ++num_skipped;
+          continue;
+        }
 
         num_skipped = 0;
         ++dbg_valid;
@@ -239,10 +244,9 @@ ChainResult GraphChainer::chain(const std::vector<NodeAnchor>& hits) const {
         if (pi.path_id == dp[it->dp_idx].path_id) cost -= 0.1;
 
         /* Matching bonus */
-        double match_bonus =
-            std::min({anchorScore(anchor_i),
-                      static_cast<double>(std::max<std::int64_t>(0, delta_query)),
-                      static_cast<double>(std::max<std::int64_t>(0, delta_ref))});
+        double match_bonus = std::min({anchorScore(anchor_i),
+                                       static_cast<double>(std::max<std::int64_t>(0, delta_query)),
+                                       static_cast<double>(std::max<std::int64_t>(0, delta_ref))});
         double score = dp[it->dp_idx].score + match_bonus - cost;
 
         if (score > best_entry.score) {
@@ -269,11 +273,8 @@ ChainResult GraphChainer::chain(const std::vector<NodeAnchor>& hits) const {
   for (std::size_t i = 0; i < n; ++i) {
     if (dp[i].score > best_dp) best_dp = dp[i].score;
   }
-  std::cerr << "[GraphChainer] anchors=" << n
-            << " candidates=" << dbg_candidates
-            << " valid=" << dbg_valid
-            << " improved=" << dbg_improved
-            << " best=" << best_dp
+  std::cerr << "[GraphChainer] anchors=" << n << " candidates=" << dbg_candidates
+            << " valid=" << dbg_valid << " improved=" << dbg_improved << " best=" << best_dp
             << "\n";
 
   /* Multi-chain extraction */

@@ -20,16 +20,14 @@ struct GafWriterConfig {
 };
 
 class GafWriter : public ResultWriter {
- public:
-  GafWriter(const std::string& path, const index::FlatGraph& graph,
-            GafWriterConfig config = {});
+public:
+  GafWriter(const std::string& path, const index::FlatGraph& graph, GafWriterConfig config = {});
   ~GafWriter() override;
 
-  void write(const mapping::ReadMapResult& result,
-             const std::string& read_id,
+  void write(const mapping::ReadMapResult& result, const std::string& read_id,
              std::size_t read_length) override;
 
- private:
+private:
   // Build GAF-style node walk string (">n1>n2>n3")
   std::string buildPathString(const std::vector<mapping::ChainedAnchor>& anchors) const;
 
