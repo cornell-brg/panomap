@@ -101,7 +101,8 @@ struct IndexPipelineResult {
  *
  * Stages: expand graph -> linearize -> squigglize -> quantize -> build seeds.
  */
-IndexPipelineResult run_index_pipeline(const io::ImportedGraph& imported,
+// Takes imported by value so it can be freed after graph expansion.
+IndexPipelineResult run_index_pipeline(io::ImportedGraph imported,
                                        const io::KmerModel& model,
                                        const IndexPipelineConfig& config);
 

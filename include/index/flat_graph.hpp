@@ -44,6 +44,19 @@ public:
       std::vector<std::uint32_t> path_name_offset, std::vector<std::uint16_t> path_name_len,
       std::vector<std::uint64_t> path_length);
 
+  // Build from pre-packed 2-bit arrays (no ASCII intermediate)
+  static FlatGraph fromPackedArrays(
+      std::uint32_t node_count, std::uint32_t path_count, std::size_t total_bases,
+      std::vector<std::uint8_t> seq_packed, std::vector<std::uint8_t> seq_n_mask,
+      std::vector<std::uint32_t> seq_base_offset, std::vector<std::uint32_t> seq_len,
+      std::vector<char> name_data, std::vector<std::uint32_t> name_offset,
+      std::vector<std::uint16_t> name_len,
+      std::vector<std::uint8_t> is_reverse,
+      std::vector<std::uint32_t> edge_target, std::vector<std::uint32_t> out_edge_offset,
+      std::vector<std::uint32_t> step_data, std::vector<std::uint32_t> path_step_offset,
+      std::vector<std::uint32_t> path_name_offset, std::vector<std::uint16_t> path_name_len,
+      std::vector<std::uint64_t> path_length);
+
   // --- 2-bit encoding helpers ---
 
   // Encode: A=0, C=1, G=2, T=3. N and others map to 0 (check n_mask).

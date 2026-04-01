@@ -26,7 +26,7 @@
 
 namespace piru::index {
 
-IndexPipelineResult run_index_pipeline(const io::ImportedGraph& imported,
+IndexPipelineResult run_index_pipeline(io::ImportedGraph imported,
                                        const io::KmerModel& model,
                                        const IndexPipelineConfig& config) {
   auto stage_start = std::chrono::high_resolution_clock::now();
@@ -35,11 +35,14 @@ IndexPipelineResult run_index_pipeline(const io::ImportedGraph& imported,
 
   auto flat_graph = simpleExpandFlat(imported);
 
+  // Free imported graph ASCII sequences (~3.1 GB for hg38)
+  imported = io::ImportedGraph{};
+
   auto stage_elapsed =
       std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - stage_start)
           .count();
   LOG_INFO(
-      "[1/2] Transforming graph to directional graph: " + std::to_string(flat_graph.nodeCount()) +
+      "[1/2] Transformed graph to directional graph: " + std::to_string(flat_graph.nodeCount()) +
       " nodes, " + std::to_string(flat_graph.edgeCount()) + " edges, " +
       std::to_string(flat_graph.pathCount()) + " paths [" + std::to_string(stage_elapsed) + "s]");
 

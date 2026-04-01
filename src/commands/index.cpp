@@ -203,7 +203,7 @@ int handle_index(const std::vector<std::string>& args) {
 
   index_config.executor = executor.get();
 
-  auto result = piru::index::run_index_pipeline(imported, *model, index_config);
+  auto result = piru::index::run_index_pipeline(std::move(imported), *model, index_config);
 
   // Import pre-computed 1D coords (overrides --compute-1d-sort)
   if (parsed.values.count("1d-coords-file")) {

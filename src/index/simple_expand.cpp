@@ -39,40 +39,68 @@ FlatGraph simpleExpandFlat(const piru::io::ImportedGraph& imported) {
   const std::size_t num_orig = imported.nodes.size();
   const std::uint32_t num_nodes = static_cast<std::uint32_t>(num_orig * 2);
 
-  // --- Step 1: Build node arenas ---
-  std::vector<char> seq_data;
+  // --- Step 1: Build node arenas (pack 2-bit directly, no ASCII intermediate) ---
   std::vector<char> name_data;
-  std::vector<std::uint32_t> seq_offset(num_nodes);
   std::vector<std::uint32_t> seq_len(num_nodes);
   std::vector<std::uint32_t> name_offset(num_nodes);
   std::vector<std::uint16_t> name_len(num_nodes);
   std::vector<std::uint8_t> is_reverse(num_nodes);
 
-  // Pre-estimate total sequence size
-  std::size_t total_seq = 0;
-  for (const auto& orig : imported.nodes) total_seq += orig.sequence.size() * 2;
-  seq_data.reserve(total_seq);
+  std::size_t total_bases = 0;
+  for (const auto& orig : imported.nodes) total_bases += orig.sequence.size() * 2;
+
+  std::size_t packed_bytes = (total_bases + 3) / 4;
+  std::size_t mask_bytes = (total_bases + 7) / 8;
+  std::vector<std::uint8_t> seq_packed(packed_bytes, 0);
+  std::vector<std::uint8_t> seq_n_mask(mask_bytes, 0);
+  std::vector<std::uint32_t> seq_base_offset(num_nodes);
+  std::size_t base_cursor = 0;
+
+  auto pack_base = [&](std::size_t abs_pos, char c) {
+    std::uint8_t val = FlatGraph::encode2bit(c);
+    std::size_t byte_idx = abs_pos >> 2;
+    std::uint32_t bit_shift = (abs_pos & 3) << 1;
+    seq_packed[byte_idx] |= (val << bit_shift);
+    if (c == 'N' || c == 'n') {
+      seq_n_mask[abs_pos >> 3] |= (1 << (abs_pos & 7));
+    }
+  };
 
   for (std::size_t i = 0; i < num_orig; ++i) {
     const auto& orig = imported.nodes[i];
     std::uint32_t fwd_id = static_cast<std::uint32_t>(forwardNodeId(i));
     std::uint32_t rev_id = static_cast<std::uint32_t>(reverseNodeId(i));
+    std::uint32_t slen = static_cast<std::uint32_t>(orig.sequence.size());
 
-    // Forward node
-    seq_offset[fwd_id] = static_cast<std::uint32_t>(seq_data.size());
-    seq_len[fwd_id] = static_cast<std::uint32_t>(orig.sequence.size());
-    seq_data.insert(seq_data.end(), orig.sequence.begin(), orig.sequence.end());
+    // Forward node: pack directly from source string
+    seq_base_offset[fwd_id] = static_cast<std::uint32_t>(base_cursor);
+    seq_len[fwd_id] = slen;
+    for (std::uint32_t j = 0; j < slen; ++j) {
+      pack_base(base_cursor + j, orig.sequence[j]);
+    }
+    base_cursor += slen;
 
     name_offset[fwd_id] = static_cast<std::uint32_t>(name_data.size());
     name_len[fwd_id] = static_cast<std::uint16_t>(orig.id.size());
     name_data.insert(name_data.end(), orig.id.begin(), orig.id.end());
     is_reverse[fwd_id] = 0;
 
-    // Reverse node
-    std::string rc = revcomp(orig.sequence);
-    seq_offset[rev_id] = static_cast<std::uint32_t>(seq_data.size());
-    seq_len[rev_id] = static_cast<std::uint32_t>(rc.size());
-    seq_data.insert(seq_data.end(), rc.begin(), rc.end());
+    // Reverse node: pack revcomp directly (no temp string)
+    seq_base_offset[rev_id] = static_cast<std::uint32_t>(base_cursor);
+    seq_len[rev_id] = slen;
+    for (std::uint32_t j = 0; j < slen; ++j) {
+      char c = orig.sequence[slen - 1 - j];
+      char rc_c;
+      switch (c) {
+        case 'A': case 'a': rc_c = 'T'; break;
+        case 'T': case 't': rc_c = 'A'; break;
+        case 'C': case 'c': rc_c = 'G'; break;
+        case 'G': case 'g': rc_c = 'C'; break;
+        default: rc_c = 'N'; break;
+      }
+      pack_base(base_cursor + j, rc_c);
+    }
+    base_cursor += slen;
 
     name_offset[rev_id] = static_cast<std::uint32_t>(name_data.size());
     name_len[rev_id] = static_cast<std::uint16_t>(orig.id.size());
@@ -165,9 +193,9 @@ FlatGraph simpleExpandFlat(const piru::io::ImportedGraph& imported) {
   }
   path_step_offset[num_paths] = static_cast<std::uint32_t>(step_data.size());
 
-  return FlatGraph::fromRawArrays(
-      num_nodes, num_paths,
-      std::move(seq_data), std::move(seq_offset), std::move(seq_len),
+  return FlatGraph::fromPackedArrays(
+      num_nodes, num_paths, total_bases,
+      std::move(seq_packed), std::move(seq_n_mask), std::move(seq_base_offset), std::move(seq_len),
       std::move(name_data), std::move(name_offset), std::move(name_len),
       std::move(is_reverse),
       std::move(edge_target), std::move(out_edge_offset),
