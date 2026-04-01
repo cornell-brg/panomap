@@ -19,10 +19,50 @@ keep/reject decisions on reads based on target regions.
 GFA/VG + pore model
        |
        v
-  GraphLoader -> Transform -> Linearize -> Squigglize -> Build
+  GraphLoader -> Transform -> Path-walk bucket indexer
        |
        v
      .pirx (GraphStore + SeedStore + LinearizationCoords)
+```
+
+Current indexing architecture:
+- The bucket indexer is the only supported indexer backend.
+- Legacy node-first and legacy path-walk builder backends were removed.
+- Seed generation is path-bounded: PIRU walks embedded graph paths and never
+  invents seeds by arbitrary graph-neighborhood expansion.
+
+Bucket indexer build flow:
+```text
+for each embedded path
+  walk path
+    -> squigglize
+    -> tokenize / quantize
+    -> generate seeds
+    -> map seed position back to (node_id, offset)
+    -> append hit to bucket[hash & mask]
+
+after all paths
+  for each bucket
+    sort by (hash, node_id, offset)
+    dedup exact duplicates
+    build bucket hash table
+```
+
+Per-bucket final form:
+```text
+bucket[bi]
+  keys[]      sorted unique hashes in this bucket
+  counts[]    hit count for each hash
+  offsets[]   entry location for each hash
+  entries[]   flat SeedEntry array
+
+lookup(hash):
+  bi = hash & mask
+  binary search keys[] in bucket[bi]
+  if count == 1:
+    singleton hit is already inline in entries[offset]
+  if count > 1:
+    offsets[i] points to the first hit in entries[]
 ```
 
 ### Map
@@ -74,7 +114,7 @@ Two backends available:
 
 | Type | Space | Role |
 |------|-------|------|
-| `SeedEntry` | index | Hash table record: node_id + offset |
+| `SeedEntry` | index | Bucketed hash-table hit record: node_id + offset |
 | `NodeAnchor` | graph | Seed hit with read context: node_id + offset + read_pos + span |
 | `PathAnchor` | linear | Projected anchor: path_id + ref_coord (internal to DPChainer) |
 | `ChainedAnchor` | output | Survived DP chaining: has score + chain_id |
@@ -101,6 +141,13 @@ Single-directory index:
 - **GraphStore**: topology, paths, node sequences
 - **SeedStore**: hash table mapping signal seeds -> (node_id, offset) entries
 - **Linearization coords**: node -> list of (path_id, ref_coord) for anchor expansion
+
+The SeedStore is bucket-finalized and read-only:
+- low hash bits choose a bucket
+- `keys[]` are sorted inside each bucket for binary search
+- exact duplicates are removed on `(hash, node_id, offset)` during build
+- singleton hashes occupy one entry slot directly
+- multi-hit hashes point to a span in the bucket's flat `entries[]` array
 
 See `docs/index_format.md` for the binary format spec.
 
