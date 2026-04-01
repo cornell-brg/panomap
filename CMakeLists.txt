@@ -91,8 +91,6 @@ add_executable(piru
     src/signal/seed_extractors/minimizer_seed_extractor.cpp
     src/index/flat_graph.cpp
     src/index/simple_expand.cpp
-    src/index/path_walk_indexer.cpp
-    src/index/node_first_indexer.cpp
     src/index/bucket_indexer.cpp
     src/index/index_pipeline.cpp
     src/index/sort_1d.cpp

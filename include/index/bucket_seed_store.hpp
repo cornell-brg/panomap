@@ -14,12 +14,10 @@
  *
  * Lookup: pick bucket from hash low bits, binary search within bucket.
  *
- * .pirx serialization currently flattens to global CSR for compatibility
- * with the existing FlatSeedStore-based loader. Bucket-native on-disk
- * format is future work.
+ * .pirx serialization writes bucket-native format directly.
  *
  * Related:
- *  - seed_store.hpp (SeedStore base, FlatSeedStore for legacy)
+ *  - seed_store.hpp (SeedStore base interface)
  *  - bucket_indexer.cpp (builds this store)
  *
  * SPDX-License-Identifier: MIT

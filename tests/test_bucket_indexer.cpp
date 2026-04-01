@@ -1,12 +1,9 @@
 /**
  * test_bucket_indexer.cpp
  *
- * Microbenchmarks comparing bucket vs path-walk indexer seed output on
- * synthetic graphs covering different structural variant types.
- *
- * Each test builds a small FlatGraph with known structure, runs both
- * indexers, and compares the set of unique seed hashes produced.
- * Goal: understand which hashes differ and why.
+ * Tests for the bucket indexer: verifies seed generation on synthetic
+ * graphs covering different structural variant types, and round-trip
+ * serialization parity.
  *
  * SPDX-License-Identifier: MIT
  */
@@ -22,7 +19,6 @@
 #include "index/bucket_indexer.hpp"
 #include "index/bucket_seed_store.hpp"
 #include "index/flat_graph.hpp"
-#include "index/path_walk_indexer.hpp"
 #include "index/simple_expand.hpp"
 #include "io/graphs/graph.hpp"
 #include "io/models/model.hpp"
@@ -83,7 +79,7 @@ IndexResult runBucket(const io::ImportedGraph& imported, const io::KmerModel& mo
     signal::FuzzyQuantizerConfig fq_cfg;
     fq_cfg.backend = "rh2";
     fq_cfg.pore_model = model.name();
-    fq_cfg.diff = 0.0;  // diff=0 for exact parity with path-walk
+    fq_cfg.diff = 0.0;
     auto fq = signal::make_fuzzy_quantizer(fq_cfg);
 
     signal::SeedExtractorConfig se_cfg;
@@ -97,14 +93,12 @@ IndexResult runBucket(const io::ImportedGraph& imported, const io::KmerModel& mo
     cfg.seed_k = 8;
     cfg.seed_stride = 1;
 
-
     auto result = index::bucketIndex(flat, model, *fq, *se, cfg);
 
     IndexResult ir;
     ir.unique_hashes = result.seed_store->size();
     ir.total_seeds = result.seeds_interior + result.seeds_boundary;
 
-    // Collect hashes from BucketSeedStore
     const auto* bucket_store = dynamic_cast<const index::BucketSeedStore*>(result.seed_store.get());
     if (bucket_store) {
         for (std::size_t bi = 0; bi < bucket_store->num_buckets(); ++bi) {
@@ -117,14 +111,94 @@ IndexResult runBucket(const io::ImportedGraph& imported, const io::KmerModel& mo
     return ir;
 }
 
-/* Run path-walk indexer on an ImportedGraph and collect seed hashes. */
-IndexResult runPathWalk(const io::ImportedGraph& imported, const io::KmerModel& model) {
-    auto flat = index::simpleExpandFlat(imported);
+/* Verify that every hash in the store can be looked up. */
+bool verifyLookup(const index::SeedStore& store, const std::set<std::uint64_t>& hashes) {
+    for (auto h : hashes) {
+        auto span = store.lookup(h);
+        if (span.count == 0) return false;
+    }
+    return true;
+}
+
+}  // namespace
+
+// ============================================================================
+// Basic seed generation tests
+// ============================================================================
+
+TEST_CASE("Bucket indexer: linear graph produces seeds") {
+    auto model = io::load_builtin_model("r10.4_400bps");
+    std::string seq = makeDNA(200, 42);
+    auto graph = makeGraph({{"s1", seq}}, {}, {{"p1", {{"s1", false}}}});
+    auto result = runBucket(graph, *model);
+
+    CHECK(result.unique_hashes > 0);
+    CHECK(result.total_seeds > 0);
+    MESSAGE("unique: " << result.unique_hashes << " total: " << result.total_seeds);
+}
+
+TEST_CASE("Bucket indexer: SNP bubble produces seeds from both paths") {
+    auto model = io::load_builtin_model("r10.4_400bps");
+    std::string prefix = makeDNA(50, 1);
+    std::string suffix = makeDNA(50, 2);
+    std::string var_a = makeDNA(20, 3);
+    std::string var_b = makeDNA(20, 4);
+
+    auto graph = makeGraph(
+        {{"pre", prefix}, {"a", var_a}, {"b", var_b}, {"suf", suffix}},
+        {{"pre", "a", false, false}, {"pre", "b", false, false},
+         {"a", "suf", false, false}, {"b", "suf", false, false}},
+        {{"p1", {{"pre", false}, {"a", false}, {"suf", false}}},
+         {"p2", {{"pre", false}, {"b", false}, {"suf", false}}}});
+
+    auto result = runBucket(graph, *model);
+    CHECK(result.unique_hashes > 0);
+    MESSAGE("SNP bubble: " << result.unique_hashes << " unique hashes");
+}
+
+TEST_CASE("Bucket indexer: tiny nodes produce seeds via path context") {
+    auto model = io::load_builtin_model("r10.4_400bps");
+    // Nodes shorter than pore_k -- need path context to generate any seeds
+    auto graph = makeGraph(
+        {{"s1", makeDNA(5, 1)}, {"s2", makeDNA(5, 2)},
+         {"s3", makeDNA(5, 3)}, {"s4", makeDNA(5, 4)},
+         {"s5", makeDNA(50, 5)}},
+        {{"s1", "s2", false, false}, {"s2", "s3", false, false},
+         {"s3", "s4", false, false}, {"s4", "s5", false, false}},
+        {{"p1", {{"s1", false}, {"s2", false}, {"s3", false},
+                 {"s4", false}, {"s5", false}}}});
+
+    auto result = runBucket(graph, *model);
+    CHECK(result.unique_hashes > 0);
+    MESSAGE("Tiny nodes: " << result.unique_hashes << " unique hashes");
+}
+
+TEST_CASE("Bucket indexer: disconnected subgraphs") {
+    auto model = io::load_builtin_model("r10.4_400bps");
+    auto graph = makeGraph(
+        {{"a", makeDNA(100, 1)}, {"b", makeDNA(100, 2)}},
+        {},
+        {{"p1", {{"a", false}}}, {"p2", {{"b", false}}}});
+
+    auto result = runBucket(graph, *model);
+    CHECK(result.unique_hashes > 0);
+    MESSAGE("Disconnected: " << result.unique_hashes << " unique hashes");
+}
+
+TEST_CASE("Bucket indexer: lookup parity after build") {
+    auto model = io::load_builtin_model("r10.4_400bps");
+    std::string seq = makeDNA(300, 99);
+    auto graph = makeGraph(
+        {{"s1", seq.substr(0, 100)}, {"s2", seq.substr(100, 100)}, {"s3", seq.substr(200, 100)}},
+        {{"s1", "s2", false, false}, {"s2", "s3", false, false}},
+        {{"p1", {{"s1", false}, {"s2", false}, {"s3", false}}}});
+
+    auto flat = index::simpleExpandFlat(graph);
 
     signal::FuzzyQuantizerConfig fq_cfg;
     fq_cfg.backend = "rh2";
-    fq_cfg.pore_model = model.name();
-    fq_cfg.diff = 0.0;  // diff=0 for exact parity
+    fq_cfg.pore_model = model->name();
+    fq_cfg.diff = 0.0;
     auto fq = signal::make_fuzzy_quantizer(fq_cfg);
 
     signal::SeedExtractorConfig se_cfg;
@@ -134,262 +208,22 @@ IndexResult runPathWalk(const io::ImportedGraph& imported, const io::KmerModel& 
     se_cfg.qbits = 4;
     auto se = signal::make_seed_extractor(se_cfg);
 
-    index::PathWalkIndexConfig cfg;
+    index::BucketIndexConfig cfg;
     cfg.seed_k = 8;
     cfg.seed_stride = 1;
 
-    cfg.seed_freq_cap = 0.0;  // no subsampling
+    auto result = index::bucketIndex(flat, *model, *fq, *se, cfg);
 
-    auto result = index::pathWalkIndex(flat, model, *fq, *se, cfg);
-
-    IndexResult ir;
-    ir.unique_hashes = result.seeds_unique;
-    ir.total_seeds = result.seeds_extracted;
-
-    // PathWalkIndex may return HashSeedStore or FlatSeedStore
-    const auto* hash_store = dynamic_cast<const index::HashSeedStore*>(result.seed_store.get());
-    const auto* flat_store = dynamic_cast<const index::FlatSeedStore*>(result.seed_store.get());
-    if (hash_store) {
-        for (const auto& [hash, hits] : hash_store->data()) {
-            ir.hashes.insert(hash);
-        }
-    } else if (flat_store) {
-        for (const auto& h : flat_store->hashes()) {
-            ir.hashes.insert(h);
-        }
+    // Collect all hashes
+    std::set<std::uint64_t> hashes;
+    const auto* store = dynamic_cast<const index::BucketSeedStore*>(result.seed_store.get());
+    REQUIRE(store != nullptr);
+    for (std::size_t bi = 0; bi < store->num_buckets(); ++bi) {
+        const auto& b = store->bucket(bi);
+        for (const auto& h : b.keys) hashes.insert(h);
     }
-    return ir;
-}
 
-struct Comparison {
-    std::size_t bucket_only{0};
-    std::size_t pathwalk_only{0};
-    std::size_t shared{0};
-};
-
-Comparison compareHashes(const IndexResult& bucket, const IndexResult& pathwalk) {
-    Comparison c;
-    for (auto h : bucket.hashes) {
-        if (pathwalk.hashes.count(h)) c.shared++;
-        else c.bucket_only++;
-    }
-    for (auto h : pathwalk.hashes) {
-        if (!bucket.hashes.count(h)) c.pathwalk_only++;
-    }
-    return c;
-}
-
-void printComparison(const char* name, const IndexResult& b, const IndexResult& pw,
-                     const Comparison& c) {
-    MESSAGE(name << ":");
-    MESSAGE("  bucket:    " << b.unique_hashes << " unique, " << b.total_seeds << " total");
-    MESSAGE("  path-walk: " << pw.unique_hashes << " unique, " << pw.total_seeds << " total");
-    MESSAGE("  shared: " << c.shared << "  bucket-only: " << c.bucket_only
-            << "  pathwalk-only: " << c.pathwalk_only);
-}
-
-}  // namespace
-
-// ============================================================================
-// 1. LINEAR -- no variation, baseline
-// ============================================================================
-TEST_CASE("Bucket vs PathWalk: linear graph (no variation)") {
-    auto model = io::load_builtin_model("r10.4");
-    // Three nodes in a line, one path
-    auto g = makeGraph(
-        {{"s1", makeDNA(50, 1)}, {"s2", makeDNA(50, 2)}, {"s3", makeDNA(50, 3)}},
-        {{"s1", "s2", false, false}, {"s2", "s3", false, false}},
-        {{"path1", {{"s1", false}, {"s2", false}, {"s3", false}}}});
-
-    auto b = runBucket(g, *model);
-    auto pw = runPathWalk(g, *model);
-    auto c = compareHashes(b, pw);
-    printComparison("LINEAR", b, pw, c);
-
-    // On a linear graph both should see the same hashes
-    CHECK(c.pathwalk_only == 0);
-    CHECK(c.bucket_only == 0);
-}
-
-// ============================================================================
-// 2. SNP BUBBLE -- single base substitution
-// ============================================================================
-TEST_CASE("Bucket vs PathWalk: SNP bubble") {
-    auto model = io::load_builtin_model("r10.4");
-    // A -> B(1bp) -> D and A -> C(1bp) -> D
-    auto g = makeGraph(
-        {{"A", makeDNA(50, 10)}, {"B", "G"}, {"C", "T"}, {"D", makeDNA(50, 11)}},
-        {{"A", "B", false, false}, {"A", "C", false, false},
-         {"B", "D", false, false}, {"C", "D", false, false}},
-        {{"p1", {{"A", false}, {"B", false}, {"D", false}}},
-         {"p2", {{"A", false}, {"C", false}, {"D", false}}}});
-
-    auto b = runBucket(g, *model);
-    auto pw = runPathWalk(g, *model);
-    auto c = compareHashes(b, pw);
-    printComparison("SNP BUBBLE", b, pw, c);
-
-    CHECK(c.shared > 0);
-    // Log difference for investigation
-    MESSAGE("  pathwalk-only hashes: " << c.pathwalk_only);
-    MESSAGE("  bucket-only hashes: " << c.bucket_only);
-}
-
-// ============================================================================
-// 3. SHORT INDEL -- 5bp insertion/deletion
-// ============================================================================
-TEST_CASE("Bucket vs PathWalk: short indel") {
-    auto model = io::load_builtin_model("r10.4");
-    // A -> B(5bp insertion) -> C, or A -> C directly
-    auto g = makeGraph(
-        {{"A", makeDNA(50, 20)}, {"B", "ACGTG"}, {"C", makeDNA(50, 21)}},
-        {{"A", "B", false, false}, {"B", "C", false, false},
-         {"A", "C", false, false}},
-        {{"p_ins", {{"A", false}, {"B", false}, {"C", false}}},
-         {"p_del", {{"A", false}, {"C", false}}}});
-
-    auto b = runBucket(g, *model);
-    auto pw = runPathWalk(g, *model);
-    auto c = compareHashes(b, pw);
-    printComparison("SHORT INDEL", b, pw, c);
-    MESSAGE("  pathwalk-only: " << c.pathwalk_only << "  bucket-only: " << c.bucket_only);
-}
-
-// ============================================================================
-// 4. STRUCTURAL VARIANT -- large insertion (500bp)
-// ============================================================================
-TEST_CASE("Bucket vs PathWalk: structural variant (large insertion)") {
-    auto model = io::load_builtin_model("r10.4");
-    auto g = makeGraph(
-        {{"A", makeDNA(50, 30)}, {"B", makeDNA(500, 31)}, {"C", makeDNA(50, 32)}},
-        {{"A", "B", false, false}, {"B", "C", false, false},
-         {"A", "C", false, false}},
-        {{"p_sv", {{"A", false}, {"B", false}, {"C", false}}},
-         {"p_ref", {{"A", false}, {"C", false}}}});
-
-    auto b = runBucket(g, *model);
-    auto pw = runPathWalk(g, *model);
-    auto c = compareHashes(b, pw);
-    printComparison("SV LARGE INSERTION", b, pw, c);
-    MESSAGE("  pathwalk-only: " << c.pathwalk_only << "  bucket-only: " << c.bucket_only);
-}
-
-// ============================================================================
-// 5. CNV / TANDEM DUPLICATION -- path revisits a node
-// ============================================================================
-TEST_CASE("Bucket vs PathWalk: CNV (tandem duplication)") {
-    auto model = io::load_builtin_model("r10.4");
-    // Path visits B twice: A -> B -> B -> C
-    auto g = makeGraph(
-        {{"A", makeDNA(50, 40)}, {"B", makeDNA(50, 41)}, {"C", makeDNA(50, 42)}},
-        {{"A", "B", false, false}, {"B", "B", false, false}, {"B", "C", false, false}},
-        {{"p_cnv", {{"A", false}, {"B", false}, {"B", false}, {"C", false}}},
-         {"p_ref", {{"A", false}, {"B", false}, {"C", false}}}});
-
-    auto b = runBucket(g, *model);
-    auto pw = runPathWalk(g, *model);
-    auto c = compareHashes(b, pw);
-    printComparison("CNV TANDEM DUP", b, pw, c);
-    MESSAGE("  pathwalk-only: " << c.pathwalk_only << "  bucket-only: " << c.bucket_only);
-}
-
-// ============================================================================
-// 6. INVERSION -- forward vs reverse of a segment
-// ============================================================================
-TEST_CASE("Bucket vs PathWalk: inversion") {
-    auto model = io::load_builtin_model("r10.4");
-    auto g = makeGraph(
-        {{"A", makeDNA(50, 50)}, {"B", makeDNA(50, 51)}, {"C", makeDNA(50, 52)}},
-        {{"A", "B", false, false}, {"A", "B", false, true},
-         {"B", "C", false, false}, {"B", "C", true, false}},
-        {{"p_fwd", {{"A", false}, {"B", false}, {"C", false}}},
-         {"p_inv", {{"A", false}, {"B", true}, {"C", false}}}});
-
-    auto b = runBucket(g, *model);
-    auto pw = runPathWalk(g, *model);
-    auto c = compareHashes(b, pw);
-    printComparison("INVERSION", b, pw, c);
-    MESSAGE("  pathwalk-only: " << c.pathwalk_only << "  bucket-only: " << c.bucket_only);
-}
-
-// ============================================================================
-// 7. DISCONNECTED SUBGRAPHS -- two separate components
-// ============================================================================
-TEST_CASE("Bucket vs PathWalk: disconnected subgraphs") {
-    auto model = io::load_builtin_model("r10.4");
-    auto g = makeGraph(
-        {{"A", makeDNA(50, 60)}, {"B", makeDNA(50, 61)},
-         {"X", makeDNA(50, 62)}, {"Y", makeDNA(50, 63)}},
-        {{"A", "B", false, false}, {"X", "Y", false, false}},
-        {{"p1", {{"A", false}, {"B", false}}},
-         {"p2", {{"X", false}, {"Y", false}}}});
-
-    auto b = runBucket(g, *model);
-    auto pw = runPathWalk(g, *model);
-    auto c = compareHashes(b, pw);
-    printComparison("DISCONNECTED", b, pw, c);
-    MESSAGE("  pathwalk-only: " << c.pathwalk_only << "  bucket-only: " << c.bucket_only);
-}
-
-// ============================================================================
-// 8. MULTI-BUBBLE -- chained SNPs
-// ============================================================================
-TEST_CASE("Bucket vs PathWalk: multi-bubble (chained SNPs)") {
-    auto model = io::load_builtin_model("r10.4");
-    // A -> B/C -> D -> E/F -> G
-    auto g = makeGraph(
-        {{"A", makeDNA(50, 70)}, {"B", "G"}, {"C", "T"},
-         {"D", makeDNA(50, 71)}, {"E", "A"}, {"F", "C"},
-         {"G", makeDNA(50, 72)}},
-        {{"A", "B", false, false}, {"A", "C", false, false},
-         {"B", "D", false, false}, {"C", "D", false, false},
-         {"D", "E", false, false}, {"D", "F", false, false},
-         {"E", "G", false, false}, {"F", "G", false, false}},
-        {{"p1", {{"A", false}, {"B", false}, {"D", false}, {"E", false}, {"G", false}}},
-         {"p2", {{"A", false}, {"C", false}, {"D", false}, {"F", false}, {"G", false}}}});
-
-    auto b = runBucket(g, *model);
-    auto pw = runPathWalk(g, *model);
-    auto c = compareHashes(b, pw);
-    printComparison("MULTI-BUBBLE", b, pw, c);
-    MESSAGE("  pathwalk-only: " << c.pathwalk_only << "  bucket-only: " << c.bucket_only);
-}
-
-// ============================================================================
-// 9. TINY NODE -- shorter than pore_k, all seeds from boundary
-// ============================================================================
-TEST_CASE("Bucket vs PathWalk: tiny node (shorter than pore_k)") {
-    auto model = io::load_builtin_model("r10.4");
-    // B is only 3bp -- too short for any interior seeds with k=9
-    auto g = makeGraph(
-        {{"A", makeDNA(50, 80)}, {"B", "ACG"}, {"C", makeDNA(50, 81)}},
-        {{"A", "B", false, false}, {"B", "C", false, false}},
-        {{"p1", {{"A", false}, {"B", false}, {"C", false}}}});
-
-    auto b = runBucket(g, *model);
-    auto pw = runPathWalk(g, *model);
-    auto c = compareHashes(b, pw);
-    printComparison("TINY NODE", b, pw, c);
-    CHECK(c.pathwalk_only == 0);
-    CHECK(c.bucket_only == 0);
-}
-
-// ============================================================================
-// 10. LONG SINGLE NODE -- no boundaries needed
-// ============================================================================
-TEST_CASE("Bucket vs PathWalk: long single node") {
-    auto model = io::load_builtin_model("r10.4");
-    auto g = makeGraph(
-        {{"mega", makeDNA(1000, 90)}},
-        {},
-        {{"p1", {{"mega", false}}}});
-
-    auto b = runBucket(g, *model);
-    auto pw = runPathWalk(g, *model);
-    auto c = compareHashes(b, pw);
-    printComparison("LONG SINGLE NODE", b, pw, c);
-
-    // Single node, no boundaries -- must be identical
-    CHECK(c.pathwalk_only == 0);
-    CHECK(c.bucket_only == 0);
+    // Verify every hash can be looked up
+    CHECK(verifyLookup(*store, hashes));
+    MESSAGE("Lookup parity: " << hashes.size() << " hashes verified");
 }

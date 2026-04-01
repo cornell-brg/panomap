@@ -90,8 +90,6 @@ if(DOCTEST_AVAILABLE)
         ${CMAKE_SOURCE_DIR}/src/signal/seed_extractors/minimizer_seed_extractor.cpp
         ${CMAKE_SOURCE_DIR}/src/index/flat_graph.cpp
         ${CMAKE_SOURCE_DIR}/src/index/simple_expand.cpp
-        ${CMAKE_SOURCE_DIR}/src/index/path_walk_indexer.cpp
-        ${CMAKE_SOURCE_DIR}/src/index/node_first_indexer.cpp
         ${CMAKE_SOURCE_DIR}/src/index/bucket_indexer.cpp
         ${CMAKE_SOURCE_DIR}/src/index/index_pipeline.cpp
         ${CMAKE_SOURCE_DIR}/src/index/sort_1d.cpp

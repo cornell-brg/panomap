@@ -2,8 +2,10 @@
  * index_pipeline.cpp
  *
  * Implements the indexing pipeline: graph expansion, signal generation,
- * quantization, and seed extraction. Delegates to node-first or
- * path-walk backend based on config.
+ * quantization, and seed extraction via the bucket indexer.
+ *
+ * Legacy backends (node-first, path-walk) were removed. See git history
+ * for their implementations if needed for reference.
  *
  * SPDX-License-Identifier: MIT
  */
@@ -16,8 +18,6 @@
 
 #include "index/flat_graph.hpp"
 #include "index/bucket_indexer.hpp"
-#include "index/node_first_indexer.hpp"
-#include "index/path_walk_indexer.hpp"
 #include "index/simple_expand.hpp"
 #include "index/sort_1d.hpp"
 #include "signal/fuzzy_quantizers/fuzzy_quantizer_factory.hpp"
@@ -34,7 +34,6 @@ IndexPipelineResult run_index_pipeline(const io::ImportedGraph& imported,
   /* 1. Expand graph (forward + reverse nodes) */
 
   auto flat_graph = simpleExpandFlat(imported);
-
 
   auto stage_elapsed =
       std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - stage_start)
@@ -75,64 +74,22 @@ IndexPipelineResult run_index_pipeline(const io::ImportedGraph& imported,
   IndexPipelineResult result;
   std::vector<std::size_t> path_lengths;
 
-  if (config.indexer_backend == "node-first") {
-    NodeFirstIndexConfig nfi_config;
-    nfi_config.seed_k = config.seed_k;
-    nfi_config.seed_stride = config.seed_stride;
-    nfi_config.seed_freq_cutoff = config.seed_freq_cutoff;
-    nfi_config.executor = config.executor;
+  BucketIndexConfig bi_config;
+  bi_config.seed_k = config.seed_k;
+  bi_config.seed_stride = config.seed_stride;
+  bi_config.executor = config.executor;
 
-    auto nfi_result = nodeFirstIndex(flat_graph, model, *fuzzy_quantizer, *extractor, nfi_config);
+  auto bi_result = bucketIndex(flat_graph, model, *fuzzy_quantizer, *extractor, bi_config);
 
-    stage_elapsed =
-        std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - stage_start)
-            .count();
-    LOG_INFO("[2/2] node-first indexed: " + std::to_string(nfi_result.seeds_unique) +
-             " unique seeds (global_mean=" + std::to_string(nfi_result.global_mean) +
-             ", global_std=" + std::to_string(nfi_result.global_std) + ") [" +
-             std::to_string(stage_elapsed) + "s]");
+  stage_elapsed =
+      std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - stage_start)
+          .count();
+  LOG_INFO("[2/2] indexed: " + std::to_string(bi_result.seed_store->size()) +
+           " unique seeds [" + std::to_string(stage_elapsed) + "s]");
 
-    path_lengths = std::move(nfi_result.path_lengths);
-    result.seed_store = std::move(nfi_result.seed_store);
-    result.linearization_coords = std::move(nfi_result.linearization_coords);
-  } else if (config.indexer_backend == "bucket") {
-    BucketIndexConfig bi_config;
-    bi_config.seed_k = config.seed_k;
-    bi_config.seed_stride = config.seed_stride;
-    bi_config.executor = config.executor;
-
-    auto bi_result = bucketIndex(flat_graph, model, *fuzzy_quantizer, *extractor, bi_config);
-
-    stage_elapsed =
-        std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - stage_start)
-            .count();
-    LOG_INFO("[2/2] bucket indexed: " + std::to_string(bi_result.seed_store->size()) +
-             " unique seeds [" + std::to_string(stage_elapsed) + "s]");
-
-    path_lengths = std::move(bi_result.path_lengths);
-    result.seed_store = std::move(bi_result.seed_store);
-    result.linearization_coords = std::move(bi_result.linearization_coords);
-  } else {
-    PathWalkIndexConfig pwi_config;
-    pwi_config.seed_k = config.seed_k;
-    pwi_config.seed_stride = config.seed_stride;
-    pwi_config.seed_freq_cutoff = config.seed_freq_cutoff;
-    pwi_config.seed_freq_cap = config.seed_freq_cap;
-    pwi_config.dump_norm_stats_path = config.dump_norm_stats_path;
-    pwi_config.executor = config.executor;
-
-    auto pwi_result = pathWalkIndex(flat_graph, model, *fuzzy_quantizer, *extractor, pwi_config);
-
-    stage_elapsed =
-        std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - stage_start)
-            .count();
-    LOG_INFO("[2/2] path-walk indexed: " + std::to_string(pwi_result.seeds_unique) +
-             " unique seeds [" + std::to_string(stage_elapsed) + "s]");
-
-    path_lengths = std::move(pwi_result.path_lengths);
-    result.seed_store = std::move(pwi_result.seed_store);
-    result.linearization_coords = std::move(pwi_result.linearization_coords);
-  }
+  path_lengths = std::move(bi_result.path_lengths);
+  result.seed_store = std::move(bi_result.seed_store);
+  result.linearization_coords = std::move(bi_result.linearization_coords);
 
   // Store path lengths in FlatGraph
   for (std::size_t i = 0; i < flat_graph.pathCount(); ++i) {

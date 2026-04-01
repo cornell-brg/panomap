@@ -70,13 +70,10 @@ int handle_index(const std::vector<std::string>& args) {
       {'\0', "diff", true,
        "Event diff filter: skip events within diff of last emitted (default: 0, RH2: 0.35)"},
       {'\0', "", false, "\nIndexer Options:"},
-      {'\0', "indexer-backend", true, "Indexer backend: node-first, path-walk (default)"},
       {'\0', "no-1d-sort", false, "Skip 1D canonical coordinate computation"},
       {'\0', "1d-coords-file", true,
        "Import pre-computed 1D coords from TSV (overrides built-in PG-SGD)"},
       {'\0', "", false, "\nDebug Options:"},
-      {'\0', "dump-norm-stats", true,
-       "Dump per-path normalization stats to TSV file (path-walk only)"},
       {'\0', "dump-1d-coords", true,
        "Dump 1D sort coordinates to TSV file"},
   };
@@ -200,12 +197,6 @@ int handle_index(const std::vector<std::string>& args) {
   index_config.seed_freq_cap = seed_freq_cap;
   index_config.fuzzy_diff = fuzzy_diff;
   index_config.fuzzy_quantizer = "rh2";
-  if (parsed.values.count("indexer-backend")) {
-    index_config.indexer_backend = parsed.values.at("indexer-backend");
-  }
-  if (parsed.values.count("dump-norm-stats")) {
-    index_config.dump_norm_stats_path = parsed.values.at("dump-norm-stats");
-  }
   if (parsed.values.count("no-1d-sort")) {
     index_config.compute_1d_sort = false;
   }
