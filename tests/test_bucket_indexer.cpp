@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "index/bucket_indexer.hpp"
+#include "index/bucket_seed_store.hpp"
 #include "index/flat_graph.hpp"
 #include "index/path_walk_indexer.hpp"
 #include "index/simple_expand.hpp"
@@ -82,7 +83,7 @@ IndexResult runBucket(const io::ImportedGraph& imported, const io::KmerModel& mo
     signal::FuzzyQuantizerConfig fq_cfg;
     fq_cfg.backend = "rh2";
     fq_cfg.pore_model = model.name();
-    fq_cfg.diff = 0.35;  // match default RH2 diff filter
+    fq_cfg.diff = 0.0;  // diff=0 for exact parity with path-walk
     auto fq = signal::make_fuzzy_quantizer(fq_cfg);
 
     signal::SeedExtractorConfig se_cfg;
@@ -95,21 +96,22 @@ IndexResult runBucket(const io::ImportedGraph& imported, const io::KmerModel& mo
     index::BucketIndexConfig cfg;
     cfg.seed_k = 8;
     cfg.seed_stride = 1;
-    cfg.seed_freq_cutoff = 1.0;
+
 
     auto result = index::bucketIndex(flat, model, *fq, *se, cfg);
 
     IndexResult ir;
-    // Collect hashes from FlatSeedStore via lookup iteration
-    // We need to extract hashes -- use the raw accessors
     ir.unique_hashes = result.seed_store->size();
     ir.total_seeds = result.seeds_interior + result.seeds_boundary;
 
-    // Collect all unique hashes by scanning the store's CSR
-    const auto* flat_store = dynamic_cast<const index::FlatSeedStore*>(result.seed_store.get());
-    if (flat_store) {
-        for (const auto& h : flat_store->hashes()) {
-            ir.hashes.insert(h);
+    // Collect hashes from BucketSeedStore
+    const auto* bucket_store = dynamic_cast<const index::BucketSeedStore*>(result.seed_store.get());
+    if (bucket_store) {
+        for (std::size_t bi = 0; bi < bucket_store->num_buckets(); ++bi) {
+            const auto& b = bucket_store->bucket(bi);
+            for (const auto& h : b.keys) {
+                ir.hashes.insert(h);
+            }
         }
     }
     return ir;
@@ -122,7 +124,7 @@ IndexResult runPathWalk(const io::ImportedGraph& imported, const io::KmerModel& 
     signal::FuzzyQuantizerConfig fq_cfg;
     fq_cfg.backend = "rh2";
     fq_cfg.pore_model = model.name();
-    fq_cfg.diff = 0.0;
+    fq_cfg.diff = 0.0;  // diff=0 for exact parity
     auto fq = signal::make_fuzzy_quantizer(fq_cfg);
 
     signal::SeedExtractorConfig se_cfg;
@@ -135,7 +137,7 @@ IndexResult runPathWalk(const io::ImportedGraph& imported, const io::KmerModel& 
     index::PathWalkIndexConfig cfg;
     cfg.seed_k = 8;
     cfg.seed_stride = 1;
-    cfg.seed_freq_cutoff = 1.0;
+
     cfg.seed_freq_cap = 0.0;  // no subsampling
 
     auto result = index::pathWalkIndex(flat, model, *fq, *se, cfg);
@@ -144,8 +146,17 @@ IndexResult runPathWalk(const io::ImportedGraph& imported, const io::KmerModel& 
     ir.unique_hashes = result.seeds_unique;
     ir.total_seeds = result.seeds_extracted;
 
-    for (const auto& [hash, hits] : result.seed_store->data()) {
-        ir.hashes.insert(hash);
+    // PathWalkIndex may return HashSeedStore or FlatSeedStore
+    const auto* hash_store = dynamic_cast<const index::HashSeedStore*>(result.seed_store.get());
+    const auto* flat_store = dynamic_cast<const index::FlatSeedStore*>(result.seed_store.get());
+    if (hash_store) {
+        for (const auto& [hash, hits] : hash_store->data()) {
+            ir.hashes.insert(hash);
+        }
+    } else if (flat_store) {
+        for (const auto& h : flat_store->hashes()) {
+            ir.hashes.insert(h);
+        }
     }
     return ir;
 }

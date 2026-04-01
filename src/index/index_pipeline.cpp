@@ -99,8 +99,6 @@ IndexPipelineResult run_index_pipeline(const io::ImportedGraph& imported,
     BucketIndexConfig bi_config;
     bi_config.seed_k = config.seed_k;
     bi_config.seed_stride = config.seed_stride;
-    bi_config.seed_freq_cutoff = config.seed_freq_cutoff;
-    bi_config.seed_freq_cap = config.seed_freq_cap;
     bi_config.executor = config.executor;
 
     auto bi_result = bucketIndex(flat_graph, model, *fuzzy_quantizer, *extractor, bi_config);
