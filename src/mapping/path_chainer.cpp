@@ -408,8 +408,14 @@ ChainResult PathChainer::chain(const std::vector<NodeAnchor>& hits) const {
 
     std::vector<bool> used(n, false);
     std::size_t path_chain_count = 0;
+    const std::size_t survivor_limit = config_.max_survivor_chains;  // 0 = unlimited
 
-    for (std::size_t k = 0; k < z.size() && path_chain_count < config_.max_chains; ++k) {
+    for (std::size_t k = 0; k < z.size(); ++k) {
+      // Stop if both decision chains and survivor chains are exhausted
+      bool need_decision = (path_chain_count < config_.max_chains);
+      bool need_survivor = (survivor_limit == 0 || path_chain_count < survivor_limit);
+      if (!need_decision && !need_survivor) break;
+
       if (used[z[k].idx]) continue;
 
       /* Backtrack, marking used as we go.
@@ -437,34 +443,40 @@ ChainResult PathChainer::chain(const std::vector<NodeAnchor>& hits) const {
         continue;
       }
 
-      /* Build Chain: recover graph-space fields via src_idx */
-      Chain chain;
-      chain.score = static_cast<double>(z[k].score);
-      chain.path_id = path_id;
-      chain.anchors.reserve(chain_indices.size());
-
+      /* Mark input_used for survivors (all valid chains, not just top X) */
       for (std::size_t idx : chain_indices) {
-        auto si = dp.src_idx[idx];
-        const auto& src = hits[si];
-        input_used[si] = true;
-
-        ChainedAnchor ca;
-        ca.node_id = src.node_id;
-        ca.offset = src.offset;
-        ca.length = dp.length[idx];
-        ca.read_pos = dp.query_pos[idx];
-        ca.ref_coord = dp.ref_coord[idx];
-
-        chain.anchors.push_back(ca);
+        input_used[dp.src_idx[idx]] = true;
       }
 
-      /* Dedup by node walk: keep higher-scoring chain for each unique walk. */
-      std::size_t walk_hash = hash_node_walk(chain.anchors);
-      auto it = walk_map.find(walk_hash);
-      if (it == walk_map.end()) {
-        walk_map.emplace(walk_hash, std::move(chain));
-      } else if (chain.score > it->second.score) {
-        it->second = std::move(chain);
+      /* Build Chain object only for decision chains (top max_chains) */
+      if (need_decision) {
+        Chain chain;
+        chain.score = static_cast<double>(z[k].score);
+        chain.path_id = path_id;
+        chain.anchors.reserve(chain_indices.size());
+
+        for (std::size_t idx : chain_indices) {
+          auto si = dp.src_idx[idx];
+          const auto& src = hits[si];
+
+          ChainedAnchor ca;
+          ca.node_id = src.node_id;
+          ca.offset = src.offset;
+          ca.length = dp.length[idx];
+          ca.read_pos = dp.query_pos[idx];
+          ca.ref_coord = dp.ref_coord[idx];
+
+          chain.anchors.push_back(ca);
+        }
+
+        /* Dedup by node walk: keep higher-scoring chain for each unique walk. */
+        std::size_t walk_hash = hash_node_walk(chain.anchors);
+        auto it = walk_map.find(walk_hash);
+        if (it == walk_map.end()) {
+          walk_map.emplace(walk_hash, std::move(chain));
+        } else if (chain.score > it->second.score) {
+          it->second = std::move(chain);
+        }
       }
       ++path_chain_count;
     }
@@ -502,6 +514,7 @@ std::vector<cli::Option> PathChainerConfig::cli_options() {
       {'\0', "chain-min-score", true, "DP chain: minimum chain score (default: 15)"},
       {'\0', "chain-min-anchors", true, "DP chain: minimum anchors per chain (default: 2)"},
       {'\0', "chain-max-chains", true, "DP chain: max chains to extract (default: 10)"},
+      {'\0', "chain-max-survivor-chains", true, "DP chain: max chains for cross-chunk survivor marking (default: 0 = unlimited)"},
       {'\0', "chain-max-skip", true, "DP chain: stop after N consecutive skips (default: 25)"},
       {'\0', "chain-max-iter", true, "DP chain: max predecessors to check per anchor (default: 0 = unlimited)"},
       {'\0', "chain-merge", true, "DP chain: merge overlapping chains (default: false)"},
@@ -527,6 +540,8 @@ PathChainerConfig PathChainerConfig::from_parsed(const cli::Parsed& parsed) {
     cfg.min_chain_anchors = std::stoull(parsed.values.at("chain-min-anchors"));
   if (parsed.values.count("chain-max-chains"))
     cfg.max_chains = std::stoull(parsed.values.at("chain-max-chains"));
+  if (parsed.values.count("chain-max-survivor-chains"))
+    cfg.max_survivor_chains = std::stoull(parsed.values.at("chain-max-survivor-chains"));
   if (parsed.values.count("chain-max-skip"))
     cfg.max_skip = std::stoull(parsed.values.at("chain-max-skip"));
   if (parsed.values.count("chain-max-iter"))

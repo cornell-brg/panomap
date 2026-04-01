@@ -49,12 +49,6 @@ struct ReadMapResult {
   double roi_overlap{-1.0};  // -1 = not computed
   bool roi_keep{false};
 
-  /* Map/unmap decision scores (populated by batch_mapper) */
-  float decision_weighted{-1.0f};  // -1 = not computed
-  float decision_r_abs{0.0f};     // absolute score component
-  float decision_r_bestq{0.0f};   // MAPQ component
-  float decision_r_bestmq{0.0f};  // MAPQ standout component
-  float decision_r_bestmc{0.0f};  // score standout component
 
   bool mapped() const { return !mappings.empty(); }
   const Mapping* primary() const { return mappings.empty() ? nullptr : &mappings[0]; }

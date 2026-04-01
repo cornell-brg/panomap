@@ -86,18 +86,14 @@ struct BatchMapperConfig {
   /* Seed lookup limits */
   std::size_t max_total_hits{100000};  // Per-read hit cap (0 = unlimited, default 100k)
 
-  /* Mapping decision (weighted score filter).
-   * weighted = w_abs*(best_score/score_scale) + w_bestq*(mapq/30)
-   *          + w_bestmq*(1-mean_mapq/best_mapq) + w_bestmc*(1-mean_score/best_score)
-   * If weighted < map_threshold -> unmapped */
-  float map_w_abs{0.20f};     // Weight on absolute chain score (normalized by score_scale)
-  float map_score_scale{100.0f};  // Normalizer for absolute score term
-  float map_w_bestq{0.35f};   // Weight on absolute MAPQ
-  float map_w_bestmq{0.05f};  // Weight on MAPQ standout ratio
-  float map_w_bestmc{0.60f};  // Weight on chain score standout ratio
-  float map_threshold{0.12f}; // Decision threshold (0 = disabled)
-  bool no_map_filter{false};  // Skip map/unmap filter (output all chains)
-  std::size_t map_min_anchors{0};  // Min anchors in primary chain to report (0 = disabled)
+  /* Mapping decision.
+   * 1. Is primary chain real? score >= min_score AND anchors >= min_anchors
+   * 2. Compute mapq from absolute strength + relative standout
+   * 3. For early exit: mapq >= min_mapq_exit */
+  std::size_t map_min_anchors{3};   // Noise floor: min anchors in primary chain
+  double map_min_score{30.0};       // Noise floor: min primary chain score
+  float map_standout_ratio{0.17f};  // Fraction of mapq from standout (rest from score)
+  int map_min_mapq_exit{12};        // Min mapq to call mapped / early exit
 
 };
 

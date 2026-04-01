@@ -152,16 +152,6 @@ void GafWriter::write(const mapping::ReadMapResult& result,
       ss << "\trd:A:" << (result.roi_keep ? 'K' : 'R');
     }
 
-    // Map decision scores (primary only, when computed)
-    if (is_primary && result.decision_weighted >= 0.0f) {
-      char buf[128];
-      std::snprintf(buf, sizeof(buf),
-                    "\tws:f:%.4f\tra:f:%.4f\tbq:f:%.4f\tmq:f:%.4f\tmc:f:%.4f",
-                    result.decision_weighted, result.decision_r_abs,
-                    result.decision_r_bestq, result.decision_r_bestmq,
-                    result.decision_r_bestmc);
-      ss << buf;
-    }
 
     out_ << ss.str() << '\n';
   }

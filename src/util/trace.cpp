@@ -11,7 +11,13 @@ namespace piru::trace {
 
 namespace {
 
+bool is_tracing_active() {
+  // Master switch: tracing only activates when PIRU_TRACE_DIR is set
+  return std::getenv("PIRU_TRACE_DIR") != nullptr;
+}
+
 std::uint32_t parse_stages() {
+  if (!is_tracing_active()) return 0;
   const char* env = std::getenv("PIRU_TRACE_STAGES");
   if (!env) return kAll;
   return static_cast<std::uint32_t>(std::strtoul(env, nullptr, 0));
@@ -31,7 +37,8 @@ std::vector<std::string> parse_read_filters() {
 
 std::string get_trace_dir() {
   const char* env = std::getenv("PIRU_TRACE_DIR");
-  std::string dir = env ? env : "/tmp/piru_trace";
+  if (!env) return {};
+  std::string dir = env;
   std::filesystem::create_directories(dir);
   return dir;
 }

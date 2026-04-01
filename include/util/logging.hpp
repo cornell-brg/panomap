@@ -14,6 +14,7 @@
 #include <sstream>
 #include <string>
 #include <thread>
+#include <unistd.h>
 
 namespace piru {
 
@@ -21,6 +22,8 @@ enum class LogLevel { TRACE = 0, DEBUG = 1, INFO = 2, WARN = 3, ERROR = 4, FATAL
 
 class Logger {
 private:
+  enum class ColorMode { AUTO, ALWAYS, NEVER };
+
   static Logger* instance_;
   static std::mutex mutex_;
 
@@ -29,17 +32,36 @@ private:
   bool show_timestamp_;
   bool show_thread_id_;
   bool show_file_line_;
-  bool enable_colors_;
+  ColorMode color_mode_;
 
-  bool is_terminal_color_supported() const {
-    // Check if output is to a terminal and supports colors
-    if (output_stream_ == &std::cout || output_stream_ == &std::cerr) {
-      const char* term = std::getenv("TERM");
-      if (term && std::string(term) != "dumb") {
-        return true;
-      }
-    }
+  bool env_var_is_set(const char* name) const {
+    const char* value = std::getenv(name);
+    return value && *value != '\0';
+  }
+
+  bool env_var_is_zero(const char* name) const {
+    const char* value = std::getenv(name);
+    return value && std::string(value) == "0";
+  }
+
+  bool stream_is_terminal() const {
+    if (output_stream_ == &std::cout) return ::isatty(STDOUT_FILENO);
+    if (output_stream_ == &std::cerr) return ::isatty(STDERR_FILENO);
     return false;
+  }
+
+  bool should_enable_colors() const {
+    if (env_var_is_set("NO_COLOR")) return false;
+    if (env_var_is_set("FORCE_COLOR") || env_var_is_set("CLICOLOR_FORCE")) return true;
+    if (env_var_is_zero("CLICOLOR")) return false;
+
+    if (color_mode_ == ColorMode::ALWAYS) return true;
+    if (color_mode_ == ColorMode::NEVER) return false;
+
+    const char* term = std::getenv("TERM");
+    if (!stream_is_terminal()) return false;
+    if (!term || std::string(term) == "dumb") return false;
+    return true;
   }
 
   Logger()
@@ -48,10 +70,7 @@ private:
         show_timestamp_(false),
         show_thread_id_(false),
         show_file_line_(true),
-        enable_colors_(true) {
-    // Auto-detect color support
-    enable_colors_ = is_terminal_color_supported();
-  }
+        color_mode_(ColorMode::AUTO) {}
 
   std::string get_timestamp() const {
     auto now = std::chrono::system_clock::now();
@@ -82,7 +101,7 @@ private:
   static constexpr const char* GRAY = "\033[90m";
 
   std::string get_color_code(LogLevel level) const {
-    if (!enable_colors_) return "";
+    if (!should_enable_colors()) return "";
 
     switch (level) {
       case LogLevel::TRACE:
@@ -103,7 +122,7 @@ private:
   }
 
   std::string get_bold_color_code(LogLevel level) const {
-    if (!enable_colors_) return "";
+    if (!should_enable_colors()) return "";
 
     switch (level) {
       case LogLevel::TRACE:
@@ -125,7 +144,7 @@ private:
 
   std::string level_to_string(LogLevel level) const {
     std::string bold_color = get_bold_color_code(level);
-    std::string reset = enable_colors_ ? RESET : "";
+    std::string reset = should_enable_colors() ? RESET : "";
 
     switch (level) {
       case LogLevel::TRACE:
@@ -151,6 +170,7 @@ private:
 
     std::lock_guard<std::mutex> lock(mutex_);
     std::stringstream ss;
+    const bool colors_enabled = should_enable_colors();
 
     if (show_timestamp_) ss << "[" << get_timestamp() << "] ";
 
@@ -166,7 +186,7 @@ private:
 
     // Color the message text
     std::string message_color = get_color_code(level);
-    std::string reset = enable_colors_ ? RESET : "";
+    std::string reset = colors_enabled ? RESET : "";
     ss << message_color << message << reset << std::endl;
 
     *output_stream_ << ss.str();
@@ -211,7 +231,12 @@ public:
 
   void set_enable_colors(bool enable) {
     std::lock_guard<std::mutex> lock(mutex_);
-    enable_colors_ = enable;
+    color_mode_ = enable ? ColorMode::ALWAYS : ColorMode::NEVER;
+  }
+
+  void set_auto_colors() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    color_mode_ = ColorMode::AUTO;
   }
 
   void trace(const std::string& message, const char* file = nullptr, int line = 0) {

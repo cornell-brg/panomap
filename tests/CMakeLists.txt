@@ -49,6 +49,7 @@ if(DOCTEST_AVAILABLE)
         test_mapping_batch.cpp
         test_index_pipeline.cpp
         test_cli.cpp
+        test_logging.cpp
         test_gfa_exporter.cpp
         test_seed_merger.cpp
         test_path_chainer.cpp

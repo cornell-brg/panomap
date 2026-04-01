@@ -109,22 +109,14 @@ int handle_map(const std::vector<std::string>& args) {
       {'\0', "output-format", true, "Override output format (paf, gaf)"},
       {'\0', "min-secondary-ratio", true,
        "Min chain score ratio vs primary for secondaries (default: 0.4)"},
-      {'\0', "map-threshold", true,
-       "Weighted mapping quality threshold (0 = disabled, RH2 default: 0.45)"},
-      {'\0', "map-score-scale", true,
-       "Absolute score normalizer for mapping decision (default: 100)"},
-      {'\0', "no-map-filter", false,
-       "Disable map/unmap filter (output all chains, decision scores in GAF tags)"},
-      {'\0', "map-w-abs", true,
-       "Map decision weight on absolute chain score (default: 0.20)"},
-      {'\0', "map-w-bestq", true,
-       "Map decision weight on best MAPQ (default: 0.35)"},
-      {'\0', "map-w-bestmq", true,
-       "Map decision weight on MAPQ standout ratio (default: 0.05)"},
-      {'\0', "map-w-bestmc", true,
-       "Map decision weight on chain score standout ratio (default: 0.60)"},
       {'\0', "map-min-anchors", true,
-       "Min anchors in primary chain to report as mapped (default: 0 = disabled)"},
+       "Noise floor: min anchors in primary chain (default: 3)"},
+      {'\0', "map-min-score", true,
+       "Noise floor: min primary chain score (default: 30)"},
+      {'\0', "map-standout-ratio", true,
+       "Fraction of mapq from standout vs score (default: 0.17)"},
+      {'\0', "map-min-mapq-exit", true,
+       "Min mapq to call mapped and early exit (default: 12)"},
   };
   // Append backend-specific CLI options
   auto chain_opts = piru::mapping::PathChainerConfig::cli_options();
@@ -495,41 +487,19 @@ int handle_map(const std::vector<std::string>& args) {
   // min-secondary-ratio is now handled by the GafWriter directly
   // TODO: pass this to the writer config if needed
 
-  // Configure mapping decision threshold.
-  // Per-chainer defaults (tuned on DRB1 chunk sweep, dev-75):
-  //   PathChainer: 0.34/100 (stable across chunks)
-  //   PanChainer:  0.40/100 (needs higher threshold for cross-path chains)
-  //   SortChainer: 0.40/100 (needs higher threshold for approximate scoring)
-  if (!parsed.values.count("map-threshold")) {
-    if (map_config.chainer_backend == "pan-chain" || map_config.chainer_backend == "sort-chain") {
-      map_config.map_threshold = 0.40f;
-    } else {
-      map_config.map_threshold = 0.34f;
-    }
-  } else {
-    map_config.map_threshold = std::stof(parsed.values.at("map-threshold"));
-  }
-  if (parsed.values.count("map-score-scale")) {
-    map_config.map_score_scale = std::stof(parsed.values.at("map-score-scale"));
-  }
-  if (parsed.values.count("no-map-filter")) {
-    map_config.no_map_filter = true;
-  }
-  if (parsed.values.count("map-w-abs"))
-    map_config.map_w_abs = std::stof(parsed.values.at("map-w-abs"));
-  if (parsed.values.count("map-w-bestq"))
-    map_config.map_w_bestq = std::stof(parsed.values.at("map-w-bestq"));
-  if (parsed.values.count("map-w-bestmq"))
-    map_config.map_w_bestmq = std::stof(parsed.values.at("map-w-bestmq"));
-  if (parsed.values.count("map-w-bestmc"))
-    map_config.map_w_bestmc = std::stof(parsed.values.at("map-w-bestmc"));
+  /* Mapping decision params */
   if (parsed.values.count("map-min-anchors"))
     map_config.map_min_anchors = std::stoull(parsed.values.at("map-min-anchors"));
-  LOG_INFO("Mapping decision threshold: " + std::to_string(map_config.map_threshold)
-           + (map_config.no_map_filter ? " (DISABLED, --no-map-filter)" : "")
-           + (map_config.map_min_anchors > 0
-              ? " (min-anchors=" + std::to_string(map_config.map_min_anchors) + ")"
-              : ""));
+  if (parsed.values.count("map-min-score"))
+    map_config.map_min_score = std::stod(parsed.values.at("map-min-score"));
+  if (parsed.values.count("map-standout-ratio"))
+    map_config.map_standout_ratio = std::stof(parsed.values.at("map-standout-ratio"));
+  if (parsed.values.count("map-min-mapq-exit"))
+    map_config.map_min_mapq_exit = std::stoi(parsed.values.at("map-min-mapq-exit"));
+  LOG_INFO("Mapping decision: min-anchors=" + std::to_string(map_config.map_min_anchors)
+           + " min-score=" + std::to_string(map_config.map_min_score)
+           + " standout-ratio=" + std::to_string(map_config.map_standout_ratio)
+           + " min-mapq-exit=" + std::to_string(map_config.map_min_mapq_exit));
 
   /* Read processing */
 

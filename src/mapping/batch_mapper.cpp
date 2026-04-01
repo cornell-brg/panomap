@@ -30,6 +30,37 @@
 
 namespace piru::mapping {
 
+namespace {
+
+// Compute mapq for a chain.
+// (1) Absolute score strength (0 to score_range)
+// (2) Relative standout vs next chain (0 to standout_range)
+// (3) Anchor count robustness (caps everything)
+// standout_ratio controls the split: standout gets ratio*60, score gets (1-ratio)*60.
+int computeMapq(double pri_score, double sec_score, std::size_t anchors,
+                float standout_ratio) {
+  if (pri_score <= 0.0) return 0;
+
+  double score_range = 60.0 * (1.0 - standout_ratio);
+  double standout_range = 60.0 * standout_ratio;
+
+  // Score strength: 0 to score_range, saturates at score = score_range * 10
+  double score_bonus = std::min(score_range, pri_score / 10.0);
+
+  // Standout: 0 to standout_range based on primary/secondary ratio
+  double standout = (sec_score <= 0.0) ? standout_range
+      : standout_range * (1.0 - sec_score / pri_score);
+  standout = std::clamp(standout, 0.0, standout_range);
+
+  // Anchor robustness: caps total mapq. <=1 anchor=0, 10+=full
+  double anchor_factor = std::clamp(static_cast<double>(anchors) / 10.0, 0.0, 1.0);
+
+  double mapq = (standout + score_bonus) * anchor_factor;
+  return static_cast<int>(std::clamp(mapq, 0.0, 60.0) + 0.499);
+}
+
+}  // namespace
+
 void SeedLookup::lookup(const signal::SeedBuffer& seeds, std::vector<NodeAnchor>& out_hits) const {
   if (!store_) return;
   out_hits.clear();
@@ -351,18 +382,24 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
             survivors.push_back(all_hits[i]);
           }
         }
+        LOG_DEBUG("SURVIVORS\t" + read.read_id + "\tchunk=" + std::to_string(chunk_idx) +
+                  "\tbefore=" + std::to_string(all_hits.size()) +
+                  "\tafter=" + std::to_string(survivors.size()) +
+                  "\tchains=" + std::to_string(chunk_chains.chains.size()));
         all_hits = std::move(survivors);
       }
 
-      /* Early exit: if best chain has high enough MAPQ, stop processing chunks */
-      if (config_.map_threshold > 0.0f && !chunk_chains.chains.empty()) {
-        double best_cs = chunk_chains.chains[0].score;
-        double sec_cs = (chunk_chains.chains.size() > 1) ? chunk_chains.chains[1].score : 0.0;
-        double mapq = (best_cs <= 0.0) ? 0.0
-            : (sec_cs <= 0.0) ? 60.0
-            : std::clamp(40.0 * (1.0 - sec_cs / best_cs), 0.0, 60.0);
-        // RH2 early exit: single chain with mapq >= min_mapq (default 2)
-        if (chunk_chains.chains.size() == 1 && mapq >= 2.0) break;
+      /* Early exit: real chain + confident mapq -> stop chunking */
+      if (!chunk_chains.chains.empty()) {
+        const auto& primary = chunk_chains.chains[0];
+        bool is_real = primary.anchors.size() >= config_.map_min_anchors
+                    && primary.score >= config_.map_min_score;
+        if (is_real) {
+          double sec = (chunk_chains.chains.size() > 1) ? chunk_chains.chains[1].score : 0.0;
+          int mapq = computeMapq(primary.score, sec, primary.anchors.size(),
+                                config_.map_standout_ratio);
+          if (mapq >= config_.map_min_mapq_exit) break;
+        }
       }
 
       ++chunk_idx;
@@ -405,117 +442,28 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
     result.mappings.push_back(std::move(mapping));
   }
 
-  /* Primary min-anchor gate: if the best chain has too few anchors,
-   * the read is unmapped. Two random seed hits on a large genome are
-   * not evidence of mapping. Check before the weighted filter. */
-  if (config_.map_min_anchors > 0 && !result.mappings.empty() &&
-      result.mappings[0].anchors.size() < config_.map_min_anchors) {
-    result.mappings.clear();
-  }
-
-  /* Mapping decision: RH2-style weighted score filter.
-   * Computes how much the best chain stands out from the average.
-   * If weighted score < threshold, declare unmapped. */
-  if (config_.map_threshold > 0.0f && result.mappings.size() >= 1) {
-    double best_score = result.mappings[0].chain_score;
-
-    /* Compute MAPQ from best/secondary ratio */
-    double secondary_score = (result.mappings.size() > 1)
-        ? result.mappings[1].chain_score : 0.0;
-    double best_mapq = (best_score <= 0.0) ? 0.0
-        : (secondary_score <= 0.0) ? 60.0
-        : std::clamp(40.0 * (1.0 - secondary_score / best_score), 0.0, 60.0);
-
-    /* Per-chain mapq: each chain's mapq is based on its score vs the next chain.
-     * Mean score and mean mapq across all chains. */
-    double mean_score = 0.0, mean_mapq = 0.0;
-    const auto& mappings = result.mappings;
-    for (std::size_t mi = 0; mi < mappings.size(); ++mi) {
-      mean_score += mappings[mi].chain_score;
-      double sec = (mi + 1 < mappings.size()) ? mappings[mi + 1].chain_score : 0.0;
-      double mq = (mappings[mi].chain_score <= 0.0) ? 0.0
-          : (sec <= 0.0) ? 60.0
-          : std::clamp(40.0 * (1.0 - sec / mappings[mi].chain_score), 0.0, 60.0);
-      mean_mapq += mq;
-    }
-    mean_score /= static_cast<double>(mappings.size());
-    mean_mapq /= static_cast<double>(mappings.size());
-
-    /* Weighted components */
-    float scaled_score_scale = config_.map_score_scale * std::sqrt(static_cast<float>(chunks_processed));
-    float chunk_factor = std::max(0.5f, 1.0f - 1.0f / static_cast<float>(chunks_processed));
-    float effective_w_abs = config_.map_w_abs * chunk_factor;
-    float r_abs = std::min(static_cast<float>(best_score / scaled_score_scale), 1.0f);
-    float r_bestq = (best_mapq > 0.0) ? std::min(static_cast<float>(best_mapq / 30.0), 1.0f) : 0.0f;
-    // Clamp to [0,1] matching RH2
-    float r_bestmq = (best_mapq > 0.0)
-        ? std::clamp(static_cast<float>(1.0 - mean_mapq / best_mapq), 0.0f, 1.0f)
-        : 0.0f;
-    float r_bestmc = (best_score > 0.0)
-        ? std::clamp(static_cast<float>(1.0 - mean_score / best_score), 0.0f, 1.0f)
-        : 0.0f;
-
-    float weighted = effective_w_abs * r_abs
-                   + config_.map_w_bestq * r_bestq
-                   + config_.map_w_bestmq * r_bestmq
-                   + config_.map_w_bestmc * r_bestmc;
-
-    // Store decision scores for GAF output
-    result.decision_weighted = weighted;
-    result.decision_r_abs = r_abs;
-    result.decision_r_bestq = r_bestq;
-    result.decision_r_bestmq = r_bestmq;
-    result.decision_r_bestmc = r_bestmc;
-
-    PIRU_TRACE_DUMP(trace::kChains, read.read_id, {
-      std::ofstream ofs(trace::trace_path("7_decision", read.read_id));
-      ofs << "bs=" << best_score << "\tss=" << secondary_score
-          << "\tms=" << mean_score << "\tbq=" << best_mapq
-          << "\tmq=" << mean_mapq << "\tw=" << weighted
-          << "\tn=" << result.mappings.size() << "\n";
-    });
-
-    if (weighted < config_.map_threshold && !config_.no_map_filter) {
-      result.mappings.clear();  // unmapped
-    }
-  }
-
-  /* Compute per-mapping MAPQ */
+  /* Mapping decision: noise floor then mapq */
   if (!result.mappings.empty()) {
+    // Step 1: noise floor
+    bool is_real = result.mappings[0].anchors.size() >= config_.map_min_anchors
+                && result.mappings[0].chain_score >= config_.map_min_score;
+    if (!is_real) {
+      result.mappings.clear();
+    }
+  }
+
+  if (!result.mappings.empty()) {
+    // Compute mapq for all mappings
     for (std::size_t i = 0; i < result.mappings.size(); ++i) {
       double sec = (i + 1 < result.mappings.size()) ? result.mappings[i + 1].chain_score : 0.0;
-      double pri = result.mappings[i].chain_score;
-      if (pri <= 0.0) {
-        result.mappings[i].mapq = 0;
-      } else if (sec <= 0.0) {
-        result.mappings[i].mapq = 60;
-      } else {
-        result.mappings[i].mapq = static_cast<int>(
-            std::clamp(40.0 * (1.0 - sec / pri), 0.0, 60.0) + 0.499);
-      }
+      result.mappings[i].mapq = computeMapq(
+          result.mappings[i].chain_score, sec, result.mappings[i].anchors.size(),
+          config_.map_standout_ratio);
     }
 
-    /* Secondary suppression: if many chains score similarly and primary
-     * mapq is low, only keep the primary. */
-    if (result.mappings.size() > 1 && result.mappings[0].mapq < 5) {
-      double primary_score = result.mappings[0].chain_score;
-      std::size_t n_similar = 0;
-      for (const auto& m : result.mappings) {
-        if (m.chain_score >= primary_score * 0.8) ++n_similar;
-      }
-      if (n_similar > 3) {
-        result.mappings.resize(1);
-      }
-    }
-
-    /* Filter secondaries with too few anchors (primary already gated above).
-     * Keep primary (index 0), remove secondaries that don't meet the anchor
-     * threshold. These short secondaries already contributed to MAPQ/standout
-     * calculation above -- we just don't emit them as results. */
-    if (config_.map_min_anchors > 0 && result.mappings.size() > 1) {
-      auto it = std::remove_if(result.mappings.begin() + 1, result.mappings.end(),
-          [&](const Mapping& m) { return m.anchors.size() < config_.map_min_anchors; });
-      result.mappings.erase(it, result.mappings.end());
+    // Step 2: mapq threshold
+    if (result.mappings[0].mapq < config_.map_min_mapq_exit) {
+      result.mappings.clear();
     }
   }
 

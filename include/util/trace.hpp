@@ -4,11 +4,11 @@
  * Compile-time optional pipeline tracing for debugging.
  * Build with -DPIRU_TRACE_ENABLED to enable. Zero overhead when compiled out.
  *
- * At runtime, control via environment variables:
- *   PIRU_TRACE_ENABLED_STAGES=0x3f    Bitmask of stages to dump (default: all)
- *   PIRU_TRACE_ENABLED_READS=MSH2,NF2 Comma-separated substrings to match read IDs
- *                              (default: empty = trace all reads)
- *   PIRU_TRACE_ENABLED_DIR=/tmp/trace  Output directory (default: /tmp/piru_trace)
+ * At runtime, tracing is OFF by default even when compiled in.
+ * Set PIRU_TRACE_DIR to activate:
+ *   PIRU_TRACE_DIR=/tmp/trace          Output directory (required to enable)
+ *   PIRU_TRACE_STAGES=0x3f             Bitmask of stages to dump (default: all)
+ *   PIRU_TRACE_READS=MSH2,NF2          Comma-separated read ID substrings (default: all)
  *
  * Usage in code:
  *   PIRU_TRACE_DUMP(kTokens, read_id, {
