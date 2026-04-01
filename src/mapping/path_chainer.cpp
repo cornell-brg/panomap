@@ -299,8 +299,11 @@ ChainResult PathChainer::chain(const std::vector<NodeAnchor>& hits) const {
       while (st < i && rc[i] > rc[st] + max_dist_ref) ++st;
 
       std::size_t num_skipped = 0;
+      std::size_t num_iter = 0;
+      const std::size_t max_iter = config_.max_iterations;
       for (std::size_t j = i; j > st && num_skipped < config_.max_skip;) {
         --j;
+        if (max_iter > 0 && ++num_iter > max_iter) break;
 
         /* Inline compute_score(j, i) */
         auto dq = static_cast<std::int32_t>(qp[i]) - static_cast<std::int32_t>(qp[j]);
@@ -500,6 +503,7 @@ std::vector<cli::Option> PathChainerConfig::cli_options() {
       {'\0', "chain-min-anchors", true, "DP chain: minimum anchors per chain (default: 2)"},
       {'\0', "chain-max-chains", true, "DP chain: max chains to extract (default: 10)"},
       {'\0', "chain-max-skip", true, "DP chain: stop after N consecutive skips (default: 25)"},
+      {'\0', "chain-max-iter", true, "DP chain: max predecessors to check per anchor (default: 0 = unlimited)"},
       {'\0', "chain-merge", true, "DP chain: merge overlapping chains (default: false)"},
   };
 }
@@ -525,6 +529,8 @@ PathChainerConfig PathChainerConfig::from_parsed(const cli::Parsed& parsed) {
     cfg.max_chains = std::stoull(parsed.values.at("chain-max-chains"));
   if (parsed.values.count("chain-max-skip"))
     cfg.max_skip = std::stoull(parsed.values.at("chain-max-skip"));
+  if (parsed.values.count("chain-max-iter"))
+    cfg.max_iterations = std::stoull(parsed.values.at("chain-max-iter"));
   if (parsed.values.count("chain-merge")) {
     const std::string val = parsed.values.at("chain-merge");
     cfg.merge_chains = (val == "true" || val == "1" || val == "yes");

@@ -405,6 +405,14 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
     result.mappings.push_back(std::move(mapping));
   }
 
+  /* Primary min-anchor gate: if the best chain has too few anchors,
+   * the read is unmapped. Two random seed hits on a large genome are
+   * not evidence of mapping. Check before the weighted filter. */
+  if (config_.map_min_anchors > 0 && !result.mappings.empty() &&
+      result.mappings[0].anchors.size() < config_.map_min_anchors) {
+    result.mappings.clear();
+  }
+
   /* Mapping decision: RH2-style weighted score filter.
    * Computes how much the best chain stands out from the average.
    * If weighted score < threshold, declare unmapped. */
@@ -499,6 +507,16 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
         result.mappings.resize(1);
       }
     }
+
+    /* Filter secondaries with too few anchors (primary already gated above).
+     * Keep primary (index 0), remove secondaries that don't meet the anchor
+     * threshold. These short secondaries already contributed to MAPQ/standout
+     * calculation above -- we just don't emit them as results. */
+    if (config_.map_min_anchors > 0 && result.mappings.size() > 1) {
+      auto it = std::remove_if(result.mappings.begin() + 1, result.mappings.end(),
+          [&](const Mapping& m) { return m.anchors.size() < config_.map_min_anchors; });
+      result.mappings.erase(it, result.mappings.end());
+    }
   }
 
   /* ROI classification (if --roi is active) */
@@ -561,6 +579,15 @@ BatchMapperStats BatchMapper::output_batch(const BatchBuffer& batch) const {
     } else {
       ++stats.reads_unmapped;
     }
+
+    /* Per-read decision log (to stderr when verbose) */
+    double pri_score = is_mapped ? map_result.mappings[0].chain_score : 0.0;
+    std::size_t pri_anchors = is_mapped ? map_result.mappings[0].anchors.size() : 0;
+    LOG_DEBUG("DECISION\t" + read.read_id + "\t" +
+              (is_mapped ? "MAP" : "UNMAP") + "\t" +
+              "chunks=" + std::to_string(map_result.chunks_processed) + "\t" +
+              "score=" + std::to_string(static_cast<int>(pri_score)) + "\t" +
+              "anchors=" + std::to_string(pri_anchors));
 
     /* Write to result file if configured */
     if (config_.result_writer) {

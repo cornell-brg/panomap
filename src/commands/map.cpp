@@ -123,6 +123,8 @@ int handle_map(const std::vector<std::string>& args) {
        "Map decision weight on MAPQ standout ratio (default: 0.05)"},
       {'\0', "map-w-bestmc", true,
        "Map decision weight on chain score standout ratio (default: 0.60)"},
+      {'\0', "map-min-anchors", true,
+       "Min anchors in primary chain to report as mapped (default: 0 = disabled)"},
   };
   // Append backend-specific CLI options
   auto chain_opts = piru::mapping::PathChainerConfig::cli_options();
@@ -521,8 +523,13 @@ int handle_map(const std::vector<std::string>& args) {
     map_config.map_w_bestmq = std::stof(parsed.values.at("map-w-bestmq"));
   if (parsed.values.count("map-w-bestmc"))
     map_config.map_w_bestmc = std::stof(parsed.values.at("map-w-bestmc"));
+  if (parsed.values.count("map-min-anchors"))
+    map_config.map_min_anchors = std::stoull(parsed.values.at("map-min-anchors"));
   LOG_INFO("Mapping decision threshold: " + std::to_string(map_config.map_threshold)
-           + (map_config.no_map_filter ? " (DISABLED, --no-map-filter)" : ""));
+           + (map_config.no_map_filter ? " (DISABLED, --no-map-filter)" : "")
+           + (map_config.map_min_anchors > 0
+              ? " (min-anchors=" + std::to_string(map_config.map_min_anchors) + ")"
+              : ""));
 
   /* Read processing */
 

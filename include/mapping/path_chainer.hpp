@@ -31,6 +31,7 @@ struct PathChainerConfig {
   std::size_t min_chain_anchors{2}; // Min anchors per chain
   std::size_t max_chains{10};       // Max number of chains to extract (multi-mapping)
   std::size_t max_skip{25};         // Stop after N consecutive failed chain attempts
+  std::size_t max_iterations{0};   // Max predecessors to check per anchor (0 = unlimited)
 
   float chn_pen_gap{0.8f};   // Gap penalty factor (applied to diagonal deviation)
   float chn_pen_skip{0.0f};  // Skip penalty factor (applied to gap distance)

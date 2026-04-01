@@ -279,8 +279,11 @@ ChainResult PanChainer::chain(const std::vector<NodeAnchor>& hits) const {
 
     // Scan backwards within 1D band
     std::size_t num_skipped = 0;
+    std::size_t num_iter = 0;
+    const std::size_t max_iter = config_.max_iterations;
     for (std::size_t j = i; j > st && num_skipped < config_.max_skip;) {
       --j;
+      if (max_iter > 0 && ++num_iter > max_iter) break;
 
       auto dq = static_cast<std::int32_t>(qp[i]) - static_cast<std::int32_t>(qp[j]);
       if (dq <= 0 || dq > max_dist_query) { ++num_skipped; continue; }
@@ -471,6 +474,8 @@ PanChainerConfig PanChainerConfig::from_parsed(const cli::Parsed& parsed) {
     cfg.max_chains = std::stoull(parsed.values.at("chain-max-chains"));
   if (parsed.values.count("chain-max-skip"))
     cfg.max_skip = std::stoull(parsed.values.at("chain-max-skip"));
+  if (parsed.values.count("chain-max-iter"))
+    cfg.max_iterations = std::stoull(parsed.values.at("chain-max-iter"));
   if (parsed.values.count("chain-pen-switch"))
     cfg.chn_pen_switch = std::stof(parsed.values.at("chain-pen-switch"));
   return cfg;

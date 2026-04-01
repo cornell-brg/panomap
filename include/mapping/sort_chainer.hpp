@@ -34,6 +34,7 @@ struct SortChainerConfig {
   std::size_t min_chain_anchors{2};
   std::size_t max_chains{10};
   std::size_t max_skip{25};
+  std::size_t max_iterations{0};
 
   float chn_pen_gap{0.4f};           // lower than PathChainer (0.8) for 1D distortion
   float chn_pen_skip{0.0f};
