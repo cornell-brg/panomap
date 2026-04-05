@@ -106,6 +106,7 @@ int handle_map(const std::vector<std::string>& args) {
       {'\0', "", false, "\nOutput Options:"},
       {'o', "output", true, "Output file path (format auto-detected from extension: .paf, .gaf)"},
       {'\0', "output-format", true, "Override output format (paf, gaf)"},
+      {'\0', "secondary", false, "Output secondary alignments (default: primary only)"},
       {'\0', "min-secondary-ratio", true,
        "Min chain score ratio vs primary for secondaries (default: 0.4)"},
       {'\0', "map-min-anchors", true, "Noise floor: min anchors in primary chain (default: 3)"},
@@ -269,13 +270,15 @@ int handle_map(const std::vector<std::string>& args) {
   }
 
   // Create result writer (needs graph for GAF path lookups)
+  bool primary_only = !parsed.values.count("secondary");
+
   piru::io::ResultWriterPtr result_writer;
   if (!output_path.empty()) {
     const auto& flat_graph = loaded.graph->flat();
     if (!output_format.empty()) {
-      result_writer = piru::io::make_result_writer(output_path, output_format, flat_graph);
+      result_writer = piru::io::make_result_writer(output_path, output_format, flat_graph, primary_only);
     } else {
-      result_writer = piru::io::make_result_writer(output_path, flat_graph);
+      result_writer = piru::io::make_result_writer(output_path, flat_graph, primary_only);
     }
     if (!result_writer) {
       LOG_ERROR("map: failed to create output writer for '" + output_path + "'");

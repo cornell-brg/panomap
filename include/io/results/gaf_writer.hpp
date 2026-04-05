@@ -14,7 +14,7 @@
 namespace piru::io {
 
 struct GafWriterConfig {
-  bool primary_only{false};
+  bool primary_only{true};
   std::size_t max_secondary{9};
   double min_secondary_ratio{0.7};
 };

@@ -12,10 +12,12 @@
 namespace piru::io {
 
 // Create a writer based on path extension.
-ResultWriterPtr make_result_writer(const std::string& path, const piru::index::FlatGraph& graph);
+ResultWriterPtr make_result_writer(const std::string& path, const piru::index::FlatGraph& graph,
+                                   bool primary_only = true);
 
 // Create a writer with explicit format override.
 ResultWriterPtr make_result_writer(const std::string& path, const std::string& format,
-                                   const piru::index::FlatGraph& graph);
+                                   const piru::index::FlatGraph& graph,
+                                   bool primary_only = true);
 
 }  // namespace piru::io
