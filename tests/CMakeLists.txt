@@ -72,7 +72,6 @@ if(DOCTEST_AVAILABLE)
         ${CMAKE_SOURCE_DIR}/src/io/reads/pod5_provider.cpp
         ${CMAKE_SOURCE_DIR}/src/io/graphs/graph_loader_factory.cpp
         ${CMAKE_SOURCE_DIR}/src/io/graphs/gfa_loader.cpp
-        ${CMAKE_SOURCE_DIR}/src/io/graphs/vg_loader.cpp
         ${CMAKE_SOURCE_DIR}/src/io/graphs/gfa_exporter.cpp
         ${CMAKE_SOURCE_DIR}/src/io/results/gaf_writer.cpp
         ${CMAKE_SOURCE_DIR}/src/io/results/paf_writer.cpp
@@ -110,11 +109,6 @@ if(DOCTEST_AVAILABLE)
         target_compile_definitions(piru_tests PRIVATE PIRU_USE_TBB)
     endif()
     target_link_libraries(piru_tests PRIVATE slow5 ZLIB::ZLIB)
-    if(PIRU_LIBVGIO_AVAILABLE)
-        target_link_libraries(piru_tests PRIVATE VGio::vgio)
-        target_compile_definitions(piru_tests PRIVATE PIRU_HAS_LIBVGIO)
-    endif()
-
     if(DOCTEST_DISCOVERY_CMAKE)
         doctest_discover_tests(piru_tests
             TEST_PREFIX unit.

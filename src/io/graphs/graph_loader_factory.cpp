@@ -4,7 +4,6 @@
 #include <cctype>
 
 #include "io/graphs/gfa_loader.hpp"
-#include "io/graphs/vg_loader.hpp"
 #include "util/logging.hpp"
 
 namespace piru::io {
@@ -29,15 +28,7 @@ GraphLoaderPtr make_graph_loader(const std::string& path) {
   if (ext == "gfa") {
     return std::make_unique<GfaLoader>(path);
   }
-  if (ext == "vg" || ext == "json") {
-#ifdef PIRU_HAS_LIBVGIO
-    return std::make_unique<VgLoader>(path);
-#else
-    LOG_ERROR("libvgio not available; vg format unsupported for '" + path + "'");
-    return nullptr;
-#endif
-  }
-  LOG_ERROR("Unsupported graph format for '" + path + "'");
+  LOG_ERROR("Unsupported graph format for '" + path + "' (expected .gfa)");
   return nullptr;
 }
 
