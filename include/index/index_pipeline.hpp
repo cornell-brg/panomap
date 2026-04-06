@@ -44,14 +44,14 @@ struct IndexPipelineConfig {
 
   /* Signal processing */
 
-  // Fuzzy quantizer: "rh2" (rawhash2) or "passthrough"
+  // Tokenizer: "rh2" (rawhash2)
   // Converts normalized signal to discrete tokens (4-bit = 16 values)
-  std::string fuzzy_quantizer{"rh2"};
-  float fuzzy_fine_min{-2.0f};
-  float fuzzy_fine_max{2.0f};
-  float fuzzy_fine_range{0.4f};
-  float fuzzy_diff{0.35f};  // Skip events within diff of last emitted (0 = disabled, RH2: 0.35)
-  std::uint32_t fuzzy_n_bins{0};  // 0 = use 2^qbits = 16
+  std::string tokenizer{"rh2"};
+  float tokenizer_fine_min{-2.0f};
+  float tokenizer_fine_max{2.0f};
+  float tokenizer_fine_range{0.4f};
+  float tokenizer_diff{0.35f};  // Skip events within diff of last emitted (0 = disabled, RH2: 0.35)
+  std::uint32_t tokenizer_n_bins{0};  // 0 = use 2^qbits = 16
 
   /* Seed extraction */
 
@@ -76,7 +76,7 @@ struct IndexPipelineConfig {
   // If nullptr, indexing runs sequentially.
   concurrency::Executor* executor{nullptr};
 
-  // Note: qbits hardcoded to 4 in both fuzzy_quantizer.hpp and seed extractor.
+  // Note: qbits hardcoded to 4 in both tokenizer.hpp and seed extractor.
   // Do not change without coordinating both.
   //
   // Pore model k: determined by model (r9.4->k=6, r10.4->k=9), not configurable.
@@ -93,7 +93,7 @@ struct IndexPipelineResult {
   std::vector<std::size_t> path_lengths;
   std::size_t pore_k{0};
   std::string model_name;
-  std::string fuzzy_quantizer;
+  std::string tokenizer;
 };
 
 /**

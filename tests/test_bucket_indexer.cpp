@@ -22,7 +22,7 @@
 #include "io/graphs/graph.hpp"
 #include "io/models/model.hpp"
 #include "io/models/model_factory.hpp"
-#include "signal/fuzzy_quantizers/fuzzy_quantizer_factory.hpp"
+#include "signal/tokenizers/tokenizer_factory.hpp"
 #include "signal/seed_extractors/seed_extractor_factory.hpp"
 
 using namespace piru;
@@ -74,11 +74,11 @@ struct IndexResult {
 IndexResult runBucket(const io::ImportedGraph& imported, const io::KmerModel& model) {
   auto flat = index::simpleExpandFlat(imported);
 
-  signal::FuzzyQuantizerConfig fq_cfg;
+  signal::TokenizerConfig fq_cfg;
   fq_cfg.backend = "rh2";
   fq_cfg.pore_model = model.name();
   fq_cfg.diff = 0.0;
-  auto fq = signal::make_fuzzy_quantizer(fq_cfg);
+  auto fq = signal::make_tokenizer(fq_cfg);
 
   signal::SeedExtractorConfig se_cfg;
   se_cfg.backend = "kmer";
@@ -195,11 +195,11 @@ TEST_CASE("Bucket indexer: lookup parity after build") {
 
   auto flat = index::simpleExpandFlat(graph);
 
-  signal::FuzzyQuantizerConfig fq_cfg;
+  signal::TokenizerConfig fq_cfg;
   fq_cfg.backend = "rh2";
   fq_cfg.pore_model = model->name();
   fq_cfg.diff = 0.0;
-  auto fq = signal::make_fuzzy_quantizer(fq_cfg);
+  auto fq = signal::make_tokenizer(fq_cfg);
 
   signal::SeedExtractorConfig se_cfg;
   se_cfg.backend = "kmer";

@@ -168,8 +168,8 @@ int handle_index(const std::vector<std::string>& args) {
   const double seed_freq_cap = parsed.values.count("seed-freq-cap")
                                    ? std::stod(parsed.values.at("seed-freq-cap"))
                                    : defaults.seed_freq_cap;
-  const float fuzzy_diff =
-      parsed.values.count("diff") ? std::stof(parsed.values.at("diff")) : defaults.fuzzy_diff;
+  const float tokenizer_diff =
+      parsed.values.count("diff") ? std::stof(parsed.values.at("diff")) : defaults.tokenizer_diff;
 
   std::string output_base = std::filesystem::path(graph_path).stem().string();
   if (parsed.values.count("output")) {
@@ -193,8 +193,8 @@ int handle_index(const std::vector<std::string>& args) {
   index_config.seed_stride = seed_stride;
   index_config.seed_freq_cutoff = seed_freq_cutoff;
   index_config.seed_freq_cap = seed_freq_cap;
-  index_config.fuzzy_diff = fuzzy_diff;
-  index_config.fuzzy_quantizer = "rh2";
+  index_config.tokenizer_diff = tokenizer_diff;
+  index_config.tokenizer = "rh2";
   if (parsed.values.count("no-1d-sort")) {
     index_config.compute_1d_sort = false;
   }
@@ -231,7 +231,7 @@ int handle_index(const std::vector<std::string>& args) {
   piru::io::index::IndexMetadata metadata;
   metadata.model_name = result.model_name;
   metadata.pore_k = result.pore_k;
-  metadata.fuzzy_quantizer = result.fuzzy_quantizer;
+  metadata.tokenizer = result.tokenizer;
   piru::io::index::save_index(output_path, *result.graph_store, *result.seed_store,
                               result.linearization_coords, metadata, result.node_1d_coords);
 

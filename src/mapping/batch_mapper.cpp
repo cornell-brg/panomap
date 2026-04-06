@@ -87,7 +87,7 @@ void SeedLookup::lookup(const signal::SeedBuffer& seeds, std::vector<NodeAnchor>
 void BatchBuffer::resize(std::size_t capacity) {
   raw_reads.resize(capacity);
   normalized.resize(capacity);
-  fuzzy_quantized.resize(capacity);
+  tokenized.resize(capacity);
   seeds.resize(capacity);
   seed_hits.resize(capacity);
   map_results.resize(capacity);
@@ -98,7 +98,7 @@ void BatchBuffer::clear() {
   for (std::size_t i = 0; i < num_reads; ++i) {
     raw_reads[i] = io::RawRead{};
     normalized[i] = signal::NormalizedSignal{};
-    fuzzy_quantized[i].tokens.clear();
+    tokenized[i].tokens.clear();
     seeds[i].seeds.clear();
     seed_hits[i].clear();
     map_results[i] = ReadMapResult{};
@@ -119,7 +119,7 @@ PipelineComponents BatchMapper::create_components() const {
   /* Create unified event pipeline (event detection + normalization) */
   comps.event_pipeline = signal::make_event_pipeline(config_.event_pipeline_config);
 
-  comps.fuzzy_quantizer = signal::make_fuzzy_quantizer(config_.fuzzy_config);
+  comps.tokenizer = signal::make_tokenizer(config_.tokenizer_config);
   comps.seed_extractor = signal::make_seed_extractor(config_.seed_config);
   comps.seed_store = config_.seed_store;
   comps.graph_store = config_.graph_store;
@@ -196,8 +196,8 @@ BatchMapperStats BatchMapper::process_all() {
 
   LOG_DEBUG(
       "BatchMapper starting: batch_capacity_reads=" + std::to_string(config_.batch_capacity_reads) +
-      ", threads=" + std::to_string(executor_->max_concurrency()) + ", fuzzy=" +
-      components_.fuzzy_quantizer->name() + ", seeds=" + components_.seed_extractor->name());
+      ", threads=" + std::to_string(executor_->max_concurrency()) + ", tokenizer=" +
+      components_.tokenizer->name() + ", seeds=" + components_.seed_extractor->name());
 
   while (true) {
     load_batch(batch);
@@ -275,8 +275,8 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
   if (chunk_size == 0) {
     /* Non-chunked path: process entire signal at once (original behavior) */
     batch.normalized[index] = components_.event_pipeline->process(read);
-    batch.fuzzy_quantized[index] = components_.fuzzy_quantizer->quantize(batch.normalized[index]);
-    batch.seeds[index] = components_.seed_extractor->extract(batch.fuzzy_quantized[index]);
+    batch.tokenized[index] = components_.tokenizer->quantize(batch.normalized[index]);
+    batch.seeds[index] = components_.seed_extractor->extract(batch.tokenized[index]);
     components_.lookup.lookup(batch.seeds[index], all_hits);
   } else {
     /* Chunked path: process signal in chunks, accumulate seed hits.
@@ -307,7 +307,7 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
       /* Per-chunk DSP: event detection, quantization, seed extraction */
       auto events =
           components_.event_pipeline->process_chunk(pA.data() + chunk_start, chunk_len, norm_state);
-      auto tokens = components_.fuzzy_quantizer->quantize(events);
+      auto tokens = components_.tokenizer->quantize(events);
       auto seeds = components_.seed_extractor->extract(tokens);
 
       /* Lookup and accumulate hits, offsetting query positions by cumulative event count */
@@ -390,18 +390,18 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
         all_hits = std::move(survivors);
       }
 
-      /* Early exit: real chain + confident mapq -> stop chunking */
-      if (!chunk_chains.chains.empty()) {
-        const auto& primary = chunk_chains.chains[0];
-        bool is_real = primary.anchors.size() >= config_.map_min_anchors &&
-                       primary.score >= config_.map_min_score;
-        if (is_real) {
-          double sec = (chunk_chains.chains.size() > 1) ? chunk_chains.chains[1].score : 0.0;
-          int mapq =
-              computeMapq(primary.score, sec, primary.anchors.size(), config_.map_standout_ratio);
-          if (mapq >= config_.map_min_mapq_exit) break;
-        }
-      }
+      // /* Early exit: real chain + confident mapq -> stop chunking */
+      // if (!chunk_chains.chains.empty()) {
+      //   const auto& primary = chunk_chains.chains[0];
+      //   bool is_real = primary.anchors.size() >= config_.map_min_anchors &&
+      //                  primary.score >= config_.map_min_score;
+      //   if (is_real) {
+      //     double sec = (chunk_chains.chains.size() > 1) ? chunk_chains.chains[1].score : 0.0;
+      //     int mapq =
+      //         computeMapq(primary.score, sec, primary.anchors.size(), config_.map_standout_ratio);
+      //     if (mapq >= config_.map_min_mapq_exit) break;
+      //   }
+      // }
 
       ++chunk_idx;
     }
@@ -441,28 +441,40 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
     result.mappings.push_back(std::move(mapping));
   }
 
-  /* Mapping decision: noise floor then mapq */
+  /* Mapping decision: noise floor, density, then mapq */
   if (!result.mappings.empty()) {
+    const auto& primary = result.mappings[0];
+
+    // Query event span from anchor positions
+    std::uint32_t min_qpos = primary.anchors.front().read_pos;
+    std::uint32_t max_qpos = primary.anchors.front().read_pos;
+    for (const auto& a : primary.anchors) {
+      min_qpos = std::min(min_qpos, a.read_pos);
+      max_qpos = std::max(max_qpos, a.read_pos);
+    }
+    std::size_t query_span = max_qpos - min_qpos;
+
     // Step 1: noise floor
-    bool is_real = result.mappings[0].anchors.size() >= config_.map_min_anchors &&
-                   result.mappings[0].chain_score >= config_.map_min_score;
+    bool is_real = primary.anchors.size() >= config_.map_min_anchors &&
+                   query_span >= config_.map_min_query_span;
+
+    // Step 2: density check (score / query_event_count)
+    if (is_real && query_span > 0) {
+      double score_per_event = primary.chain_score / static_cast<double>(query_span);
+      is_real = score_per_event >= config_.map_min_score_per_event;
+    }
+
     if (!is_real) {
       result.mappings.clear();
     }
   }
 
   if (!result.mappings.empty()) {
-    // Compute mapq for all mappings
     for (std::size_t i = 0; i < result.mappings.size(); ++i) {
       double sec = (i + 1 < result.mappings.size()) ? result.mappings[i + 1].chain_score : 0.0;
       result.mappings[i].mapq =
           computeMapq(result.mappings[i].chain_score, sec, result.mappings[i].anchors.size(),
                       config_.map_standout_ratio);
-    }
-
-    // Step 2: mapq threshold
-    if (result.mappings[0].mapq < config_.map_min_mapq_exit) {
-      result.mappings.clear();
     }
   }
 

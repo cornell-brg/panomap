@@ -44,7 +44,7 @@ if(DOCTEST_AVAILABLE)
         test_aln_graph.cpp
         test_results.cpp
         test_reads.cpp
-        test_signal_fuzzy_quantize.cpp
+        test_signal_tokenize.cpp
         test_signal_seed_extractors.cpp
         test_mapping_batch.cpp
         test_index_pipeline.cpp
@@ -79,13 +79,9 @@ if(DOCTEST_AVAILABLE)
         ${CMAKE_SOURCE_DIR}/src/io/results/result_writer_factory.cpp
         ${CMAKE_SOURCE_DIR}/src/io/models/builtin_models.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/event_pipeline_factory.cpp
-        ${CMAKE_SOURCE_DIR}/src/signal/event_pipelines/scrappie_event_pipeline.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/event_pipelines/rawhash_event_pipeline.cpp
-        ${CMAKE_SOURCE_DIR}/src/signal/event_pipelines/passthrough_event_pipeline.cpp
-        ${CMAKE_SOURCE_DIR}/src/signal/fuzzy_quantizers/fuzzy_quantizer_factory.cpp
-        ${CMAKE_SOURCE_DIR}/src/signal/fuzzy_quantizers/passthrough_fuzzy_quantizer.cpp
-        ${CMAKE_SOURCE_DIR}/src/signal/fuzzy_quantizers/piru_fuzzy_quantizer.cpp
-        ${CMAKE_SOURCE_DIR}/src/signal/fuzzy_quantizers/rh2_fuzzy_quantizer.cpp
+        ${CMAKE_SOURCE_DIR}/src/signal/tokenizers/tokenizer_factory.cpp
+        ${CMAKE_SOURCE_DIR}/src/signal/tokenizers/rh2_tokenizer.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/seed_extractors/seed_extractor_factory.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/seed_extractors/kmer_seed_extractor.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/seed_extractors/minimizer_seed_extractor.cpp

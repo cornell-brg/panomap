@@ -14,7 +14,7 @@ namespace piru::signal {
 MinimizerSeedExtractor::MinimizerSeedExtractor(SeedExtractorConfig config)
     : config_(std::move(config)) {}
 
-SeedBuffer MinimizerSeedExtractor::extract(const FuzzyQuantizedSignal& signal) const {
+SeedBuffer MinimizerSeedExtractor::extract(const TokenizedSignal& signal) const {
   SeedBuffer buffer;
   const auto& tokens = signal.tokens;
   const std::size_t k = config_.k;

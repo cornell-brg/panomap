@@ -91,7 +91,7 @@ void save_index(const std::string& path, const piru::index::GraphStore& graph_st
 
   write_string(out, metadata.model_name);
   write_pod<uint32_t>(out, metadata.pore_k);
-  write_string(out, metadata.fuzzy_quantizer);
+  write_string(out, metadata.tokenizer);
   // Legacy: graph_flavor was "vg" vs "dbg", now unused.
   write_string(out, std::string{});
   auto pos_graph = out.tellp();
@@ -245,7 +245,7 @@ LoadedIndex load_index(const std::string& path) {
   IndexMetadata metadata;
   metadata.model_name = read_string(in);
   read_pod(in, metadata.pore_k);
-  metadata.fuzzy_quantizer = read_string(in);
+  metadata.tokenizer = read_string(in);
   // Legacy: graph_flavor, read and discard
   read_string(in);
 

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-#include "signal/fuzzy_quantizers/rh2_fuzzy_quantizer.hpp"
+#include "signal/tokenizers/rh2_tokenizer.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -9,7 +9,7 @@ namespace piru::signal {
 
 namespace {
 
-std::uint32_t dynamic_quantize(float value, const FuzzyQuantizerConfig& cfg) {
+std::uint32_t dynamic_quantize(float value, const TokenizerConfig& cfg) {
   const float fine_min = cfg.fine_min;
   const float fine_max = cfg.fine_max;
   const float fine_range = cfg.fine_range;
@@ -50,10 +50,10 @@ std::uint32_t dynamic_quantize(float value, const FuzzyQuantizerConfig& cfg) {
 
 }  // namespace
 
-Rh2FuzzyQuantizer::Rh2FuzzyQuantizer(FuzzyQuantizerConfig config) : config_(std::move(config)) {}
+Rh2Tokenizer::Rh2Tokenizer(TokenizerConfig config) : config_(std::move(config)) {}
 
-FuzzyQuantizedSignal Rh2FuzzyQuantizer::quantize(const NormalizedSignal& signal) const {
-  FuzzyQuantizedSignal quantized;
+TokenizedSignal Rh2Tokenizer::quantize(const NormalizedSignal& signal) const {
+  TokenizedSignal quantized;
   quantized.tokens.reserve(signal.samples.size());
   const std::int16_t sentinel = std::numeric_limits<std::int16_t>::min();
   const float diff = config_.diff;
@@ -90,8 +90,8 @@ FuzzyQuantizedSignal Rh2FuzzyQuantizer::quantize(const NormalizedSignal& signal)
   return quantized;
 }
 
-const FuzzyQuantizerConfig& Rh2FuzzyQuantizer::config() const { return config_; }
+const TokenizerConfig& Rh2Tokenizer::config() const { return config_; }
 
-std::string Rh2FuzzyQuantizer::name() const { return config_.backend; }
+std::string Rh2Tokenizer::name() const { return config_.backend; }
 
 }  // namespace piru::signal

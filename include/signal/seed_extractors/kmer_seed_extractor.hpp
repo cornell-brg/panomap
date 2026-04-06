@@ -12,7 +12,7 @@ class KmerSeedExtractor : public SeedExtractor {
 public:
   explicit KmerSeedExtractor(SeedExtractorConfig config);
 
-  SeedBuffer extract(const FuzzyQuantizedSignal& signal) const override;
+  SeedBuffer extract(const TokenizedSignal& signal) const override;
   const SeedExtractorConfig& config() const override;
   std::string name() const override;
 

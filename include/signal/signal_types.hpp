@@ -28,7 +28,7 @@ struct EventSeries {
   float sampling_rate_hz{0.0f};
 };
 
-struct FuzzyQuantizedSignal {
+struct TokenizedSignal {
   std::vector<std::int16_t> tokens;
   // When diff filter compresses the event stream, this maps compressed token
   // index -> original event index. Empty when no compression (positions = indices).

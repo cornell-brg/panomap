@@ -87,7 +87,7 @@ std::pair<std::uint32_t, std::uint32_t> signalPosToNodeOffset(
 }  // namespace
 
 BucketIndexResult bucketIndex(const FlatGraph& graph, const io::KmerModel& model,
-                              const signal::FuzzyQuantizer& fuzzy_quantizer,
+                              const signal::Tokenizer& tokenizer,
                               const signal::SeedExtractor& extractor,
                               const BucketIndexConfig& config) {
   BucketIndexResult result;
@@ -181,8 +181,8 @@ BucketIndexResult bucketIndex(const FlatGraph& graph, const io::KmerModel& model
     /* Quantize + extract seeds */
     signal::NormalizedSignal normalized;
     normalized.samples = std::move(raw_signal);
-    auto fuzzy = fuzzy_quantizer.quantize(normalized);
-    auto seeds = extractor.extract(fuzzy);
+    auto tokenized = tokenizer.quantize(normalized);
+    auto seeds = extractor.extract(tokenized);
 
     if (seeds.seeds.empty()) return;
 

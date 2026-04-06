@@ -25,7 +25,7 @@ namespace piru::io::index {
 struct IndexMetadata {
   std::string model_name;
   uint32_t pore_k{0};
-  std::string fuzzy_quantizer;
+  std::string tokenizer;
 };
 
 struct LoadedIndex {

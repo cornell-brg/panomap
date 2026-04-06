@@ -2,9 +2,7 @@
 
 #include "signal/event_pipelines/event_pipeline_factory.hpp"
 
-#include "signal/event_pipelines/passthrough_event_pipeline.hpp"
 #include "signal/event_pipelines/rawhash_event_pipeline.hpp"
-#include "signal/event_pipelines/scrappie_event_pipeline.hpp"
 #include "util/logging.hpp"
 
 namespace piru::signal {
@@ -60,15 +58,13 @@ EventPipelineConfig apply_rawhash_defaults(EventPipelineConfig config) {
     // RawHash2 --r10 preset (from main.cpp:363):
     // w1=3, w2=6, t1=6.5, t2=4.0, ph=0.2
   } else {
-    // R9 parameters (tuned for piru, see DEV025)
-    config.window_length1 = 5;
-    config.window_length2 = 8;
-    config.threshold1 = 2.1f;
-    config.threshold2 = 1.2f;
+    // R9 parameters (RawHash R9 defaults, validated on covid 1k reads)
+    config.window_length1 = 3;
+    config.window_length2 = 9;
+    config.threshold1 = 4.0f;
+    config.threshold2 = 3.5f;
     config.peak_height = 0.4f;
-    LOG_DEBUG("RawHash event pipeline: using R9 defaults (w1=5, w2=8, t1=2.1, t2=1.2, ph=0.4)");
-    // Original RawHash R9 defaults (from RawHash roptions.c):
-    // w1=3, w2=9, t1=4.0, t2=3.5, ph=0.4
+    LOG_DEBUG("RawHash event pipeline: using R9 defaults (w1=3, w2=9, t1=4.0, t2=3.5, ph=0.4)");
   }
 
   // Apply user overrides after backend defaults
@@ -77,32 +73,14 @@ EventPipelineConfig apply_rawhash_defaults(EventPipelineConfig config) {
   return config;
 }
 
-// Apply Scrappie defaults (and user overrides)
-EventPipelineConfig apply_scrappie_defaults(EventPipelineConfig config) {
-  // Scrappie uses the struct defaults, just apply overrides
-  apply_user_overrides(config);
-  return config;
-}
-
 }  // namespace
 
 EventPipelinePtr make_event_pipeline(const EventPipelineConfig& config) {
-  if (config.backend == "rawhash" || config.backend.empty()) {
-    LOG_DEBUG("Event pipeline: rawhash (normalize raw signal, then detect events)");
-    auto rawhash_config = apply_rawhash_defaults(config);
-    return std::make_unique<RawHashEventPipeline>(rawhash_config);
-  }
-  if (config.backend == "scrappie") {
-    LOG_DEBUG("Event pipeline: scrappie (detect events on raw signal, then normalize)");
-    auto scrappie_config = apply_scrappie_defaults(config);
-    return std::make_unique<ScrappieEventPipeline>(scrappie_config);
-  }
-  if (config.backend == "passthrough") {
-    LOG_DEBUG("Event pipeline: passthrough (normalize only, no event detection)");
-    return std::make_unique<PassthroughEventPipeline>(config);
+  if (config.backend != "rawhash" && !config.backend.empty()) {
+    LOG_WARN("Unknown event pipeline backend '" + config.backend + "', using rawhash");
   }
 
-  LOG_WARN("Unknown event pipeline backend '" + config.backend + "', using rawhash");
+  LOG_DEBUG("Event pipeline: rawhash (normalize raw signal, then detect events)");
   auto rawhash_config = apply_rawhash_defaults(config);
   return std::make_unique<RawHashEventPipeline>(rawhash_config);
 }

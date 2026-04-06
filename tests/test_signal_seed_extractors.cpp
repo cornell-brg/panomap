@@ -8,7 +8,7 @@
 using namespace piru::signal;
 
 TEST_CASE("K-mer seed extractor emits sliding window hashes") {
-  FuzzyQuantizedSignal quantized;
+  TokenizedSignal quantized;
   quantized.tokens = {1, 2, 3};
 
   auto extractor =
@@ -25,7 +25,7 @@ TEST_CASE("K-mer seed extractor emits sliding window hashes") {
 }
 
 TEST_CASE("Seed struct length field is initialized correctly") {
-  FuzzyQuantizedSignal quantized;
+  TokenizedSignal quantized;
   quantized.tokens = {1, 2, 3, 4, 5, 6};
 
   auto extractor =

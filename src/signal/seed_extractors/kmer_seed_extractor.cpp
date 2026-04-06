@@ -12,7 +12,7 @@ namespace piru::signal {
 
 KmerSeedExtractor::KmerSeedExtractor(SeedExtractorConfig config) : config_(std::move(config)) {}
 
-SeedBuffer KmerSeedExtractor::extract(const FuzzyQuantizedSignal& signal) const {
+SeedBuffer KmerSeedExtractor::extract(const TokenizedSignal& signal) const {
   SeedBuffer buffer;
   const auto& tokens = signal.tokens;
   const std::size_t k = config_.k;

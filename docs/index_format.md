@@ -120,8 +120,8 @@ H+24     4      uint32_t   graph_k                Graph k-mer size (DBG paramete
 H+28     4      uint32_t   pore_k                 Pore model k-mer size
 H+32     4      uint32_t   model_name_length      Length of pore model name string
 H+36     N      char[]     model_name             Pore model name (e.g., "r9.4_450bps")
-H+36+N   4      uint32_t   fuzzy_quantizer_length Length of fuzzy quantizer backend name
-H+40+N   M      char[]     fuzzy_quantizer        Fuzzy quantizer type (e.g., "rh2")
+H+36+N   4      uint32_t   tokenizer_length Length of tokenizer backend name
+H+40+N   M      char[]     tokenizer        Tokenizer type (e.g., "rh2")
 H+40+N+M 4      uint32_t   align_quantizer_length Length of alignment quantizer backend name
 H+44+N+M P      char[]     align_quantizer        Alignment quantizer type (e.g., "int16")
 H+44+N+M+P 4    uint32_t   source_path_length     Length of source graph path
@@ -138,7 +138,7 @@ Where `H` = header size from common header.
 **Notes:**
 - PIRU version allows the mapper to warn about version mismatches
 - `model_name` is the canonical model identifier (e.g., "r9.4_450bps", "r10.4_400bps")
-- `fuzzy_quantizer` and `align_quantizer` ensure mapper uses compatible quantization
+- `tokenizer` and `align_quantizer` ensure mapper uses compatible quantization
 - `source_path` is optional and may be relative or absolute (for debugging/provenance)
 
 ### Graph Metadata
@@ -367,7 +367,7 @@ For `backend_type = "hash"`, no additional backend metadata is needed beyond the
 3. **Read and validate global metadata** from `.graph` file:
    - Extract PIRU version, build timestamp
    - Extract build parameters: `graph_k`, `pore_k`, `model_name`
-   - Extract quantizer types: `fuzzy_quantizer`, `align_quantizer`
+   - Extract quantizer types: `tokenizer`, `align_quantizer`
    - **Warn if PIRU version mismatch** (different major version)
    - **Verify pore model compatibility** with mapper's available models
 4. **Validate consistency**:
@@ -392,7 +392,7 @@ struct IndexMetadata {
     uint32_t graph_k;
     uint32_t pore_k;
     std::string model_name;
-    std::string fuzzy_quantizer;
+    std::string tokenizer;
     std::string align_quantizer;
     std::string source_path;
 };
@@ -427,7 +427,7 @@ LoadedIndex load_index(const std::string& index_dir) {
     // Validate consistency
     validate_node_counts(graph_hdr, signal_hdr);
     validate_parameters(metadata, seed_hdr);
-    validate_quantizers(metadata.fuzzy_quantizer, metadata.align_quantizer);
+    validate_quantizers(metadata.tokenizer, metadata.align_quantizer);
 
     // Load via factories
     auto graph = load_graph_store(graph_file, graph_hdr);
@@ -553,5 +553,5 @@ Invalid indexes must trigger clear error messages, not crashes.
   - Graph flavor (DBG/VG)
   - Graph and pore k-mer sizes
   - Pore model name (e.g., "r9.4_450bps")
-  - Fuzzy and alignment quantizer types
+  - Tokenizer and alignment quantizer types
   - Source graph path (optional provenance)

@@ -126,7 +126,7 @@ Two backends available:
 src/commands/       CLI entry points (index.cpp, map.cpp, annotate.cpp)
 src/mapping/        Mapping pipeline (batch_mapper, dp_chainer, result_formatter)
 src/index/          Graph loading, transformation, linearization, indexing
-src/signal/         DSP: event pipelines, fuzzy quantizers, seed extractors
+src/signal/         DSP: event pipelines, tokenizers, seed extractors
 src/io/             Read/result/model I/O (BLOW5, PAF, GAF, pore models)
 src/concurrency/    Thread pool (TBB backend)
 src/util/           Timing, logging, metrics

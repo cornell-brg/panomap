@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Interface for fuzzy quantization used during seeding.
+// Interface for signal tokenization used during seeding.
 
 #pragma once
 
@@ -10,8 +10,8 @@
 
 namespace piru::signal {
 
-struct FuzzyQuantizerConfig {
-  std::string backend{"piru"};  // Original default: "rawhash2"
+struct TokenizerConfig {
+  std::string backend{"rh2"};
   std::string params;
   std::string pore_model;  // For chemistry-specific defaults (r9/r10)
   float fine_min{-2.0f};
@@ -20,18 +20,18 @@ struct FuzzyQuantizerConfig {
   float diff{0.35f};        // Skip events within diff of last emitted (0 = disabled, RH2: 0.35)
   std::uint32_t qbits{4};
   std::uint32_t n_bins{10};  // Original default: 0 (=16). DEV025: 10 works well
-  bool operator==(const FuzzyQuantizerConfig& other) const = default;
+  bool operator==(const TokenizerConfig& other) const = default;
 };
 
-class FuzzyQuantizer {
+class Tokenizer {
 public:
-  virtual ~FuzzyQuantizer() = default;
+  virtual ~Tokenizer() = default;
 
-  virtual FuzzyQuantizedSignal quantize(const NormalizedSignal& signal) const = 0;
-  virtual const FuzzyQuantizerConfig& config() const = 0;
+  virtual TokenizedSignal quantize(const NormalizedSignal& signal) const = 0;
+  virtual const TokenizerConfig& config() const = 0;
   virtual std::string name() const = 0;
 };
 
-using FuzzyQuantizerPtr = std::unique_ptr<FuzzyQuantizer>;
+using TokenizerPtr = std::unique_ptr<Tokenizer>;
 
 }  // namespace piru::signal

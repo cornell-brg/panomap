@@ -20,7 +20,7 @@
 #include "index/flat_graph.hpp"
 #include "index/simple_expand.hpp"
 #include "index/sort_1d.hpp"
-#include "signal/fuzzy_quantizers/fuzzy_quantizer_factory.hpp"
+#include "signal/tokenizers/tokenizer_factory.hpp"
 #include "signal/seed_extractors/seed_extractor_factory.hpp"
 #include "util/logging.hpp"
 
@@ -49,17 +49,17 @@ IndexPipelineResult run_index_pipeline(io::ImportedGraph imported, const io::Kme
 
   stage_start = std::chrono::high_resolution_clock::now();
 
-  signal::FuzzyQuantizerConfig fuzzy_cfg;
-  fuzzy_cfg.backend = config.fuzzy_quantizer;
-  fuzzy_cfg.pore_model = model.name();
-  fuzzy_cfg.fine_min = config.fuzzy_fine_min;
-  fuzzy_cfg.fine_max = config.fuzzy_fine_max;
-  fuzzy_cfg.fine_range = config.fuzzy_fine_range;
-  fuzzy_cfg.diff = config.fuzzy_diff;
-  fuzzy_cfg.n_bins = config.fuzzy_n_bins;
-  auto fuzzy_quantizer = signal::make_fuzzy_quantizer(fuzzy_cfg);
-  if (!fuzzy_quantizer) {
-    throw std::runtime_error("Failed to create fuzzy quantizer: " + config.fuzzy_quantizer);
+  signal::TokenizerConfig tok_cfg;
+  tok_cfg.backend = config.tokenizer;
+  tok_cfg.pore_model = model.name();
+  tok_cfg.fine_min = config.tokenizer_fine_min;
+  tok_cfg.fine_max = config.tokenizer_fine_max;
+  tok_cfg.fine_range = config.tokenizer_fine_range;
+  tok_cfg.diff = config.tokenizer_diff;
+  tok_cfg.n_bins = config.tokenizer_n_bins;
+  auto tokenizer = signal::make_tokenizer(tok_cfg);
+  if (!tokenizer) {
+    throw std::runtime_error("Failed to create tokenizer: " + config.tokenizer);
   }
 
   signal::SeedExtractorConfig extractor_cfg;
@@ -81,7 +81,7 @@ IndexPipelineResult run_index_pipeline(io::ImportedGraph imported, const io::Kme
   bi_config.seed_stride = config.seed_stride;
   bi_config.executor = config.executor;
 
-  auto bi_result = bucketIndex(flat_graph, model, *fuzzy_quantizer, *extractor, bi_config);
+  auto bi_result = bucketIndex(flat_graph, model, *tokenizer, *extractor, bi_config);
 
   stage_elapsed =
       std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - stage_start)
@@ -116,7 +116,7 @@ IndexPipelineResult run_index_pipeline(io::ImportedGraph imported, const io::Kme
   result.path_lengths = std::move(path_lengths);
   result.pore_k = model.k();
   result.model_name = model.name();
-  result.fuzzy_quantizer = fuzzy_cfg.backend;
+  result.tokenizer = tok_cfg.backend;
 
   return result;
 }

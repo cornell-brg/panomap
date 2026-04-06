@@ -70,7 +70,7 @@ Visualization tool for debugging signal processing and mapping.
 ### Purpose
 
 Helps diagnose signal processing issues by plotting:
-- Node signals at different pipeline stages (raw → fuzzy quantized → alignment quantized)
+- Node signals at different pipeline stages (raw -> tokenized -> alignment quantized)
 - Read signals from BLOW5/SLOW5 files
 - Anchor matches overlaid to verify signal similarity
 
@@ -94,7 +94,7 @@ When enabled, indexing and mapping will output GFA files to `build/graph_dumps/`
 - `imported_graph.gfa` - Original graph structure
 - `transformed_graph.gfa` - After VG transform (if applicable)
 - `raw_signals.gfa` - Node signals after squigglization
-- `fuzzy_quantized.gfa` - Fuzzy quantized tokens (seed extraction)
+- `tokenized.gfa` - Quantized tokens (seed extraction)
 - `aln_quantized.gfa` - Alignment quantized signals
 
 ### Usage
@@ -110,7 +110,7 @@ python scripts/plot_signal_alignment.py \
 Shows:
 - Node sequence
 - Raw signal (picoamps)
-- Fuzzy quantized tokens
+- Quantized tokens
 - Alignment quantized signal
 
 **2. Plot read signal:**
@@ -145,7 +145,7 @@ Shows:
 - Full node and read signals
 - Overlaid normalized signals at anchor window
 - Correlation metric
-- Fuzzy quantized tokens
+- Quantized tokens
 
 ### Debugging Workflow
 
@@ -171,7 +171,7 @@ Shows:
 
 4. **Check for issues**:
    - Low correlation (<0.5): anchor match is spurious
-   - Identical fuzzy tokens across all nodes: quantization collapse
+   - Identical tokens across all nodes: quantization collapse
    - Flat signals: event detection or normalization broken
    - Mismatched signal scales: calibration issue
 

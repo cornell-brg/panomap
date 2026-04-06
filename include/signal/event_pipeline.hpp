@@ -2,9 +2,8 @@
 // Unified interface for event detection and normalization.
 //
 // This interface consolidates event detection and normalization into a single
-// pipeline stage. Different backends can implement different internal orderings:
-// - Scrappie-style: detect events on raw signal, then normalize
-// - RawHash-style: normalize raw signal first, then detect events
+// pipeline stage. The rawhash backend normalizes raw signal first, then
+// detects events.
 
 #pragma once
 
@@ -18,7 +17,7 @@
 namespace piru::signal {
 
 struct EventPipelineConfig {
-  std::string backend{"rawhash"};  // "rawhash" | "scrappie" | "passthrough"
+  std::string backend{"rawhash"};
   std::string pore_model;          // e.g., "r9.4", "r10.4" - used for backend-specific defaults
 
   // Event detection parameters (t-stat peak detection)

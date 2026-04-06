@@ -10,7 +10,7 @@ Usage:
            --graph-dir ../build/graph_dumps \
            --signal-dump ../build/signal_dump_0.txt \
            --read-repr normalized \
-           --node-repr fuzzy
+           --node-repr tokenized
 
     # Plot just read signal progression
     python plot_signal_alignment.py --signal-dump ../build/signal_dump_0.txt
@@ -42,7 +42,7 @@ class SignalDumpLoader:
         self.raw_signal = None
         self.event_means = None
         self.normalized = None
-        self.fuzzy_tokens = None
+        self.tokens = None
         self._load()
 
     def _load(self):
@@ -65,8 +65,8 @@ class SignalDumpLoader:
         # Line 4: Normalized signal (z-scores)
         self.normalized = np.array([float(x) for x in lines[3].strip().split(',')])
 
-        # Line 5: Fuzzy quantized tokens (integer IDs)
-        self.fuzzy_tokens = np.array([int(x) for x in lines[4].strip().split(',')])
+        # Line 5: Quantized tokens (integer IDs)
+        self.tokens = np.array([int(x) for x in lines[4].strip().split(',')])
 
     def get_signal(self, repr_type: str) -> np.ndarray:
         """Get signal by representation type."""
@@ -76,8 +76,8 @@ class SignalDumpLoader:
             return self.event_means
         elif repr_type == 'normalized':
             return self.normalized
-        elif repr_type == 'fuzzy':
-            return self.fuzzy_tokens.astype(float)
+        elif repr_type == 'tokenized':
+            return self.tokens.astype(float)
         else:
             raise ValueError(f"Unknown representation: {repr_type}")
 
@@ -87,7 +87,7 @@ class SignalDumpLoader:
             'raw': 'Signal (pA)',
             'events': 'Event Mean (pA)',
             'normalized': 'Normalized Signal (z-score)',
-            'fuzzy': 'Fuzzy Token ID'
+            'tokenized': 'Token ID'
         }
         return labels.get(repr_type, repr_type)
 
@@ -113,7 +113,7 @@ class GFASignalLoader:
 
         Signal tags:
         - SG:Z: Raw signal (picoamps, comma-separated)
-        - FZ:Z: Fuzzy quantized tokens (integer IDs, comma-separated)
+        - FZ:Z: Quantized tokens (integer IDs, comma-separated)
         - AQ:Z: Alignment quantized signal (picoamps, comma-separated)
         """
         with open(gfa_path) as f:
@@ -140,7 +140,7 @@ class SignalPlotter:
         if graph_dir:
             self.imported_gfa = graph_dir / "imported_graph.gfa"
             self.raw_signals_gfa = graph_dir / "raw_signals.gfa"
-            self.fuzzy_gfa = graph_dir / "fuzzy_quantized.gfa"
+            self.tokenized_gfa = graph_dir / "tokenized.gfa"
             self.aln_gfa = graph_dir / "aln_quantized.gfa"
 
         # Load signal dump if provided
@@ -178,11 +178,11 @@ class SignalPlotter:
         ax3.set_ylabel("Normalized (z-score)")
         ax3.grid(True, alpha=0.3)
 
-        # 4. Fuzzy tokens
+        # 4. Tokens
         ax4 = fig.add_subplot(gs[3])
-        ax4.step(range(len(self.dump_loader.fuzzy_tokens)), self.dump_loader.fuzzy_tokens,
+        ax4.step(range(len(self.dump_loader.tokens)), self.dump_loader.tokens,
                 where='mid', color='orange')
-        ax4.set_title(f"Fuzzy Quantized Tokens (n={len(self.dump_loader.fuzzy_tokens)})")
+        ax4.set_title(f"Quantized Tokens (n={len(self.dump_loader.tokens)})")
         ax4.set_ylabel("Token ID")
         ax4.set_xlabel("Sample Index")
         ax4.grid(True, alpha=0.3)
@@ -198,8 +198,8 @@ class SignalPlotter:
 
         Args:
             node_id: Graph node ID
-            read_repr: Read representation ('raw', 'events', 'normalized', 'fuzzy')
-            node_repr: Node representation ('raw', 'fuzzy', 'alignment')
+            read_repr: Read representation ('raw', 'events', 'normalized', 'tokenized')
+            node_repr: Node representation ('raw', 'tokenized', 'alignment')
             window_start: Start sample index (None = full signal)
             window_end: End sample index (None = full signal)
         """
@@ -216,8 +216,8 @@ class SignalPlotter:
         if node_repr == 'raw':
             node_signal = GFASignalLoader.load_node_signal(self.raw_signals_gfa, node_id, 'SG')
             node_seq = GFASignalLoader.load_node_sequence(self.imported_gfa, node_id)
-        elif node_repr == 'fuzzy':
-            node_signal = GFASignalLoader.load_node_signal(self.fuzzy_gfa, node_id, 'FZ')
+        elif node_repr == 'tokenized':
+            node_signal = GFASignalLoader.load_node_signal(self.tokenized_gfa, node_id, 'FZ')
             node_seq = GFASignalLoader.load_node_sequence(self.imported_gfa, node_id)
         elif node_repr == 'alignment':
             node_signal = GFASignalLoader.load_node_signal(self.aln_gfa, node_id, 'AQ')
@@ -306,11 +306,11 @@ Examples:
       --signal-dump signal_dump_0.txt \\
       --read-repr normalized --node-repr raw
 
-  # Compare fuzzy quantized signals
+  # Compare tokenized signals
   python plot_signal_alignment.py --node-id 31 \\
       --graph-dir build/graph_dumps \\
       --signal-dump signal_dump_0.txt \\
-      --read-repr fuzzy --node-repr fuzzy
+      --read-repr tokenized --node-repr tokenized
 
   # Focus on specific window of read signal
   python plot_signal_alignment.py --node-id 31 \\
@@ -326,9 +326,9 @@ Examples:
     parser.add_argument('--node-id', type=int, help="Graph node ID to compare")
     parser.add_argument('--graph-dir', type=Path,
                        help="Directory containing GFA dumps (required with --node-id)")
-    parser.add_argument('--read-repr', choices=['raw', 'events', 'normalized', 'fuzzy'],
+    parser.add_argument('--read-repr', choices=['raw', 'events', 'normalized', 'tokenized'],
                        default='raw', help="Read signal representation (default: raw)")
-    parser.add_argument('--node-repr', choices=['raw', 'fuzzy', 'alignment'],
+    parser.add_argument('--node-repr', choices=['raw', 'tokenized', 'alignment'],
                        default='raw', help="Node signal representation (default: raw)")
     parser.add_argument('--window-start', type=int, help="Start sample index for read window")
     parser.add_argument('--window-end', type=int, help="End sample index for read window")

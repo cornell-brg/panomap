@@ -79,13 +79,9 @@ add_executable(piru
     src/io/index/serialization.cpp
     src/cli/parse.cpp
     src/signal/event_pipeline_factory.cpp
-    src/signal/event_pipelines/scrappie_event_pipeline.cpp
     src/signal/event_pipelines/rawhash_event_pipeline.cpp
-    src/signal/event_pipelines/passthrough_event_pipeline.cpp
-    src/signal/fuzzy_quantizers/fuzzy_quantizer_factory.cpp
-    src/signal/fuzzy_quantizers/passthrough_fuzzy_quantizer.cpp
-    src/signal/fuzzy_quantizers/piru_fuzzy_quantizer.cpp
-    src/signal/fuzzy_quantizers/rh2_fuzzy_quantizer.cpp
+    src/signal/tokenizers/tokenizer_factory.cpp
+    src/signal/tokenizers/rh2_tokenizer.cpp
     src/signal/seed_extractors/seed_extractor_factory.cpp
     src/signal/seed_extractors/kmer_seed_extractor.cpp
     src/signal/seed_extractors/minimizer_seed_extractor.cpp

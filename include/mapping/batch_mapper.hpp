@@ -29,7 +29,7 @@
 #include "mapping/chainer.hpp"
 #include "mapping/map_result.hpp"
 #include "signal/event_pipelines/event_pipeline_factory.hpp"
-#include "signal/fuzzy_quantizers/fuzzy_quantizer_factory.hpp"
+#include "signal/tokenizers/tokenizer_factory.hpp"
 #include "signal/seed_extractors/seed_extractor_factory.hpp"
 #include "signal/signal_types.hpp"
 
@@ -55,7 +55,7 @@ struct BatchMapperConfig {
   int num_threads{-1};                                  // -1 = automatic.
 
   signal::EventPipelineConfig event_pipeline_config{};  // Unified event detection + normalization
-  signal::FuzzyQuantizerConfig fuzzy_config{};
+  signal::TokenizerConfig tokenizer_config{};
   signal::SeedExtractorConfig seed_config{};
   std::string chainer_backend{"path-chain"};
   cli::Parsed chainer_parsed{};                   // CLI args forwarded to chainer
@@ -87,13 +87,15 @@ struct BatchMapperConfig {
   std::size_t max_total_hits{100000};  // Per-read hit cap (0 = unlimited, default 100k)
 
   /* Mapping decision.
-   * 1. Is primary chain real? score >= min_score AND anchors >= min_anchors
-   * 2. Compute mapq from absolute strength + relative standout
-   * 3. For early exit: mapq >= min_mapq_exit */
-  std::size_t map_min_anchors{3};   // Noise floor: min anchors in primary chain
-  double map_min_score{30.0};       // Noise floor: min primary chain score
-  float map_standout_ratio{0.17f};  // Fraction of mapq from standout (rest from score)
-  int map_min_mapq_exit{12};        // Min mapq to call mapped / early exit
+   * 1. Noise floor: anchors >= min_anchors AND query_span >= min_query_span
+   * 2. Density: score / query_event_count >= min_score_per_event
+   * 3. Compute mapq from absolute strength + relative standout */
+  std::size_t map_min_anchors{3};        // Noise floor: min anchors in primary chain
+  std::size_t map_min_query_span{20};    // Noise floor: min query event span
+  double map_min_score_per_event{0.10};  // Density: min score / query_event_count
+  double map_min_score{30.0};            // Noise floor: min primary chain score
+  float map_standout_ratio{0.17f};       // Fraction of mapq from standout (rest from score)
+  int map_min_mapq_exit{12};             // Min mapq to call mapped / early exit
 };
 
 struct BatchMapperStats {
@@ -109,7 +111,7 @@ struct BatchMapperStats {
 struct BatchBuffer {
   std::vector<io::RawRead> raw_reads;
   std::vector<signal::NormalizedSignal> normalized;
-  std::vector<signal::FuzzyQuantizedSignal> fuzzy_quantized;
+  std::vector<signal::TokenizedSignal> tokenized;
   std::vector<signal::SeedBuffer> seeds;
   std::vector<std::vector<NodeAnchor>> seed_hits;
   std::vector<ReadMapResult> map_results;
@@ -121,7 +123,7 @@ struct BatchBuffer {
 
 struct PipelineComponents {
   signal::EventPipelinePtr event_pipeline;
-  signal::FuzzyQuantizerPtr fuzzy_quantizer;
+  signal::TokenizerPtr tokenizer;
   signal::SeedExtractorPtr seed_extractor;
   const index::SeedStore* seed_store{nullptr};    // non-owning; loaded index
   const index::GraphStore* graph_store{nullptr};  // non-owning; loaded index

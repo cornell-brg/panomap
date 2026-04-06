@@ -24,7 +24,7 @@
 #include "index/linearizer.hpp"
 #include "index/seed_store.hpp"
 #include "io/models/model.hpp"
-#include "signal/fuzzy_quantizers/fuzzy_quantizer.hpp"
+#include "signal/tokenizers/tokenizer.hpp"
 #include "signal/seed_extractors/seed_extractor.hpp"
 
 namespace piru::index {
@@ -71,7 +71,7 @@ struct BucketIndexResult {
  * for compatibility. Bucket-native on-disk format is future work.
  */
 BucketIndexResult bucketIndex(const FlatGraph& graph, const io::KmerModel& model,
-                              const signal::FuzzyQuantizer& fuzzy_quantizer,
+                              const signal::Tokenizer& tokenizer,
                               const signal::SeedExtractor& extractor,
                               const BucketIndexConfig& config = {});
 

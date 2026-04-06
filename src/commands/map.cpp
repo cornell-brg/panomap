@@ -86,8 +86,7 @@ int handle_map(const std::vector<std::string>& args) {
       {'\0', "1d-coords-file", true,
        "1D coords TSV for sort-chain/pan-chain (from odgi sort --path-sgd-layout)"},
       {'\0', "", false, "\nSignal Processing Options:"},
-      {'\0', "event-pipeline", true,
-       "Event pipeline backend: rawhash (default), scrappie, passthrough"},
+      {'\0', "event-pipeline", true, "Event pipeline backend: rawhash (default)"},
       {'\0', "event-w1", true, "Event detection short window length (default: 3)"},
       {'\0', "event-w2", true, "Event detection long window length (default: backend-specific)"},
       {'\0', "event-t1", true, "Event detection threshold1 (default: backend-specific)"},
@@ -110,6 +109,8 @@ int handle_map(const std::vector<std::string>& args) {
       {'\0', "min-secondary-ratio", true,
        "Min chain score ratio vs primary for secondaries (default: 0.4)"},
       {'\0', "map-min-anchors", true, "Noise floor: min anchors in primary chain (default: 3)"},
+      {'\0', "map-min-query-span", true, "Noise floor: min query event span (default: 50)"},
+      {'\0', "map-min-score-per-event", true, "Density: min score/query_events (default: 0.10)"},
       {'\0', "map-min-score", true, "Noise floor: min primary chain score (default: 30)"},
       {'\0', "map-standout-ratio", true, "Fraction of mapq from standout vs score (default: 0.17)"},
       {'\0', "map-min-mapq-exit", true, "Min mapq to call mapped and early exit (default: 12)"},
@@ -256,8 +257,8 @@ int handle_map(const std::vector<std::string>& args) {
   auto loaded = piru::io::index::load_index(index_path);
 
   LOG_INFO("index loaded: " + std::to_string(loaded.graph->nodeCount()) + " nodes");
-  LOG_INFO("index metadata: model=" + loaded.metadata.model_name + ", fuzzy=" +
-           loaded.metadata.fuzzy_quantizer + ", seeds=" + loaded.seeds->extractor_name());
+  LOG_INFO("index metadata: model=" + loaded.metadata.model_name + ", tokenizer=" +
+           loaded.metadata.tokenizer + ", seeds=" + loaded.seeds->extractor_name());
 
   // Extract path lengths from loaded graph BEFORE moving (AdjListGraphStore has path access)
   std::vector<std::size_t> path_lengths;
@@ -290,7 +291,7 @@ int handle_map(const std::vector<std::string>& args) {
   auto graph_store = std::move(loaded.graph);
   auto seed_store = std::move(loaded.seeds);
   auto linearization_coords = std::move(loaded.linearization_coords);
-  const std::string fuzzy_quantizer_name = loaded.metadata.fuzzy_quantizer;
+  const std::string tokenizer_name = loaded.metadata.tokenizer;
   const std::string pore_model_name = loaded.metadata.model_name;
   const std::size_t loaded_pore_k = loaded.metadata.pore_k;
 
@@ -346,23 +347,22 @@ int handle_map(const std::vector<std::string>& args) {
     map_config.node_1d_coords = &node_1d_coords;
   }
 
-  // Configure fuzzy quantizer to match index-time settings.
+  // Configure tokenizer to match index-time settings.
   // Must mirror IndexPipelineConfig defaults so index and query produce
-  // identical tokens. The factory only overrides for "piru" backend;
-  // "rh2" backend uses these values directly.
-  if (!fuzzy_quantizer_name.empty()) {
-    map_config.fuzzy_config.backend = fuzzy_quantizer_name;
+  // identical tokens.
+  if (!tokenizer_name.empty()) {
+    map_config.tokenizer_config.backend = tokenizer_name;
   }
-  map_config.fuzzy_config.pore_model = pore_model_name;
-  map_config.fuzzy_config.fine_min = -2.0f;
-  map_config.fuzzy_config.fine_max = 2.0f;
-  map_config.fuzzy_config.fine_range = 0.4f;  // must match IndexPipelineConfig::fuzzy_fine_range
-  map_config.fuzzy_config.n_bins =
-      0;  // must match IndexPipelineConfig::fuzzy_n_bins (0 = use qbits)
+  map_config.tokenizer_config.pore_model = pore_model_name;
+  map_config.tokenizer_config.fine_min = -2.0f;
+  map_config.tokenizer_config.fine_max = 2.0f;
+  map_config.tokenizer_config.fine_range = 0.4f;  // must match IndexPipelineConfig::tokenizer_fine_range
+  map_config.tokenizer_config.n_bins =
+      0;  // must match IndexPipelineConfig::tokenizer_n_bins (0 = use qbits)
   if (parsed.values.count("diff")) {
-    map_config.fuzzy_config.diff = std::stof(parsed.values.at("diff"));
+    map_config.tokenizer_config.diff = std::stof(parsed.values.at("diff"));
   }
-  LOG_DEBUG("Using fuzzy quantizer: " + map_config.fuzzy_config.backend);
+  LOG_DEBUG("Using tokenizer: " + map_config.tokenizer_config.backend);
 
   // Configure seed extractor from seed store parameters
   auto index_seed_cfg = seed_config_from_store(*seed_store);
@@ -486,6 +486,10 @@ int handle_map(const std::vector<std::string>& args) {
   /* Mapping decision params */
   if (parsed.values.count("map-min-anchors"))
     map_config.map_min_anchors = std::stoull(parsed.values.at("map-min-anchors"));
+  if (parsed.values.count("map-min-query-span"))
+    map_config.map_min_query_span = std::stoull(parsed.values.at("map-min-query-span"));
+  if (parsed.values.count("map-min-score-per-event"))
+    map_config.map_min_score_per_event = std::stod(parsed.values.at("map-min-score-per-event"));
   if (parsed.values.count("map-min-score"))
     map_config.map_min_score = std::stod(parsed.values.at("map-min-score"));
   if (parsed.values.count("map-standout-ratio"))
@@ -493,6 +497,8 @@ int handle_map(const std::vector<std::string>& args) {
   if (parsed.values.count("map-min-mapq-exit"))
     map_config.map_min_mapq_exit = std::stoi(parsed.values.at("map-min-mapq-exit"));
   LOG_INFO("Mapping decision: min-anchors=" + std::to_string(map_config.map_min_anchors) +
+           " min-query-span=" + std::to_string(map_config.map_min_query_span) +
+           " min-score-per-event=" + std::to_string(map_config.map_min_score_per_event) +
            " min-score=" + std::to_string(map_config.map_min_score) +
            " standout-ratio=" + std::to_string(map_config.map_standout_ratio) +
            " min-mapq-exit=" + std::to_string(map_config.map_min_mapq_exit));
