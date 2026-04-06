@@ -26,7 +26,6 @@
 #include "index/sort_1d.hpp"
 #include "io/index/serialization.hpp"
 #include "io/reads/read_provider_factory.hpp"
-#include "io/regions/pira_parser.hpp"
 #include "io/results/result_writer_factory.hpp"
 #include "mapping/batch_mapper.hpp"
 #include "mapping/path_chainer.hpp"
@@ -72,49 +71,28 @@ int handle_map(const std::vector<std::string>& args) {
       {'t', "threads", true, "Worker threads (default: 1)"},
       {'p', "profile", false, "Emit timing profile (tree)"},
       {'v', "verbose", false, "Enable verbose logging (DEBUG level)"},
-      {'\0', "", false, "\nMapping Options:"},
-      {'\0', "seed-freq-cap", true,
-       "Skip high-freq seeds: <N> for absolute, p<F> for percentile (default: p0.99)"},
-      {'\0', "max-hits", true,
-       "Max seed hits per read before stopping lookup (default: 100000, 0 = unlimited)"},
-      {'\0', "diff", true,
-       "Event diff filter: skip events within diff of last emitted (default: 0.35)"},
+      {'\0', "", false, "\nSignal Processing Options:"},
       {'\0', "chunk-size", true, "Signal chunk size in samples (default: 4000, 0 = no chunking)"},
       {'\0', "max-chunks", true, "Max chunks to process per read (default: 10, 0 = unlimited)"},
-      {'\0', "chainer", true,
-       "Chainer backend: path-chain (default), sort-chain, pan-chain"},
-      {'\0', "1d-coords-file", true,
-       "1D coords TSV for sort-chain/pan-chain (from odgi sort --path-sgd-layout)"},
-      {'\0', "", false, "\nSignal Processing Options:"},
       {'\0', "event-w1", true, "Event detection short window (R10: 4, R9: 3)"},
       {'\0', "event-w2", true, "Event detection long window (R10: 10, R9: 9)"},
       {'\0', "event-t1", true, "Event detection threshold1 (R10: 4.0, R9: 4.0)"},
       {'\0', "event-t2", true, "Event detection threshold2 (R10: 3.0, R9: 3.5)"},
       {'\0', "event-peak", true, "Event detection peak height (R10: 0.4, R9: 0.4)"},
-      {'\0', "", false, "\nDebug Options:"},
-      {'\0', "dump-seed-store", true, "Dump full seed store hash table to TSV file"},
-      {'\0', "no-anchor-merge", false, "Disable anchor merging (for heatmap debugging)"},
-      {'\0', "", false, "\nClassification Options:"},
-      {'\0', "roi", true, "ROI annotation file (.pira from piru annotate)"},
-      {'\0', "mode", true, "Classification mode: enrich or deplete (requires --roi)"},
-      {'\0', "chain-target", true,
-       "ROI-only chaining: filter anchors to ROI nodes, classify by score >= threshold"},
-      {'\0', "chain-genome", true,
-       "Whole-genome chaining: classify by ROI overlap fraction >= threshold (default: 0.5)"},
-      {'\0', "", false, "\nOutput Options:"},
-      {'o', "output", true, "Output file path (format auto-detected from extension: .paf, .gaf)"},
-      {'\0', "output-format", true, "Override output format (paf, gaf)"},
-      {'\0', "secondary", false, "Output secondary alignments (default: primary only)"},
-      {'\0', "min-secondary-ratio", true,
-       "Min chain score ratio vs primary for secondaries (default: 0.4)"},
-      {'\0', "map-min-anchors", true, "Noise floor: min anchors in primary chain (default: 3)"},
-      {'\0', "map-min-query-span", true, "Noise floor: min query event span (default: 50)"},
-      {'\0', "map-min-score-per-event", true, "Density: min score/query_events (default: 0.10)"},
-      {'\0', "map-min-score", true, "Noise floor: min primary chain score (default: 30)"},
-      {'\0', "map-standout-ratio", true, "Fraction of mapq from standout vs score (default: 0.17)"},
-      {'\0', "map-min-mapq-exit", true, "Min mapq to call mapped and early exit (default: 12)"},
+      {'\0', "diff", true,
+       "Diff filter: skip events within diff of last emitted (default: 0.35)"},
+      {'\0', "", false, "\nSeed Lookup Options:"},
+      {'\0', "seed-freq-cap", true,
+       "Skip high-freq seeds: <N> for absolute, p<F> for percentile (default: p0.99)"},
+      {'\0', "max-hits", true,
+       "Max seed hits per read before stopping lookup (default: 100000, 0 = unlimited)"},
+      {'\0', "", false, "\nChaining Options:"},
+      {'\0', "chainer", true,
+       "Chainer backend: path-chain (default), sort-chain, pan-chain"},
+      {'\0', "1d-coords-file", true,
+       "1D coords TSV for sort-chain/pan-chain (from odgi sort --path-sgd-layout)"},
   };
-  // Append backend-specific CLI options
+  // Append backend-specific chaining options
   auto chain_opts = piru::mapping::PathChainerConfig::cli_options();
   config.options.insert(config.options.end(), chain_opts.begin(), chain_opts.end());
   config.options.push_back(
@@ -126,6 +104,21 @@ int handle_map(const std::vector<std::string>& args) {
                             "PanChainer: 1D band width for candidate selection (default: 5000)"});
   config.options.push_back({'\0', "chain-pen-switch", true,
                             "PanChainer: penalty for switching haplotype path (default: 50)"});
+  config.options.push_back({'\0', "", false, "\nMapping Decision Options:"});
+  config.options.push_back({'\0', "map-min-anchors", true, "Min anchors in primary chain (default: 3)"});
+  config.options.push_back({'\0', "map-min-query-span", true, "Min query event span (default: 50)"});
+  config.options.push_back({'\0', "map-min-score-per-event", true, "Min score/query_events (default: 0.10)"});
+  config.options.push_back({'\0', "map-min-score", true, "Min primary chain score (default: 30)"});
+  config.options.push_back({'\0', "map-standout-ratio", true, "Fraction of mapq from standout vs score (default: 0.17)"});
+  config.options.push_back({'\0', "map-min-mapq-exit", true, "Min mapq to call mapped and early exit (default: 12)"});
+  config.options.push_back({'\0', "", false, "\nOutput Options:"});
+  config.options.push_back({'o', "output", true, "Output file (.paf or .gaf, default: GAF to stdout)"});
+  config.options.push_back({'\0', "secondary", false, "Output secondary alignments (default: primary only)"});
+  config.options.push_back({'\0', "min-secondary-ratio", true,
+                            "Min chain score ratio vs primary for secondaries (default: 0.4)"});
+  config.options.push_back({'\0', "", false, "\nDebug Options:"});
+  config.options.push_back({'\0', "dump-seed-store", true, "Dump full seed store hash table to TSV file"});
+  config.options.push_back({'\0', "no-anchor-merge", false, "Disable anchor merging (for heatmap debugging)"});
 
   config.on_error = [](const std::string&) { std::cerr << "map: invalid option\n"; };
 
@@ -169,73 +162,13 @@ int handle_map(const std::vector<std::string>& args) {
     }
   }();
 
-  // Classification options
-  const std::string roi_path = parsed.values.count("roi") ? parsed.values.at("roi") : "";
-  const std::string classify_mode = parsed.values.count("mode") ? parsed.values.at("mode") : "";
-  const bool has_chain_target = parsed.values.count("chain-target") > 0;
-  const bool has_chain_genome = parsed.values.count("chain-genome") > 0;
-
-  if (!roi_path.empty() && classify_mode.empty()) {
-    LOG_ERROR("map: --roi requires --mode (enrich or deplete)");
-    return 1;
-  }
-  if (!classify_mode.empty() && roi_path.empty()) {
-    LOG_ERROR("map: --mode requires --roi <file>");
-    return 1;
-  }
-  if (!classify_mode.empty() && classify_mode != "enrich" && classify_mode != "deplete") {
-    LOG_ERROR("map: --mode must be 'enrich' or 'deplete', got '" + classify_mode + "'");
-    return 1;
-  }
-  if (has_chain_target && has_chain_genome) {
-    LOG_ERROR("map: --chain-target and --chain-genome are mutually exclusive");
-    return 1;
-  }
-  if ((has_chain_target || has_chain_genome) && roi_path.empty()) {
-    LOG_ERROR("map: --chain-target/--chain-genome require --roi <file>");
-    return 1;
-  }
-  if (!roi_path.empty() && !has_chain_target && !has_chain_genome) {
-    LOG_ERROR("map: --roi requires --chain-target <score> or --chain-genome <overlap>");
-    return 1;
-  }
-
-  // Parse classification thresholds
-  const bool roi_filter_anchors = has_chain_target;
-  const double roi_score_threshold = [&]() {
-    if (!has_chain_target) return 0.0;
-    try {
-      return std::stod(parsed.values.at("chain-target"));
-    } catch (...) {
-      LOG_WARN("map: invalid --chain-target value, using 30");
-      return 30.0;
-    }
-  }();
-  const double roi_overlap_threshold = [&]() {
-    if (!has_chain_genome) return 0.5;  // default for implicit genome mode
-    try {
-      return std::stod(parsed.values.at("chain-genome"));
-    } catch (...) {
-      LOG_WARN("map: invalid --chain-genome value, using 0.5");
-      return 0.5;
-    }
-  }();
-
-  // Load ROI annotation if provided
-  std::unordered_set<std::size_t> roi_nodes;
-  if (!roi_path.empty()) {
-    roi_nodes = piru::io::parse_pira(roi_path);
-  }
-
-  // Create executor for parallel operations (indexing and mapping)
+  // Create executor for parallel operations
   auto executor = piru::concurrency::make_executor(num_threads);
   LOG_DEBUG("Using " + std::to_string(executor->max_concurrency()) + " threads (" +
             executor->backend_name() + ")");
 
   // Extract output options
   const std::string output_path = parsed.values.count("output") ? parsed.values.at("output") : "";
-  const std::string output_format =
-      parsed.values.count("output-format") ? parsed.values.at("output-format") : "";
 
   // Result writer created after index load (needs graph for GAF path lookups)
 
@@ -271,20 +204,14 @@ int handle_map(const std::vector<std::string>& args) {
 
   // Create result writer (needs graph for GAF path lookups)
   bool primary_only = !parsed.values.count("secondary");
+  const auto& flat_graph = loaded.graph->flat();
 
   piru::io::ResultWriterPtr result_writer;
   if (!output_path.empty()) {
-    const auto& flat_graph = loaded.graph->flat();
-    if (!output_format.empty()) {
-      result_writer = piru::io::make_result_writer(output_path, output_format, flat_graph, primary_only);
-    } else {
-      result_writer = piru::io::make_result_writer(output_path, flat_graph, primary_only);
-    }
-    if (!result_writer) {
-      LOG_ERROR("map: failed to create output writer for '" + output_path + "'");
-      return 1;
-    }
+    result_writer = piru::io::make_result_writer(output_path, flat_graph, primary_only);
     LOG_INFO("Writing results to: " + output_path);
+  } else {
+    result_writer = piru::io::make_result_writer_stdout(flat_graph, primary_only);
   }
 
   auto graph_store = std::move(loaded.graph);
@@ -382,26 +309,6 @@ int handle_map(const std::vector<std::string>& args) {
   }
   map_config.chainer_parsed = parsed;
 
-  // ROI classification config
-  if (!roi_nodes.empty()) {
-    map_config.roi_nodes = &roi_nodes;
-    map_config.classify_mode = classify_mode;
-    map_config.roi_filter_anchors = roi_filter_anchors;
-    map_config.roi_score_threshold = roi_score_threshold;
-    map_config.roi_overlap_threshold = roi_overlap_threshold;
-    // Force top-1 chain only -- we only need the best for classification
-    map_config.chainer_parsed.values["chain-max-chains"] = "1";
-    if (roi_filter_anchors) {
-      LOG_INFO("ROI classification: mode=" + classify_mode +
-               ", chain-target score>=" + std::to_string(roi_score_threshold) + ", " +
-               std::to_string(roi_nodes.size()) + " ROI nodes");
-    } else {
-      LOG_INFO("ROI classification: mode=" + classify_mode +
-               ", chain-genome overlap>=" + std::to_string(roi_overlap_threshold) + ", " +
-               std::to_string(roi_nodes.size()) + " ROI nodes");
-    }
-  }
-
   // pore_k from index metadata, used for chainer scoring span
   map_config.pore_k = loaded_pore_k;
 
@@ -466,10 +373,7 @@ int handle_map(const std::vector<std::string>& args) {
            " (seeds with freq > " + std::to_string(seed_store->frequency_threshold()) +
            " will be skipped)");
 
-  // Configure result writer if specified
-  if (result_writer) {
-    map_config.result_writer = result_writer.get();
-  }
+  map_config.result_writer = result_writer.get();
 
   if (parsed.values.count("no-anchor-merge")) {
     map_config.enable_anchor_merge = false;

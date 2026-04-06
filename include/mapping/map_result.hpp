@@ -45,10 +45,6 @@ struct ReadMapResult {
   std::size_t chunks_processed{0};
   double processing_time_sec{0.0};
 
-  /* ROI classification (populated when --roi is active) */
-  double roi_overlap{-1.0};  // -1 = not computed
-  bool roi_keep{false};
-
   bool mapped() const { return !mappings.empty(); }
   const Mapping* primary() const { return mappings.empty() ? nullptr : &mappings[0]; }
 };

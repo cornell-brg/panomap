@@ -11,13 +11,12 @@
 
 namespace piru::io {
 
-// Create a writer based on path extension.
+// Create a writer based on path extension (.paf -> PAF, anything else -> GAF).
 ResultWriterPtr make_result_writer(const std::string& path, const piru::index::FlatGraph& graph,
                                    bool primary_only = true);
 
-// Create a writer with explicit format override.
-ResultWriterPtr make_result_writer(const std::string& path, const std::string& format,
-                                   const piru::index::FlatGraph& graph,
-                                   bool primary_only = true);
+// Create a GAF writer to stdout.
+ResultWriterPtr make_result_writer_stdout(const piru::index::FlatGraph& graph,
+                                          bool primary_only = true);
 
 }  // namespace piru::io

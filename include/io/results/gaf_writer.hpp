@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <fstream>
+#include <ostream>
 #include <string>
 #include <vector>
 
@@ -21,21 +22,22 @@ struct GafWriterConfig {
 
 class GafWriter : public ResultWriter {
 public:
+  // Write to file
   GafWriter(const std::string& path, const index::FlatGraph& graph, GafWriterConfig config = {});
+  // Write to stream (e.g. stdout)
+  GafWriter(const index::FlatGraph& graph, GafWriterConfig config = {});
   ~GafWriter() override;
 
   void write(const mapping::ReadMapResult& result, const std::string& read_id,
              std::size_t read_length) override;
 
 private:
-  // Build GAF-style node walk string (">n1>n2>n3")
   std::string buildPathString(const std::vector<mapping::ChainedAnchor>& anchors) const;
-
-  // Get path name and length from graph
   std::string getPathName(std::size_t path_id) const;
   std::size_t getPathLength(std::size_t path_id) const;
 
-  std::ofstream out_;
+  std::ofstream file_;        // owned file (when writing to file)
+  std::ostream* out_;         // points to file_ or external stream (e.g. cout)
   const index::FlatGraph& graph_;
   GafWriterConfig config_;
 

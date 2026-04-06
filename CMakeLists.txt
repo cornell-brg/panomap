@@ -70,7 +70,6 @@ add_executable(piru
     src/io/reads/read_provider_factory.cpp
     src/io/reads/pod5_provider.cpp
     src/io/reads/slow5_provider.cpp
-    src/io/regions/pira_parser.cpp
     src/io/models/builtin_models.cpp
     src/io/models/model.cpp
     src/io/index/serialization.cpp

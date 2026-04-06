@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <iostream>
 #include <limits>
 #include <sstream>
 #include <string_view>
@@ -20,22 +21,33 @@
 
 namespace piru::io {
 
+namespace {
+void write_header(std::ostream& out) {
+  out << "#query_name\tquery_len\tquery_start\tquery_end\tstrand\t"
+      << "graph_path\tpath_len\tpath_start\tpath_end\t"
+      << "matches\tblock_len\tmapq\t[optional_tags: pn:Z:path_name ...]\n";
+}
+}  // namespace
+
 GafWriter::GafWriter(const std::string& path, const index::FlatGraph& graph, GafWriterConfig config)
-    : out_(path, std::ios::out | std::ios::trunc), graph_(graph), config_(std::move(config)) {
-  if (!out_) {
+    : file_(path, std::ios::out | std::ios::trunc), out_(&file_), graph_(graph), config_(std::move(config)) {
+  if (!file_) {
     LOG_ERROR("Failed to open GAF output: " + path);
   } else {
-    out_ << "#query_name\tquery_len\tquery_start\tquery_end\tstrand\t"
-         << "graph_path\tpath_len\tpath_start\tpath_end\t"
-         << "matches\tblock_len\tmapq\t[optional_tags: pn:Z:path_name ...]\n";
+    write_header(*out_);
   }
 }
 
-GafWriter::~GafWriter() { out_.flush(); }
+GafWriter::GafWriter(const index::FlatGraph& graph, GafWriterConfig config)
+    : out_(&std::cout), graph_(graph), config_(std::move(config)) {
+  write_header(*out_);
+}
+
+GafWriter::~GafWriter() { out_->flush(); }
 
 void GafWriter::write(const mapping::ReadMapResult& result, const std::string& read_id,
                       std::size_t read_length) {
-  if (!out_ || result.mappings.empty()) return;
+  if (!out_ || !*out_ || result.mappings.empty()) return;
 
   /* Determine how many mappings to output */
   std::size_t max_out = result.mappings.size();
@@ -143,13 +155,9 @@ void GafWriter::write(const mapping::ReadMapResult& result, const std::string& r
       ss << '\t' << dt_buf;
     }
 
-    // ROI tags (primary only)
-    if (is_primary && result.roi_overlap >= 0.0) {
-      ss << "\tro:f:" << result.roi_overlap;
-      ss << "\trd:A:" << (result.roi_keep ? 'K' : 'R');
-    }
 
-    out_ << ss.str() << '\n';
+
+    *out_ << ss.str() << '\n';
   }
 }
 

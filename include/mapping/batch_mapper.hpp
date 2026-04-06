@@ -17,7 +17,6 @@
 #include <iosfwd>
 #include <memory>
 #include <string>
-#include <unordered_set>
 #include <vector>
 
 #include "concurrency/executor.hpp"
@@ -76,13 +75,6 @@ struct BatchMapperConfig {
   /* Anchor merging (passed to chainer) */
   bool enable_anchor_merge{true};
   std::size_t pore_k{0};  // Pore model k, passed to chainer for scoring span
-
-  /* ROI classification */
-  const std::unordered_set<std::size_t>* roi_nodes{nullptr};  // non-owning
-  std::string classify_mode{};        // "enrich" or "deplete", empty = disabled
-  bool roi_filter_anchors{false};     // --chain-target: filter anchors to ROI nodes
-  double roi_score_threshold{30.0};   // --chain-target: min chain score for accept
-  double roi_overlap_threshold{0.5};  // --chain-genome: min ROI overlap for accept
 
   /* Seed lookup limits */
   std::size_t max_total_hits{100000};  // Per-read hit cap (0 = unlimited, default 100k)
