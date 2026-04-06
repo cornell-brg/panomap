@@ -21,7 +21,6 @@
 #include <string>
 #include <utility>
 
-#include "mapping/graph_chainer.hpp"
 #include "mapping/pan_chainer.hpp"
 #include "mapping/path_chainer.hpp"
 #include "mapping/sort_chainer.hpp"
@@ -140,15 +139,6 @@ PipelineComponents BatchMapper::create_components() const {
     path_config.pore_k = config_.pore_k;
     comps.chainer = std::make_unique<PathChainer>(path_config, *config_.linearization_coords,
                                                   *config_.path_lengths);
-  } else if (config_.chainer_backend == "graph-chain") {
-    if (!config_.linearization_coords) {
-      throw std::runtime_error("GraphChainer requires linearization_coords");
-    }
-    if (!config_.path_lengths) {
-      throw std::runtime_error("GraphChainer requires path_lengths for bounds checking");
-    }
-    comps.chainer =
-        std::make_unique<GraphChainer>(*config_.linearization_coords, *config_.path_lengths);
   } else if (config_.chainer_backend == "sort-chain") {
     if (!config_.node_1d_coords) {
       throw std::runtime_error(

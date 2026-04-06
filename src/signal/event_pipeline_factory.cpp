@@ -2,7 +2,7 @@
 
 #include "signal/event_pipelines/event_pipeline_factory.hpp"
 
-#include "signal/event_pipelines/rawhash_event_pipeline.hpp"
+#include "signal/event_pipelines/standard_event_pipeline.hpp"
 #include "util/logging.hpp"
 
 namespace piru::signal {
@@ -41,33 +41,28 @@ void apply_user_overrides(EventPipelineConfig& config) {
   }
 }
 
-// Apply RawHash-specific defaults based on pore model (R9 vs R10)
-EventPipelineConfig apply_rawhash_defaults(EventPipelineConfig config) {
+// Apply pore model-specific defaults (R9 vs R10)
+EventPipelineConfig apply_defaults(EventPipelineConfig config) {
   const bool is_r10 = (config.pore_model.find("r10") != std::string::npos ||
                        config.pore_model.find("R10") != std::string::npos);
 
   if (is_r10) {
-    // Piru-tuned R10 defaults (DEV025)
     config.window_length1 = 4;
     config.window_length2 = 10;
     config.threshold1 = 4.0f;
     config.threshold2 = 3.0f;
     config.peak_height = 0.4f;
-    LOG_DEBUG(
-        "RawHash event pipeline: using piru R10 defaults (w1=4, w2=10, t1=4.0, t2=3.0, ph=0.4)");
-    // RawHash2 --r10 preset (from main.cpp:363):
-    // w1=3, w2=6, t1=6.5, t2=4.0, ph=0.2
+    LOG_DEBUG("Event pipeline: using R10 defaults (w1=4, w2=10, t1=4.0, t2=3.0, ph=0.4)");
   } else {
-    // R9 parameters (RawHash R9 defaults, validated on covid 1k reads)
     config.window_length1 = 3;
     config.window_length2 = 9;
     config.threshold1 = 4.0f;
     config.threshold2 = 3.5f;
     config.peak_height = 0.4f;
-    LOG_DEBUG("RawHash event pipeline: using R9 defaults (w1=3, w2=9, t1=4.0, t2=3.5, ph=0.4)");
+    LOG_DEBUG("Event pipeline: using R9 defaults (w1=3, w2=9, t1=4.0, t2=3.5, ph=0.4)");
   }
 
-  // Apply user overrides after backend defaults
+  // Apply user overrides after defaults
   apply_user_overrides(config);
 
   return config;
@@ -76,13 +71,12 @@ EventPipelineConfig apply_rawhash_defaults(EventPipelineConfig config) {
 }  // namespace
 
 EventPipelinePtr make_event_pipeline(const EventPipelineConfig& config) {
-  if (config.backend != "rawhash" && !config.backend.empty()) {
-    LOG_WARN("Unknown event pipeline backend '" + config.backend + "', using rawhash");
+  if (config.backend != "standard" && !config.backend.empty()) {
+    LOG_WARN("Unknown event pipeline backend '" + config.backend + "', using standard");
   }
 
-  LOG_DEBUG("Event pipeline: rawhash (normalize raw signal, then detect events)");
-  auto rawhash_config = apply_rawhash_defaults(config);
-  return std::make_unique<RawHashEventPipeline>(rawhash_config);
+  auto resolved = apply_defaults(config);
+  return std::make_unique<StandardEventPipeline>(resolved);
 }
 
 }  // namespace piru::signal

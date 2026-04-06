@@ -59,8 +59,6 @@ add_executable(piru
     src/main.cpp
     src/commands/index.cpp
     src/commands/map.cpp
-    src/commands/eval.cpp
-    src/commands/annotate.cpp
     src/concurrency/executor.cpp
     src/io/graphs/graph_loader_factory.cpp
     src/io/graphs/gfa_loader.cpp
@@ -72,14 +70,13 @@ add_executable(piru
     src/io/reads/read_provider_factory.cpp
     src/io/reads/pod5_provider.cpp
     src/io/reads/slow5_provider.cpp
-    src/io/regions/bed_parser.cpp
     src/io/regions/pira_parser.cpp
     src/io/models/builtin_models.cpp
     src/io/models/model.cpp
     src/io/index/serialization.cpp
     src/cli/parse.cpp
     src/signal/event_pipeline_factory.cpp
-    src/signal/event_pipelines/rawhash_event_pipeline.cpp
+    src/signal/event_pipelines/standard_event_pipeline.cpp
     src/signal/tokenizers/tokenizer_factory.cpp
     src/signal/tokenizers/rh2_tokenizer.cpp
     src/signal/seed_extractors/seed_extractor_factory.cpp
@@ -93,7 +90,6 @@ add_executable(piru
     src/mapping/batch_mapper.cpp
     src/mapping/seed_merger.cpp
     src/mapping/path_chainer.cpp
-    src/mapping/graph_chainer.cpp
     src/mapping/sort_chainer.cpp
     src/mapping/pan_chainer.cpp
 

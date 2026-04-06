@@ -79,7 +79,7 @@ if(DOCTEST_AVAILABLE)
         ${CMAKE_SOURCE_DIR}/src/io/results/result_writer_factory.cpp
         ${CMAKE_SOURCE_DIR}/src/io/models/builtin_models.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/event_pipeline_factory.cpp
-        ${CMAKE_SOURCE_DIR}/src/signal/event_pipelines/rawhash_event_pipeline.cpp
+        ${CMAKE_SOURCE_DIR}/src/signal/event_pipelines/standard_event_pipeline.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/tokenizers/tokenizer_factory.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/tokenizers/rh2_tokenizer.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/seed_extractors/seed_extractor_factory.cpp
@@ -96,7 +96,6 @@ if(DOCTEST_AVAILABLE)
         ${CMAKE_SOURCE_DIR}/src/mapping/batch_mapper.cpp
         ${CMAKE_SOURCE_DIR}/src/mapping/seed_merger.cpp
         ${CMAKE_SOURCE_DIR}/src/mapping/path_chainer.cpp
-        ${CMAKE_SOURCE_DIR}/src/mapping/graph_chainer.cpp
         ${CMAKE_SOURCE_DIR}/src/mapping/sort_chainer.cpp
         ${CMAKE_SOURCE_DIR}/src/mapping/pan_chainer.cpp
 

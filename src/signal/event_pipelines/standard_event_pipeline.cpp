@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-#include "signal/event_pipelines/rawhash_event_pipeline.hpp"
+#include "signal/event_pipelines/standard_event_pipeline.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -12,8 +12,7 @@ namespace piru::signal {
 
 namespace {
 
-// RawHash normalizes raw signal first, then detects events.
-// Key differences from Scrappie:
+// Standard event pipeline: normalize raw signal first, then detect events.
 // 1. Zscore normalize raw samples, filter |z| >= 3
 // 2. Run t-stat event detection on normalized signal
 // 3. Use IQR-filtered mean for each event segment
@@ -21,7 +20,7 @@ namespace {
 
 void compute_sum_sumsq(const std::vector<float>& signal, std::vector<float>& sum,
                        std::vector<float>& sumsq) {
-  // RawHash uses float for prefix sums (unlike Scrappie which uses double)
+  // Uses float for prefix sums
   const int n = static_cast<int>(signal.size());
   sum.assign(n + 1, 0.0f);
   sumsq.assign(n + 1, 0.0f);
@@ -132,7 +131,6 @@ std::vector<int> short_long_peak_detector(const std::vector<float>& t1,
 }
 
 // IQR-filtered mean: filter outliers using interquartile range, then compute mean.
-// This is what RawHash uses for computing event means.
 float iqr_filtered_mean(std::vector<float> segment) {
   if (segment.empty()) return 0.0f;
 
@@ -158,10 +156,10 @@ float iqr_filtered_mean(std::vector<float> segment) {
 
 }  // namespace
 
-RawHashEventPipeline::RawHashEventPipeline(EventPipelineConfig config)
+StandardEventPipeline::StandardEventPipeline(EventPipelineConfig config)
     : config_(std::move(config)) {}
 
-NormalizedSignal RawHashEventPipeline::process(const io::RawRead& read) const {
+NormalizedSignal StandardEventPipeline::process(const io::RawRead& read) const {
   NormalizedSignal result;
   result.sampling_rate_hz = read.sampling_rate_hz;
 
@@ -177,7 +175,7 @@ NormalizedSignal RawHashEventPipeline::process(const io::RawRead& read) const {
     raw.push_back((static_cast<float>(value) + read.offset) * raw_unit);
   }
 
-  // Step 2: Normalize raw signal FIRST (RawHash style)
+  // Step 2: Normalize raw signal first
   // Compute running mean and stddev, then zscore normalize and filter outliers
   double sum = 0.0;
   double sum2 = 0.0;
@@ -192,7 +190,7 @@ NormalizedSignal RawHashEventPipeline::process(const io::RawRead& read) const {
   normalized.reserve(raw.size());
   for (const auto v : raw) {
     float norm_val = static_cast<float>((v - mean) / stddev);
-    // RawHash filters out samples where |z| >= 3
+    // Filter out samples where |z| >= 3
     if (norm_val > -3.0f && norm_val < 3.0f) {
       normalized.push_back(norm_val);
     }
@@ -221,8 +219,7 @@ NormalizedSignal RawHashEventPipeline::process(const io::RawRead& read) const {
     return result;
   }
 
-  // Step 6: Generate events using IQR-filtered mean
-  // RawHash skips segments > 500 samples
+  // Step 6: Generate events using IQR-filtered mean (skip segments > 500 samples)
   constexpr int kMaxSegmentLength = 500;
 
   result.samples.reserve(peaks.size() + 1);
@@ -252,12 +249,12 @@ NormalizedSignal RawHashEventPipeline::process(const io::RawRead& read) const {
   return result;
 }
 
-NormalizedSignal RawHashEventPipeline::process_chunk(const float* pA, std::size_t len,
+NormalizedSignal StandardEventPipeline::process_chunk(const float* pA, std::size_t len,
                                                      NormState& norm_state) const {
   NormalizedSignal result;
   if (len == 0) return result;
 
-  /* Accumulate normalization stats (progressive, like RH2 normalize_signal) */
+  /* Accumulate normalization stats (progressive) */
   for (std::size_t i = 0; i < len; ++i) {
     norm_state.sum += pA[i];
     norm_state.sum_sq += static_cast<double>(pA[i]) * pA[i];
@@ -321,8 +318,8 @@ NormalizedSignal RawHashEventPipeline::process_chunk(const float* pA, std::size_
   return result;
 }
 
-const EventPipelineConfig& RawHashEventPipeline::config() const { return config_; }
+const EventPipelineConfig& StandardEventPipeline::config() const { return config_; }
 
-std::string RawHashEventPipeline::name() const { return "rawhash"; }
+std::string StandardEventPipeline::name() const { return "standard"; }
 
 }  // namespace piru::signal

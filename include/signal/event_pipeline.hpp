@@ -2,7 +2,7 @@
 // Unified interface for event detection and normalization.
 //
 // This interface consolidates event detection and normalization into a single
-// pipeline stage. The rawhash backend normalizes raw signal first, then
+// pipeline stage. The standard backend normalizes raw signal first, then
 // detects events.
 
 #pragma once
@@ -17,11 +17,11 @@
 namespace piru::signal {
 
 struct EventPipelineConfig {
-  std::string backend{"rawhash"};
+  std::string backend{"standard"};
   std::string pore_model;          // e.g., "r9.4", "r10.4" - used for backend-specific defaults
 
   // Event detection parameters (t-stat peak detection)
-  // Note: For rawhash backend, these are auto-set based on pore_model in factory
+  // Note: auto-set based on pore_model in factory
   int window_length1{3};
   int window_length2{6};
   float threshold1{1.4f};
@@ -52,7 +52,7 @@ struct EventPipelineConfig {
   float clip_max{3.0f};
 };
 
-// Normalization state accumulated across chunks (like RH2's mean_sum/std_dev_sum).
+// Normalization state accumulated across chunks.
 // Allows progressive normalization: chunk N uses stats from samples 0..N.
 struct NormState {
   double sum{0.0};

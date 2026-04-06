@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// RawHash-style event pipeline: normalize raw signal first, then detect events.
+// Standard event pipeline: normalize raw signal first, then detect events.
 
 #pragma once
 
@@ -9,9 +9,9 @@
 
 namespace piru::signal {
 
-class RawHashEventPipeline : public EventPipeline {
+class StandardEventPipeline : public EventPipeline {
 public:
-  explicit RawHashEventPipeline(EventPipelineConfig config);
+  explicit StandardEventPipeline(EventPipelineConfig config);
 
   NormalizedSignal process(const io::RawRead& read) const override;
   NormalizedSignal process_chunk(const float* pA, std::size_t len,

@@ -4,8 +4,6 @@
 #include <vector>
 
 #include "cli/parse.hpp"
-#include "commands/annotate.hpp"
-#include "commands/eval.hpp"
 #include "commands/index.hpp"
 #include "commands/map.hpp"
 #include "util/metrics.hpp"
@@ -47,9 +45,7 @@ int main(int argc, char** argv) {
 
   const std::vector<Command> commands = {
       {"index", "Build index from a pangenome graph.", handle_index},
-      {"map", "Map reads against an index (stub).", handle_map},
-      {"eval", "Evaluate mapping accuracy against ground truth.", handle_eval},
-      {"annotate", "Project BED target regions onto graph node sets.", handle_annotate},
+      {"map", "Map reads against an index.", handle_map},
   };
 
   std::vector<std::string> args(argv + 1, argv + argc);

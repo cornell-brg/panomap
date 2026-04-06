@@ -30,7 +30,7 @@ RESULTS_DIR="${PIRU_ROOT}/tests/data/HLA/eval_results"
 FORCE=0
 THREADS=5
 MIN_LENGTH=0
-EVENT_PIPELINE="rawhash"
+EVENT_PIPELINE="standard"
 SLUGS=""
 
 usage() {
@@ -39,7 +39,7 @@ usage() {
     echo "Options:"
     echo "  --graph PATH         Path to graph file (default: tests/data/graphs/drb1.gfa)"
     echo "  -t, --threads N      Number of threads (default: 5)"
-    echo "  -e, --event-pipeline Event pipeline: rawhash, scrappie, passthrough (default: rawhash)"
+    echo "  -e, --event-pipeline Event pipeline: standard (default: standard)"
     echo "  -l, --min-length N   Filter reads shorter than N bp in eval (default: 0, no filter)"
     echo "  -f, --force          Overwrite existing results"
     echo "  -h, --help           Show this help"
@@ -49,7 +49,7 @@ usage() {
     echo "Examples:"
     echo "  $0                                    # Run all"
     echo "  $0 r9m_2k_ideal_dnorm                 # Run single"
-    echo "  $0 -e rawhash                         # Use rawhash event pipeline"
+    echo "  $0 -e standard                        # Use standard event pipeline"
     echo "  $0 -l 1000                            # Filter reads < 1000bp"
     echo "  $0 -f r9m_2k_ideal_dnorm              # Force rerun"
     exit 0
