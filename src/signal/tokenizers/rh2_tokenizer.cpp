@@ -53,41 +53,21 @@ std::uint32_t dynamic_quantize(float value, const TokenizerConfig& cfg) {
 Rh2Tokenizer::Rh2Tokenizer(TokenizerConfig config) : config_(std::move(config)) {}
 
 TokenizedSignal Rh2Tokenizer::quantize(const NormalizedSignal& signal) const {
-  TokenizedSignal quantized;
-  quantized.tokens.reserve(signal.samples.size());
+  TokenizedSignal result;
+  result.tokens.reserve(signal.samples.size());
   const std::int16_t sentinel = std::numeric_limits<std::int16_t>::min();
-  const float diff = config_.diff;
-  const bool has_diff = diff > 0.0f;
 
-  // Diff filter (RH2 rsketch.c behavior): skip events too similar to the
-  // last emitted. Unlike sentinels, filtered events are removed entirely so
-  // seeds are built from consecutive surviving tokens (matching RH2's
-  // compressed event stream).
-  float last_emitted = std::numeric_limits<float>::quiet_NaN();
-
-  if (has_diff) {
-    quantized.original_positions.reserve(signal.samples.size());
-  }
-
-  for (std::uint32_t i = 0; i < signal.samples.size(); ++i) {
-    const auto sample = signal.samples[i];
+  for (const auto sample : signal.samples) {
     if (std::isnan(sample)) {
-      quantized.tokens.push_back(sentinel);
-      if (has_diff) quantized.original_positions.push_back(i);
+      result.tokens.push_back(sentinel);
       continue;
     }
-
-    // Diff filter: drop events too similar to last emitted
-    if (has_diff && !std::isnan(last_emitted) && std::fabs(sample - last_emitted) < diff) {
-      continue;  // skip entirely, don't insert sentinel
-    }
-
-    last_emitted = sample;
-    const auto val = dynamic_quantize(sample, config_);
-    quantized.tokens.push_back(static_cast<std::int16_t>(val));
-    if (has_diff) quantized.original_positions.push_back(i);
+    result.tokens.push_back(static_cast<std::int16_t>(dynamic_quantize(sample, config_)));
   }
-  return quantized;
+
+  // Pass through position mapping from diff filter (if present)
+  result.original_positions = signal.original_positions;
+  return result;
 }
 
 const TokenizerConfig& Rh2Tokenizer::config() const { return config_; }

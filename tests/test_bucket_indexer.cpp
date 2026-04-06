@@ -77,7 +77,6 @@ IndexResult runBucket(const io::ImportedGraph& imported, const io::KmerModel& mo
   signal::TokenizerConfig fq_cfg;
   fq_cfg.backend = "rh2";
   fq_cfg.pore_model = model.name();
-  fq_cfg.diff = 0.0;
   auto fq = signal::make_tokenizer(fq_cfg);
 
   signal::SeedExtractorConfig se_cfg;
@@ -89,7 +88,6 @@ IndexResult runBucket(const io::ImportedGraph& imported, const io::KmerModel& mo
 
   index::BucketIndexConfig cfg;
   cfg.seed_k = 8;
-  cfg.seed_stride = 1;
 
   auto result = index::bucketIndex(flat, model, *fq, *se, cfg);
 
@@ -198,7 +196,6 @@ TEST_CASE("Bucket indexer: lookup parity after build") {
   signal::TokenizerConfig fq_cfg;
   fq_cfg.backend = "rh2";
   fq_cfg.pore_model = model->name();
-  fq_cfg.diff = 0.0;
   auto fq = signal::make_tokenizer(fq_cfg);
 
   signal::SeedExtractorConfig se_cfg;
@@ -210,7 +207,6 @@ TEST_CASE("Bucket indexer: lookup parity after build") {
 
   index::BucketIndexConfig cfg;
   cfg.seed_k = 8;
-  cfg.seed_stride = 1;
 
   auto result = index::bucketIndex(flat, *model, *fq, *se, cfg);
 

@@ -56,19 +56,15 @@ int handle_index(const std::vector<std::string>& args) {
       {'m', "model", true,
        "Pore model (builtin name: r9.4/r10.4 or model file path, default: r10.4)"},
       {'o', "output", true, "Output index file (default: <graph-file>.pirx)"},
-      {'t', "threads", true, "Worker threads"},
+      {'t', "threads", true, "Worker threads (default: 1)"},
       {'p', "profile", false, "Emit timing profile (tree)"},
       {'\0', "", false, "\nSeed Generation Options:"},
-      {'\0', "seed-type", true, "Seed extractor type: kmer, minimizer (default)"},
+      {'\0', "seed-type", true, "Seed extractor type: kmer (default), minimizer"},
       {'\0', "seed-k", true, "Seed k-mer size (default: 6)"},
       {'\0', "minimizer-window", true,
        "Minimizer window size (default: 5, only with --seed-type minimizer)"},
-      {'\0', "seed-stride", true, "Seed stride (default: 1)"},
-      {'\0', "seed-freq-cutoff", true, "Seed frequency filter percentile (0.0-1.0, default: 0.9)"},
-      {'\0', "seed-freq-cap", true,
-       "Subsample cap percentile for filtered seeds (0.0-1.0, default: 0.25)"},
       {'\0', "diff", true,
-       "Event diff filter: skip events within diff of last emitted (default: 0, RH2: 0.35)"},
+       "Event diff filter: skip events within diff of last emitted (default: 0.35)"},
       {'\0', "", false, "\nIndexer Options:"},
       {'\0', "no-1d-sort", false, "Skip 1D canonical coordinate computation"},
       {'\0', "1d-coords-file", true,
@@ -97,7 +93,7 @@ int handle_index(const std::vector<std::string>& args) {
 
   const int num_threads = [&]() {
     auto it = parsed.values.find("threads");
-    if (it == parsed.values.end()) return -1;
+    if (it == parsed.values.end()) return 1;
     try {
       return std::stoi(it->second);
     } catch (...) {
@@ -159,17 +155,8 @@ int handle_index(const std::vector<std::string>& args) {
   const std::size_t minimizer_window = parsed.values.count("minimizer-window")
                                            ? std::stoul(parsed.values.at("minimizer-window"))
                                            : defaults.minimizer_window;
-  const std::size_t seed_stride = parsed.values.count("seed-stride")
-                                      ? std::stoul(parsed.values.at("seed-stride"))
-                                      : defaults.seed_stride;
-  const double seed_freq_cutoff = parsed.values.count("seed-freq-cutoff")
-                                      ? std::stod(parsed.values.at("seed-freq-cutoff"))
-                                      : defaults.seed_freq_cutoff;
-  const double seed_freq_cap = parsed.values.count("seed-freq-cap")
-                                   ? std::stod(parsed.values.at("seed-freq-cap"))
-                                   : defaults.seed_freq_cap;
-  const float tokenizer_diff =
-      parsed.values.count("diff") ? std::stof(parsed.values.at("diff")) : defaults.tokenizer_diff;
+  const float diff_filter =
+      parsed.values.count("diff") ? std::stof(parsed.values.at("diff")) : defaults.diff_filter;
 
   std::string output_base = std::filesystem::path(graph_path).stem().string();
   if (parsed.values.count("output")) {
@@ -179,9 +166,7 @@ int handle_index(const std::vector<std::string>& args) {
   LOG_INFO("input: " + graph_path);
   LOG_INFO("model: " + model->name() + " (k=" + std::to_string(pore_k) + ")");
   LOG_INFO("seeds: type=" + seed_type + ", k=" + std::to_string(seed_k) + ", window=" +
-           std::to_string(minimizer_window) + ", stride=" + std::to_string(seed_stride) +
-           ", freq_cutoff=" + std::to_string(seed_freq_cutoff) +
-           ", freq_cap=" + std::to_string(seed_freq_cap));
+           std::to_string(minimizer_window));
   LOG_INFO("output: " + output_base);
 
   /* Run indexing pipeline */
@@ -190,10 +175,7 @@ int handle_index(const std::vector<std::string>& args) {
   index_config.seed_type = seed_type;
   index_config.seed_k = seed_k;
   index_config.minimizer_window = minimizer_window;
-  index_config.seed_stride = seed_stride;
-  index_config.seed_freq_cutoff = seed_freq_cutoff;
-  index_config.seed_freq_cap = seed_freq_cap;
-  index_config.tokenizer_diff = tokenizer_diff;
+  index_config.diff_filter = diff_filter;
   index_config.tokenizer = "rh2";
   if (parsed.values.count("no-1d-sort")) {
     index_config.compute_1d_sort = false;

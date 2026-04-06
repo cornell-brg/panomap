@@ -78,6 +78,7 @@ if(DOCTEST_AVAILABLE)
         ${CMAKE_SOURCE_DIR}/src/io/results/paf_writer.cpp
         ${CMAKE_SOURCE_DIR}/src/io/results/result_writer_factory.cpp
         ${CMAKE_SOURCE_DIR}/src/io/models/builtin_models.cpp
+        ${CMAKE_SOURCE_DIR}/src/signal/diff_filter.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/event_pipeline_factory.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/event_pipelines/standard_event_pipeline.cpp
         ${CMAKE_SOURCE_DIR}/src/signal/tokenizers/tokenizer_factory.cpp

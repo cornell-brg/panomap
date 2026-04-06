@@ -14,6 +14,9 @@ struct NormalizedSignal {
   std::vector<float> samples;
   float sampling_rate_hz{0.0f};
   std::vector<float> debug_normalized;  // DEV-62: pre-event-detection normalized signal for tracing
+  // When diff filter compresses the event stream, this maps compressed sample
+  // index -> original event index. Empty when no compression (positions = indices).
+  std::vector<std::uint32_t> original_positions;
 };
 
 struct SignalEvent {
@@ -30,8 +33,8 @@ struct EventSeries {
 
 struct TokenizedSignal {
   std::vector<std::int16_t> tokens;
-  // When diff filter compresses the event stream, this maps compressed token
-  // index -> original event index. Empty when no compression (positions = indices).
+  // Passed through from NormalizedSignal. Maps compressed token index -> original
+  // event index. Empty when no compression (positions = indices).
   std::vector<std::uint32_t> original_positions;
 };
 

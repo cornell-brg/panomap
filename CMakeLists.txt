@@ -75,6 +75,7 @@ add_executable(piru
     src/io/models/model.cpp
     src/io/index/serialization.cpp
     src/cli/parse.cpp
+    src/signal/diff_filter.cpp
     src/signal/event_pipeline_factory.cpp
     src/signal/event_pipelines/standard_event_pipeline.cpp
     src/signal/tokenizers/tokenizer_factory.cpp

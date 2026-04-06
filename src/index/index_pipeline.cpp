@@ -20,8 +20,9 @@
 #include "index/flat_graph.hpp"
 #include "index/simple_expand.hpp"
 #include "index/sort_1d.hpp"
-#include "signal/tokenizers/tokenizer_factory.hpp"
+#include "signal/diff_filter.hpp"
 #include "signal/seed_extractors/seed_extractor_factory.hpp"
+#include "signal/tokenizers/tokenizer_factory.hpp"
 #include "util/logging.hpp"
 
 namespace piru::index {
@@ -55,7 +56,6 @@ IndexPipelineResult run_index_pipeline(io::ImportedGraph imported, const io::Kme
   tok_cfg.fine_min = config.tokenizer_fine_min;
   tok_cfg.fine_max = config.tokenizer_fine_max;
   tok_cfg.fine_range = config.tokenizer_fine_range;
-  tok_cfg.diff = config.tokenizer_diff;
   tok_cfg.n_bins = config.tokenizer_n_bins;
   auto tokenizer = signal::make_tokenizer(tok_cfg);
   if (!tokenizer) {
@@ -65,7 +65,6 @@ IndexPipelineResult run_index_pipeline(io::ImportedGraph imported, const io::Kme
   signal::SeedExtractorConfig extractor_cfg;
   extractor_cfg.backend = config.seed_type;
   extractor_cfg.k = config.seed_k;
-  extractor_cfg.stride = config.seed_stride;
   extractor_cfg.window = config.minimizer_window;
   extractor_cfg.qbits = 4;
   auto extractor = signal::make_seed_extractor(extractor_cfg);
@@ -78,7 +77,7 @@ IndexPipelineResult run_index_pipeline(io::ImportedGraph imported, const io::Kme
 
   BucketIndexConfig bi_config;
   bi_config.seed_k = config.seed_k;
-  bi_config.seed_stride = config.seed_stride;
+  bi_config.diff_filter = config.diff_filter;
   bi_config.executor = config.executor;
 
   auto bi_result = bucketIndex(flat_graph, model, *tokenizer, *extractor, bi_config);

@@ -57,6 +57,7 @@ struct BatchMapperConfig {
   signal::EventPipelineConfig event_pipeline_config{};  // Unified event detection + normalization
   signal::TokenizerConfig tokenizer_config{};
   signal::SeedExtractorConfig seed_config{};
+  float diff_filter{0.35f};  // Skip events within diff of last emitted (0 = disabled)
   std::string chainer_backend{"path-chain"};
   cli::Parsed chainer_parsed{};                   // CLI args forwarded to chainer
   const index::SeedStore* seed_store{nullptr};    // non-owning pointer to loaded SeedStore

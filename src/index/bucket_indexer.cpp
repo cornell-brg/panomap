@@ -30,6 +30,8 @@
 
 #include "index/bucket_indexer.hpp"
 
+#include "signal/diff_filter.hpp"
+
 #include <algorithm>
 #include <atomic>
 #include <cmath>
@@ -178,9 +180,10 @@ BucketIndexResult bucketIndex(const FlatGraph& graph, const io::KmerModel& model
     }
     if (!has_valid) return;
 
-    /* Quantize + extract seeds */
+    /* Diff filter + quantize + extract seeds */
     signal::NormalizedSignal normalized;
     normalized.samples = std::move(raw_signal);
+    signal::apply_diff_filter(normalized, config.diff_filter);
     auto tokenized = tokenizer.quantize(normalized);
     auto seeds = extractor.extract(tokenized);
 

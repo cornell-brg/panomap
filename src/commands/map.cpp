@@ -69,7 +69,7 @@ int handle_map(const std::vector<std::string>& args) {
   config.options = {
       {'h', "help", false, "Show help"},
       {'i', "index", true, "Path to pre-built index file (.pirx)"},
-      {'t', "threads", true, "Worker threads (-1 = auto)"},
+      {'t', "threads", true, "Worker threads (default: 1)"},
       {'p', "profile", false, "Emit timing profile (tree)"},
       {'v', "verbose", false, "Enable verbose logging (DEBUG level)"},
       {'\0', "", false, "\nMapping Options:"},
@@ -78,7 +78,7 @@ int handle_map(const std::vector<std::string>& args) {
       {'\0', "max-hits", true,
        "Max seed hits per read before stopping lookup (default: 100000, 0 = unlimited)"},
       {'\0', "diff", true,
-       "Event diff filter: skip events within diff of last emitted (default: 0, RH2: 0.35)"},
+       "Event diff filter: skip events within diff of last emitted (default: 0.35)"},
       {'\0', "chunk-size", true, "Signal chunk size in samples (default: 4000, 0 = no chunking)"},
       {'\0', "max-chunks", true, "Max chunks to process per read (default: 10, 0 = unlimited)"},
       {'\0', "chainer", true,
@@ -86,12 +86,11 @@ int handle_map(const std::vector<std::string>& args) {
       {'\0', "1d-coords-file", true,
        "1D coords TSV for sort-chain/pan-chain (from odgi sort --path-sgd-layout)"},
       {'\0', "", false, "\nSignal Processing Options:"},
-      {'\0', "event-pipeline", true, "Event pipeline backend: standard (default)"},
-      {'\0', "event-w1", true, "Event detection short window length (default: 3)"},
-      {'\0', "event-w2", true, "Event detection long window length (default: backend-specific)"},
-      {'\0', "event-t1", true, "Event detection threshold1 (default: backend-specific)"},
-      {'\0', "event-t2", true, "Event detection threshold2 (default: backend-specific)"},
-      {'\0', "event-peak", true, "Event detection peak height (default: backend-specific)"},
+      {'\0', "event-w1", true, "Event detection short window (R10: 4, R9: 3)"},
+      {'\0', "event-w2", true, "Event detection long window (R10: 10, R9: 9)"},
+      {'\0', "event-t1", true, "Event detection threshold1 (R10: 4.0, R9: 4.0)"},
+      {'\0', "event-t2", true, "Event detection threshold2 (R10: 3.0, R9: 3.5)"},
+      {'\0', "event-peak", true, "Event detection peak height (R10: 0.4, R9: 0.4)"},
       {'\0', "", false, "\nDebug Options:"},
       {'\0', "dump-seed-store", true, "Dump full seed store hash table to TSV file"},
       {'\0', "no-anchor-merge", false, "Disable anchor merging (for heatmap debugging)"},
@@ -161,7 +160,7 @@ int handle_map(const std::vector<std::string>& args) {
   }
   const int num_threads = [&]() {
     auto it = parsed.values.find("threads");
-    if (it == parsed.values.end()) return -1;
+    if (it == parsed.values.end()) return 1;
     try {
       return std::stoi(it->second);
     } catch (...) {
@@ -360,7 +359,7 @@ int handle_map(const std::vector<std::string>& args) {
   map_config.tokenizer_config.n_bins =
       0;  // must match IndexPipelineConfig::tokenizer_n_bins (0 = use qbits)
   if (parsed.values.count("diff")) {
-    map_config.tokenizer_config.diff = std::stof(parsed.values.at("diff"));
+    map_config.diff_filter = std::stof(parsed.values.at("diff"));
   }
   LOG_DEBUG("Using tokenizer: " + map_config.tokenizer_config.backend);
 
@@ -406,12 +405,9 @@ int handle_map(const std::vector<std::string>& args) {
   // pore_k from index metadata, used for chainer scoring span
   map_config.pore_k = loaded_pore_k;
 
-  // Configure event pipeline (unified event detection + normalization)
+  // Configure event pipeline
   map_config.event_pipeline_config.pore_model = pore_model_name;
-  if (parsed.values.count("event-pipeline")) {
-    map_config.event_pipeline_config.backend = parsed.values.at("event-pipeline");
-  }
-  // Event detection parameter overrides (take precedence over backend defaults)
+  // Event detection parameter overrides (take precedence over model defaults)
   if (parsed.values.count("event-w1")) {
     map_config.event_pipeline_config.override_window_length1 =
         std::stoi(parsed.values.at("event-w1"));

@@ -14,6 +14,8 @@
 
 #include "mapping/batch_mapper.hpp"
 
+#include "signal/diff_filter.hpp"
+
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -265,6 +267,7 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
   if (chunk_size == 0) {
     /* Non-chunked path: process entire signal at once (original behavior) */
     batch.normalized[index] = components_.event_pipeline->process(read);
+    signal::apply_diff_filter(batch.normalized[index], config_.diff_filter);
     batch.tokenized[index] = components_.tokenizer->quantize(batch.normalized[index]);
     batch.seeds[index] = components_.seed_extractor->extract(batch.tokenized[index]);
     components_.lookup.lookup(batch.seeds[index], all_hits);
@@ -297,6 +300,7 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
       /* Per-chunk DSP: event detection, quantization, seed extraction */
       auto events =
           components_.event_pipeline->process_chunk(pA.data() + chunk_start, chunk_len, norm_state);
+      signal::apply_diff_filter(events, config_.diff_filter);
       auto tokens = components_.tokenizer->quantize(events);
       auto seeds = components_.seed_extractor->extract(tokens);
 
