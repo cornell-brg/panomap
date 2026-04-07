@@ -267,6 +267,7 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
     batch.normalized[index] = components_.event_pipeline->process(read);
     signal::apply_diff_filter(batch.normalized[index], config_.diff_filter);
     batch.tokenized[index] = components_.tokenizer->quantize(batch.normalized[index]);
+
     batch.seeds[index] = components_.seed_extractor->extract(batch.tokenized[index]);
     components_.lookup.lookup(batch.seeds[index], all_hits);
   } else {
@@ -280,7 +281,10 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
     std::vector<float> pA;
     pA.reserve(read.raw_signal.size());
     for (auto value : read.raw_signal) {
-      pA.push_back((static_cast<float>(value) + read.offset) * raw_unit);
+      float pa = (static_cast<float>(value) + read.offset) * raw_unit;
+      if (pa > 30.0f && pa < 200.0f) {
+        pA.push_back(pa);
+      }
     }
 
     const std::size_t total_samples = pA.size();
@@ -300,6 +304,7 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
           components_.event_pipeline->process_chunk(pA.data() + chunk_start, chunk_len, norm_state);
       signal::apply_diff_filter(events, config_.diff_filter);
       auto tokens = components_.tokenizer->quantize(events);
+
       auto seeds = components_.seed_extractor->extract(tokens);
 
       /* Lookup and accumulate hits, offsetting query positions by cumulative event count */

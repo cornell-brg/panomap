@@ -167,12 +167,15 @@ NormalizedSignal StandardEventPipeline::process(const io::RawRead& read) const {
     return result;
   }
 
-  // Step 1: Convert raw ADC values to picoamps
+  // Step 1: Convert raw ADC values to picoamps, filter out-of-range (RH2 compat)
   const float raw_unit = (read.digitisation == 0.0f) ? 1.0f : (read.range / read.digitisation);
   std::vector<float> raw;
   raw.reserve(read.raw_signal.size());
   for (auto value : read.raw_signal) {
-    raw.push_back((static_cast<float>(value) + read.offset) * raw_unit);
+    float pa = (static_cast<float>(value) + read.offset) * raw_unit;
+    if (pa > 30.0f && pa < 200.0f) {
+      raw.push_back(pa);
+    }
   }
 
   // Step 2: Normalize raw signal first
@@ -219,28 +222,26 @@ NormalizedSignal StandardEventPipeline::process(const io::RawRead& read) const {
     return result;
   }
 
-  // Step 6: Generate events using IQR-filtered mean (skip segments > 500 samples)
+  // Step 6: Generate events using IQR-filtered mean (skip segments >= 500 samples)
+  // Matches RH2 gen_events: no last segment after final peak.
   constexpr int kMaxSegmentLength = 500;
 
-  result.samples.reserve(peaks.size() + 1);
+  result.samples.reserve(peaks.size());
 
   int start_idx = 0;
   for (size_t pi = 0; pi < peaks.size(); ++pi) {
     if (peaks[pi] <= 0 || peaks[pi] >= n_signals) continue;
 
     int segment_length = peaks[pi] - start_idx;
-    if (segment_length > 0 && segment_length < kMaxSegmentLength) {
-      std::vector<float> segment(normalized.begin() + start_idx, normalized.begin() + peaks[pi]);
-      result.samples.push_back(iqr_filtered_mean(segment));
+    if (segment_length < kMaxSegmentLength) {
+      if (segment_length > 0) {
+        std::vector<float> segment(normalized.begin() + start_idx, normalized.begin() + peaks[pi]);
+        result.samples.push_back(iqr_filtered_mean(segment));
+      } else {
+        result.samples.push_back(0.0f);  // RH2 compat: zero-length segment -> 0.0
+      }
     }
     start_idx = peaks[pi];
-  }
-
-  // Last segment
-  int last_length = n_signals - start_idx;
-  if (last_length > 0 && last_length < kMaxSegmentLength) {
-    std::vector<float> segment(normalized.begin() + start_idx, normalized.end());
-    result.samples.push_back(iqr_filtered_mean(segment));
   }
 
   // Note: Events are already normalized (from step 2), so no further normalization needed.
@@ -295,24 +296,23 @@ NormalizedSignal StandardEventPipeline::process_chunk(const float* pA, std::size
   if (peaks.empty()) return result;
 
   /* Generate events using IQR-filtered mean */
+  // Matches RH2 gen_events: no last segment after final peak.
   constexpr int kMaxSegmentLength = 500;
-  result.samples.reserve(peaks.size() + 1);
+  result.samples.reserve(peaks.size());
 
   int start_idx = 0;
   for (std::size_t pi = 0; pi < peaks.size(); ++pi) {
     if (peaks[pi] <= 0 || peaks[pi] >= n_signals) continue;
     int segment_length = peaks[pi] - start_idx;
-    if (segment_length > 0 && segment_length < kMaxSegmentLength) {
-      std::vector<float> segment(normalized.begin() + start_idx, normalized.begin() + peaks[pi]);
-      result.samples.push_back(iqr_filtered_mean(segment));
+    if (segment_length < kMaxSegmentLength) {
+      if (segment_length > 0) {
+        std::vector<float> segment(normalized.begin() + start_idx, normalized.begin() + peaks[pi]);
+        result.samples.push_back(iqr_filtered_mean(segment));
+      } else {
+        result.samples.push_back(0.0f);  // RH2 compat: zero-length segment -> 0.0
+      }
     }
     start_idx = peaks[pi];
-  }
-
-  int last_length = n_signals - start_idx;
-  if (last_length > 0 && last_length < kMaxSegmentLength) {
-    std::vector<float> segment(normalized.begin() + start_idx, normalized.end());
-    result.samples.push_back(iqr_filtered_mean(segment));
   }
 
   return result;
