@@ -58,13 +58,15 @@ int handle_index(const std::vector<std::string>& args) {
       {'o', "output", true, "Output index file (default: <graph-file>.pirx)"},
       {'t', "threads", true, "Worker threads (default: 1)"},
       {'p', "profile", false, "Emit timing profile (tree)"},
+      {'\0', "", false, "\nSignal Processing Options:"},
+      {'\0', "tokenizer", true, "Tokenizer backend: rh2 (default), landmark"},
+      {'\0', "diff", true,
+       "Diff filter: skip events within diff of last emitted (default: 0.35, ignored for peak)"},
       {'\0', "", false, "\nSeed Generation Options:"},
       {'\0', "seed-type", true, "Seed extractor type: kmer (default), minimizer"},
       {'\0', "seed-k", true, "Seed k-mer size (default: 6)"},
       {'\0', "minimizer-window", true,
        "Minimizer window size (default: 5, only with --seed-type minimizer)"},
-      {'\0', "diff", true,
-       "Event diff filter: skip events within diff of last emitted (default: 0.35)"},
       {'\0', "", false, "\nIndexer Options:"},
       {'\0', "no-1d-sort", false, "Skip 1D canonical coordinate computation"},
       {'\0', "1d-coords-file", true,
@@ -176,7 +178,8 @@ int handle_index(const std::vector<std::string>& args) {
   index_config.seed_k = seed_k;
   index_config.minimizer_window = minimizer_window;
   index_config.diff_filter = diff_filter;
-  index_config.tokenizer = "rh2";
+  index_config.tokenizer =
+      parsed.values.count("tokenizer") ? parsed.values.at("tokenizer") : "rh2";
   if (parsed.values.count("no-1d-sort")) {
     index_config.compute_1d_sort = false;
   }

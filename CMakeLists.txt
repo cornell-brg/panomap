@@ -77,6 +77,7 @@ add_executable(piru
     src/signal/event_pipelines/standard_event_pipeline.cpp
     src/signal/tokenizers/tokenizer_factory.cpp
     src/signal/tokenizers/rh2_tokenizer.cpp
+    src/signal/tokenizers/landmark_tokenizer.cpp
     src/signal/seed_extractors/seed_extractor_factory.cpp
     src/signal/seed_extractors/kmer_seed_extractor.cpp
     src/signal/seed_extractors/minimizer_seed_extractor.cpp

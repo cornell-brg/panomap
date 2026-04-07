@@ -244,14 +244,12 @@ void BatchMapper::process_batch(BatchBuffer& batch) {
 
   executor_->parallel_for(0, batch.num_reads, 1, [&](std::size_t i) { process_read(batch, i); });
 
-  /* Calculate seed hits memory */
+  /* Summarize seed hits from per-read results */
   std::size_t total_hits = 0;
   for (std::size_t i = 0; i < batch.num_reads; ++i) {
-    total_hits += batch.seed_hits[i].size();
+    total_hits += batch.map_results[i].total_seed_hits;
   }
-  const std::size_t hits_mem_mb = total_hits * sizeof(NodeAnchor) / 1024 / 1024;
-  LOG_INFO("Batch complete: total_hits=" + std::to_string(total_hits) + " (~" +
-           std::to_string(hits_mem_mb) + " MB)");
+  LOG_INFO("Batch complete: total_hits=" + std::to_string(total_hits));
 }
 
 void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
@@ -403,6 +401,7 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
   }
 
   /* Final chain with all accumulated hits */
+  const std::size_t total_hits = all_hits.size();
   ChainResult chain_result = components_.chainer->chain(all_hits);
 
   /* Free seed hits */
@@ -412,6 +411,7 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
   /* Build unified map result from chain result */
   ReadMapResult& result = batch.map_results[index];
   result.mappings.clear();
+  result.total_seed_hits = total_hits;
   result.expanded_anchor_count = chain_result.expanded_anchor_count;
   result.chunks_processed = chunks_processed;
   const auto t_end = std::chrono::high_resolution_clock::now();

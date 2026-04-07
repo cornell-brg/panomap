@@ -39,6 +39,7 @@ struct Mapping {
  */
 struct ReadMapResult {
   std::vector<Mapping> mappings;  // primary (index 0) + secondaries
+  std::size_t total_seed_hits{0};       // raw seed lookup hits (before chaining)
   std::size_t expanded_anchor_count{0};
 
   /* Per-read timing */

@@ -36,9 +36,11 @@ SeedBuffer KmerSeedExtractor::extract(const TokenizedSignal& signal) const {
     if (hasSentinel(tokens.data(), start, k)) continue;
 
     const auto hash = hashKmer(tokens.data(), start, k, qbits, token_mask, window_mask, use_shift);
-    const std::size_t pos =
-        signal.original_positions.empty() ? start : signal.original_positions[start];
-    buffer.seeds.push_back(Seed{.hash = hash, .position = pos, .length = k});
+    const bool has_pos = !signal.original_positions.empty();
+    const std::size_t pos = has_pos ? signal.original_positions[start] : start;
+    const std::size_t end = has_pos ? signal.original_positions[start + k - 1] : start + k - 1;
+    const std::size_t span = end - pos + 1;
+    buffer.seeds.push_back(Seed{.hash = hash, .position = pos, .length = span});
   }
   return buffer;
 }

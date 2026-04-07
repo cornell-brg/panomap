@@ -147,6 +147,27 @@ void GafWriter::write(const mapping::ReadMapResult& result, const std::string& r
     // an:i: anchor count
     ss << "\tan:i:" << mapping.anchors.size();
 
+    // se:f: score per event span (score / query_span)
+    {
+      auto qspan = max_query - min_query;
+      if (qspan > 0) {
+        char buf[32];
+        std::snprintf(buf, sizeof(buf), "se:f:%.3f", mapping.chain_score / static_cast<double>(qspan));
+        ss << '\t' << buf;
+      }
+    }
+
+    // ad:f: anchor density (anchors / ref_span)
+    {
+      auto rspan = max_ref - min_ref;
+      if (rspan > 0) {
+        char buf[32];
+        std::snprintf(buf, sizeof(buf), "ad:f:%.4f",
+                      static_cast<double>(mapping.anchors.size()) / static_cast<double>(rspan));
+        ss << '\t' << buf;
+      }
+    }
+
     // Per-read timing (primary only)
     if (is_primary) {
       ss << "\tck:i:" << result.chunks_processed;

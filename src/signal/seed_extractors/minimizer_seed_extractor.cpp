@@ -62,9 +62,11 @@ SeedBuffer MinimizerSeedExtractor::extract(const TokenizedSignal& signal) const 
 
     // Deduplicate: don't emit the same position twice.
     if (min_idx != last_emitted) {
-      const std::size_t pos =
-          signal.original_positions.empty() ? min_idx : signal.original_positions[min_idx];
-      buffer.seeds.push_back(Seed{.hash = min_hash, .position = pos, .length = k});
+      const bool has_pos = !signal.original_positions.empty();
+      const std::size_t pos = has_pos ? signal.original_positions[min_idx] : min_idx;
+      const std::size_t end = has_pos ? signal.original_positions[min_idx + k - 1] : min_idx + k - 1;
+      const std::size_t span = end - pos + 1;
+      buffer.seeds.push_back(Seed{.hash = min_hash, .position = pos, .length = span});
       last_emitted = min_idx;
     }
   }
