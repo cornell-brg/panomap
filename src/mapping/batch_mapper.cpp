@@ -452,13 +452,12 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
     result.is_mapped = is_real;
   }
 
-  if (result.is_mapped) {
-    for (std::size_t i = 0; i < result.mappings.size(); ++i) {
-      double sec = (i + 1 < result.mappings.size()) ? result.mappings[i + 1].chain_score : 0.0;
-      result.mappings[i].mapq =
-          computeMapq(result.mappings[i].chain_score, sec, result.mappings[i].anchors.size(),
-                      config_.map_standout_ratio);
-    }
+  /* Compute mapq for all reads (mapped and unmapped) for diagnostics */
+  for (std::size_t i = 0; i < result.mappings.size(); ++i) {
+    double sec = (i + 1 < result.mappings.size()) ? result.mappings[i + 1].chain_score : 0.0;
+    result.mappings[i].mapq =
+        computeMapq(result.mappings[i].chain_score, sec, result.mappings[i].anchors.size(),
+                    config_.map_standout_ratio);
   }
 
 }

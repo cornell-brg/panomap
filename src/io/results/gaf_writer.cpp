@@ -56,13 +56,17 @@ void GafWriter::write(const mapping::ReadMapResult& result, const std::string& r
       const auto& best = result.mappings[0];
       std::uint32_t min_q = best.anchors.front().read_pos;
       std::uint32_t max_q = best.anchors.front().read_pos;
+      std::int64_t min_r = best.anchors.front().ref_coord;
+      std::int64_t max_r = best.anchors.front().ref_coord;
       for (const auto& a : best.anchors) {
         min_q = std::min(min_q, a.read_pos);
         max_q = std::max(max_q, a.read_pos + a.length);
+        min_r = std::min(min_r, a.ref_coord);
+        max_r = std::max(max_r, a.ref_coord + static_cast<std::int64_t>(a.length));
       }
       ss << read_id << '\t' << read_length << '\t' << min_q << '\t' << max_q
-         << "\t*\t*\t*\t*\t*\t0\t0\t0";
-      ss << "\ttp:A:U";
+         << "\t*\t*\t*\t*\t*\t0\t0\t" << best.mapq;
+      ss << "\tpn:Z:*\ttp:A:U";
       ss << "\tcs:i:" << static_cast<int>(best.chain_score);
       ss << "\tan:i:" << best.anchors.size();
       auto qspan = max_q - min_q;
@@ -71,11 +75,23 @@ void GafWriter::write(const mapping::ReadMapResult& result, const std::string& r
         std::snprintf(buf, sizeof(buf), "se:f:%.3f", best.chain_score / static_cast<double>(qspan));
         ss << '\t' << buf;
       }
+      auto rspan = max_r - min_r;
+      if (rspan > 0) {
+        char buf[32];
+        std::snprintf(buf, sizeof(buf), "ad:f:%.4f",
+                      static_cast<double>(best.anchors.size()) / static_cast<double>(rspan));
+        ss << '\t' << buf;
+      }
     } else {
       ss << read_id << '\t' << read_length << "\t*\t*\t*\t*\t*\t*\t*\t0\t0\t0";
-      ss << "\ttp:A:U";
+      ss << "\tpn:Z:*\ttp:A:U";
     }
     ss << "\tck:i:" << result.chunks_processed;
+    {
+      char dt_buf[32];
+      std::snprintf(dt_buf, sizeof(dt_buf), "dt:f:%.6f", result.processing_time_sec);
+      ss << '\t' << dt_buf;
+    }
     *out_ << ss.str() << '\n';
     return;
   }
