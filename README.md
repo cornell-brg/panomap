@@ -5,7 +5,7 @@
 ---
 
 <p align="center">
-  <em>Real-time squiggle-to-graph classification for Nanopore adaptive sampling</em>
+  <em>Real-time squiggle-to-graph mapping for Nanopore adaptive sampling</em>
 </p>
 
 <p align="center">
@@ -16,8 +16,8 @@
 
 PIRU maps raw Nanopore signal directly to pangenome graphs without basecalling.
 By working at the squiggle level, it enables real-time keep/reject decisions
-during adaptive sampling experiments. Supports GFA and VG graphs, SLOW5/BLOW5
-signals, and R9.4/R10.4 pore chemistries.
+during adaptive sampling experiments. Supports GFA graphs, SLOW5/BLOW5 signals,
+and R9.4/R10.4 pore chemistries.
 
 ## Quick Start
 
@@ -26,39 +26,40 @@ signals, and R9.4/R10.4 pore chemistries.
 ```bash
 # Clone and build
 git clone --recursive https://github.com/xxx/piru.git
-cd piru && mkdir build && cd build && cmake .. && make
+cd piru && mkdir build && cd build && cmake .. && make -j8
 
-# Index a graph
-./piru index -m r10.4 --seed-mode path reference.gfa -o ref.pirx
+# Index a graph (RH2 tokenizer, default)
+./piru index -m r10.4 reference.gfa -o ref.pirx
 
-# Map reads
+# Index with landmark tokenizer (amplitude-based peak seeding)
+./piru index -m r9.4 --tokenizer landmark --seed-k 4 reference.gfa -o ref.pirx
+
+# Map reads (GAF to stdout by default)
 ./piru map --index ref.pirx reads.blow5 -o out.gaf
-
-# ROI classification (adaptive sampling)
-./piru annotate reference.gfa --bed targets.bed -o targets.pira
-
-# Whole-genome chaining, classify by ROI overlap
-./piru map --index ref.pirx --roi targets.pira --mode enrich \
-  --chain-genome 0.5 reads.blow5 -o out.gaf
-
-# ROI-only chaining (faster), classify by chain score
-./piru map --index ref.pirx --roi targets.pira --mode enrich \
-  --chain-target 30 reads.blow5 -o out.gaf
 ```
-
-**Optional dependencies:**
-- VG support: `libjansson-dev`, `libhts-dev` (or `-DPIRU_ENABLE_LIBVGIO=OFF`)
-- Tests: `ctest` from build directory
 
 ## Subcommands
 
 | Command | Description |
 |---------|-------------|
-| `piru index` | Build .pirx index from GFA graph + pore model. Supports 1D PG-SGD coordinates via --1d-coords-file (odgi, recommended) or --compute-1d-sort (built-in, not yet verified) |
-| `piru map` | Map BLOW5 reads against index. Three chainer backends: path-chain (default), graph-chain, sort-chain |
-| `piru annotate` | Project BED target intervals onto graph -> .pira v2 annotation with 1D canonical intervals |
+| `piru index` | Build .pirx index from GFA graph + pore model |
+| `piru map` | Map BLOW5/SLOW5 reads against index, output GAF/PAF |
 
 Run `piru <command> --help` for full options.
+
+## Tokenizers
+
+PIRU supports two tokenization strategies for converting signal to seeds:
+
+| Tokenizer | Description | Seed bits | Typical use |
+|-----------|-------------|-----------|-------------|
+| `rh2` (default) | Adaptive quantization of event values | 24 (k=6, 4-bit tokens) | General purpose |
+| `landmark` | Log-quantized peak rise/fall amplitudes | 16 (k=4, 4-bit tokens) | Fewer seeds, faster chaining |
+
+The landmark tokenizer detects valleys in the signal, extracts peaks between
+them, and encodes each peak by its rise and fall amplitudes. This produces
+~3x fewer index seeds and ~4x fewer hits per read compared to RH2, with
+equivalent or better mapping accuracy.
 
 ## Simulation Workflow
 
@@ -70,13 +71,13 @@ squigulator reference.fa -x dna-r10-min \
   -q reads.fasta -c reads.paf \
   --ideal --seed 123
 
-./piru index -m r10.4 --seed-mode path -o ref.pirx reference.gfa
+./piru index -m r10.4 reference.gfa -o ref.pirx
 ./piru map --index ref.pirx reads.blow5 -o out.gaf
 ```
 
 ## Documentation
 
-- [ARCHITECTURE.md](docs/ARCHITECTURE.md) -- System architecture and vision
+- [ARCHITECTURE.md](docs/ARCHITECTURE.md) -- System architecture
 - [index_format.md](docs/index_format.md) -- Binary index format specification
 
 ## Build & Test
@@ -84,7 +85,7 @@ squigulator reference.fa -x dna-r10-min \
 ```bash
 mkdir build && cd build
 cmake ..
-make
+make -j8
 ctest          # unit tests
 ctest -V       # verbose
 ```

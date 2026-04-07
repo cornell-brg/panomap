@@ -28,10 +28,6 @@ constexpr uint32_t kVersionMajor = 1;
 constexpr uint32_t kVersionMinor = 0;
 constexpr uint32_t kVersion = (kVersionMajor << 16) | kVersionMinor;
 
-constexpr uint32_t kFlagHasSequences = 1 << 0;
-constexpr uint32_t kFlagHasFuzzySignals = 1 << 1;  // reserved
-constexpr uint32_t kFlagHasAlignSignals = 1 << 2;  // reserved
-
 template <typename T>
 void write_pod(std::ostream& out, const T& val) {
   out.write(reinterpret_cast<const char*>(&val), sizeof(T));
@@ -89,11 +85,11 @@ void save_index(const std::string& path, const piru::index::GraphStore& graph_st
 
   /* 2. Metadata */
 
+  write_string(out, metadata.version);
+  write_pod<uint64_t>(out, metadata.build_timestamp);
   write_string(out, metadata.model_name);
   write_pod<uint32_t>(out, metadata.pore_k);
   write_string(out, metadata.tokenizer);
-  // Legacy: graph_flavor was "vg" vs "dbg", now unused.
-  write_string(out, std::string{});
   auto pos_graph = out.tellp();
 
   /* 3. Graph - nodes (from FlatGraph) */
@@ -103,9 +99,6 @@ void save_index(const std::string& path, const piru::index::GraphStore& graph_st
     auto name = fg.name(i);
     write_string(out, std::string(name));
     write_pod<uint8_t>(out, fg.isReverse(i) ? 1 : 0);
-    if (flags & kFlagHasSequences) {
-      write_string(out, fg.seqDecoded(i));
-    }
   }
 
   /* 4. Graph - edges (from FlatGraph CSR) */
@@ -243,11 +236,11 @@ LoadedIndex load_index(const std::string& path) {
   /* 2. Metadata */
 
   IndexMetadata metadata;
+  metadata.version = read_string(in);
+  read_pod(in, metadata.build_timestamp);
   metadata.model_name = read_string(in);
   read_pod(in, metadata.pore_k);
   metadata.tokenizer = read_string(in);
-  // Legacy: graph_flavor, read and discard
-  read_string(in);
 
   /* 3-5. Graph - build FlatGraph directly from pirx */
 
@@ -272,13 +265,6 @@ LoadedIndex load_index(const std::string& path) {
     name_offset_nodes[i] = static_cast<std::uint32_t>(name_data.size());
     name_len_nodes[i] = static_cast<std::uint16_t>(orig_id.size());
     name_data.insert(name_data.end(), orig_id.begin(), orig_id.end());
-
-    if (flags & kFlagHasSequences) {
-      std::string seq = read_string(in);
-      seq_offset[i] = static_cast<std::uint32_t>(seq_data.size());
-      seq_len[i] = static_cast<std::uint32_t>(seq.size());
-      seq_data.insert(seq_data.end(), seq.begin(), seq.end());
-    }
   }
 
   /* 4. Edges */

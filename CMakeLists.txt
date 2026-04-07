@@ -57,6 +57,7 @@ endif()
 add_executable(piru
     src/main.cpp
     src/commands/index.cpp
+    src/commands/inspect.cpp
     src/commands/map.cpp
     src/concurrency/executor.cpp
     src/io/graphs/graph_loader_factory.cpp

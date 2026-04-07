@@ -23,6 +23,8 @@
 namespace piru::io::index {
 
 struct IndexMetadata {
+  std::string version;            // piru version that built this index
+  uint64_t build_timestamp{0};    // unix seconds
   std::string model_name;
   uint32_t pore_k{0};
   std::string tokenizer;

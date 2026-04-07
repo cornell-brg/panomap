@@ -5,6 +5,7 @@
 
 #include "cli/parse.hpp"
 #include "commands/index.hpp"
+#include "commands/inspect.hpp"
 #include "commands/map.hpp"
 #include "util/metrics.hpp"
 #include "util/signal_handlers.hpp"
@@ -46,6 +47,7 @@ int main(int argc, char** argv) {
   const std::vector<Command> commands = {
       {"index", "Build index from a pangenome graph.", handle_index},
       {"map", "Map reads against an index.", handle_map},
+      {"inspect", "Show index metadata and stats.", handle_inspect},
   };
 
   std::vector<std::string> args(argv + 1, argv + argc);

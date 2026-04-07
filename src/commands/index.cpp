@@ -14,6 +14,7 @@
 
 #include "commands/index.hpp"
 
+#include <chrono>
 #include <filesystem>
 #include <iostream>
 #include <map>
@@ -214,6 +215,9 @@ int handle_index(const std::vector<std::string>& args) {
   }
 
   piru::io::index::IndexMetadata metadata;
+  metadata.version = PIRU_VERSION;
+  metadata.build_timestamp = static_cast<uint64_t>(
+      std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()));
   metadata.model_name = result.model_name;
   metadata.pore_k = result.pore_k;
   metadata.tokenizer = result.tokenizer;
