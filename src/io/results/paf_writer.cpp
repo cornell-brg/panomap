@@ -2,6 +2,7 @@
 
 #include "io/results/paf_writer.hpp"
 
+#include <cstdio>
 #include <sstream>
 
 #include "util/logging.hpp"
@@ -18,9 +19,38 @@ PafWriter::~PafWriter() { out_.flush(); }
 
 void PafWriter::write(const mapping::ReadMapResult& result, const std::string& read_id,
                       std::size_t read_length) {
-  if (!out_ || result.mappings.empty()) return;
+  if (!out_) return;
 
-  // PAF: write primary mapping only (simple for now)
+  /* Unmapped */
+  if (!result.mapped()) {
+    std::stringstream ss;
+    if (!result.mappings.empty()) {
+      const auto& best = result.mappings[0];
+      std::uint32_t min_q = best.anchors.front().read_pos;
+      std::uint32_t max_q = best.anchors.front().read_pos;
+      for (const auto& a : best.anchors) {
+        min_q = std::min(min_q, a.read_pos);
+        max_q = std::max(max_q, a.read_pos + a.length);
+      }
+      ss << read_id << '\t' << read_length << '\t' << min_q << '\t' << max_q
+         << "\t*\t*\t0\t*\t*\t0\t0\t0";
+      ss << "\ttp:A:U";
+      ss << "\tcs:i:" << static_cast<int>(best.chain_score);
+      ss << "\tan:i:" << best.anchors.size();
+      auto qspan = max_q - min_q;
+      if (qspan > 0) {
+        char buf[32];
+        std::snprintf(buf, sizeof(buf), "se:f:%.3f", best.chain_score / static_cast<double>(qspan));
+        ss << '\t' << buf;
+      }
+    } else {
+      ss << read_id << '\t' << read_length << "\t*\t*\t*\t*\t0\t*\t*\t0\t0\t0\ttp:A:U";
+    }
+    out_ << ss.str() << '\n';
+    return;
+  }
+
+  /* Mapped: primary */
   const auto& mapping = result.mappings[0];
 
   std::size_t min_query = mapping.anchors.front().read_pos;
@@ -40,11 +70,20 @@ void PafWriter::write(const mapping::ReadMapResult& result, const std::string& r
   std::uint64_t total_anchor_len = 0;
   for (const auto& a : mapping.anchors) total_anchor_len += a.length;
 
+  auto qspan = max_query - min_query;
+
   std::stringstream ss;
   ss << read_id << '\t' << read_length << '\t' << min_query << '\t' << max_query << "\t+\t*\t0\t"
      << min_ref << '\t' << max_ref << '\t' << total_anchor_len << '\t' << (max_ref - min_ref)
      << '\t' << mapping.mapq;
+  ss << "\ttp:A:P";
   ss << "\tcs:i:" << static_cast<int>(mapping.chain_score);
+  ss << "\tan:i:" << mapping.anchors.size();
+  if (qspan > 0) {
+    char buf[32];
+    std::snprintf(buf, sizeof(buf), "se:f:%.3f", mapping.chain_score / static_cast<double>(qspan));
+    ss << '\t' << buf;
+  }
 
   out_ << ss.str() << '\n';
 }

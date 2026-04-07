@@ -47,7 +47,40 @@ GafWriter::~GafWriter() { out_->flush(); }
 
 void GafWriter::write(const mapping::ReadMapResult& result, const std::string& read_id,
                       std::size_t read_length) {
-  if (!out_ || !*out_ || result.mappings.empty()) return;
+  if (!out_ || !*out_) return;
+
+  /* Unmapped: output with * ref coordinates but keep query span and chain stats */
+  if (!result.mapped()) {
+    std::stringstream ss;
+    if (!result.mappings.empty()) {
+      const auto& best = result.mappings[0];
+      std::uint32_t min_q = best.anchors.front().read_pos;
+      std::uint32_t max_q = best.anchors.front().read_pos;
+      for (const auto& a : best.anchors) {
+        min_q = std::min(min_q, a.read_pos);
+        max_q = std::max(max_q, a.read_pos + a.length);
+      }
+      ss << read_id << '\t' << read_length << '\t' << min_q << '\t' << max_q
+         << "\t*\t*\t*\t*\t*\t0\t0\t0";
+      ss << "\ttp:A:U";
+      ss << "\tcs:i:" << static_cast<int>(best.chain_score);
+      ss << "\tan:i:" << best.anchors.size();
+      auto qspan = max_q - min_q;
+      if (qspan > 0) {
+        char buf[32];
+        std::snprintf(buf, sizeof(buf), "se:f:%.3f", best.chain_score / static_cast<double>(qspan));
+        ss << '\t' << buf;
+      }
+    } else {
+      ss << read_id << '\t' << read_length << "\t*\t*\t*\t*\t*\t*\t*\t0\t0\t0";
+      ss << "\ttp:A:U";
+    }
+    ss << "\tck:i:" << result.chunks_processed;
+    *out_ << ss.str() << '\n';
+    return;
+  }
+
+  if (result.mappings.empty()) return;
 
   /* Determine how many mappings to output */
   std::size_t max_out = result.mappings.size();

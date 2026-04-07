@@ -39,6 +39,7 @@ struct Mapping {
  */
 struct ReadMapResult {
   std::vector<Mapping> mappings;  // primary (index 0) + secondaries
+  bool is_mapped{false};                // passed mapping decision filters
   std::size_t total_seed_hits{0};       // raw seed lookup hits (before chaining)
   std::size_t expanded_anchor_count{0};
 
@@ -46,7 +47,7 @@ struct ReadMapResult {
   std::size_t chunks_processed{0};
   double processing_time_sec{0.0};
 
-  bool mapped() const { return !mappings.empty(); }
+  bool mapped() const { return is_mapped; }
   const Mapping* primary() const { return mappings.empty() ? nullptr : &mappings[0]; }
 };
 

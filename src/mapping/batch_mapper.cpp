@@ -449,12 +449,10 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
       is_real = score_per_event >= config_.map_min_score_per_event;
     }
 
-    if (!is_real) {
-      result.mappings.clear();
-    }
+    result.is_mapped = is_real;
   }
 
-  if (!result.mappings.empty()) {
+  if (result.is_mapped) {
     for (std::size_t i = 0; i < result.mappings.size(); ++i) {
       double sec = (i + 1 < result.mappings.size()) ? result.mappings[i + 1].chain_score : 0.0;
       result.mappings[i].mapq =
