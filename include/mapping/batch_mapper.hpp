@@ -79,16 +79,23 @@ struct BatchMapperConfig {
   /* Seed lookup limits */
   std::size_t max_total_hits{100000};  // Per-read hit cap (0 = unlimited, default 100k)
 
-  /* Mapping decision.
-   * 1. Noise floor: anchors >= min_anchors AND query_span >= min_query_span
-   * 2. Density: score / query_event_count >= min_score_per_event
-   * 3. Compute mapq from absolute strength + relative standout */
-  std::size_t map_min_anchors{3};        // Noise floor: min anchors in primary chain
-  std::size_t map_min_query_span{20};    // Noise floor: min query event span
-  double map_min_score_per_event{0.10};  // Density: min score / query_event_count
-  double map_min_score{30.0};            // Noise floor: min primary chain score
-  float map_standout_ratio{0.17f};       // Fraction of mapq from standout (rest from score)
-  int map_min_mapq_exit{12};             // Min mapq to call mapped / early exit
+  /* Mapping decision (RH2-style three-tier).
+   * 1. Single-chain early exit: only 1 chain && mapq >= min_mapq -> mapped
+   * 2. Weighted standout: best chain stands out from crowd -> mapped
+   * 3. Fallback: after all chunks, mapq > min_mapq -> mapped */
+  std::size_t map_min_anchors{2};     // Min anchors (from chain extraction, noise floor)
+  int map_min_mapq{2};                // Min mapq to accept mapping
+  float map_w_bestq{0.35f};           // Weight: absolute mapq strength (bestQ/30)
+  float map_w_bestmq{0.05f};          // Weight: mapq standout vs mean
+  float map_w_bestmc{0.6f};           // Weight: score standout vs mean
+  float map_w_threshold{0.45f};       // Weighted sum threshold to accept
+
+  /* Legacy fields kept for CLI compat (unused in new decision) */
+  std::size_t map_min_query_span{20};
+  double map_min_score_per_event{0.10};
+  double map_min_score{30.0};
+  float map_standout_ratio{0.17f};
+  int map_min_mapq_exit{12};
 };
 
 struct BatchMapperStats {

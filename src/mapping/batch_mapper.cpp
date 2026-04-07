@@ -38,25 +38,22 @@ namespace {
 // (2) Relative standout vs next chain (0 to standout_range)
 // (3) Anchor count robustness (caps everything)
 // standout_ratio controls the split: standout gets ratio*60, score gets (1-ratio)*60.
-int computeMapq(double pri_score, double sec_score, std::size_t anchors, float standout_ratio) {
+// RH2-style mapq: log-based, with anchor count and secondary suppression.
+// Matches mm_set_mapq() in hit.c (non-DTW mode).
+int computeMapq(double pri_score, double sec_score, std::size_t anchors, int min_chain_sc) {
   if (pri_score <= 0.0) return 0;
+  constexpr float q_coef = 40.0f;
 
-  double score_range = 60.0 * (1.0 - standout_ratio);
-  double standout_range = 60.0 * standout_ratio;
+  float pen_s1 = static_cast<float>((pri_score > 100 ? 1.0 : 0.01 * pri_score));
+  float pen_cm = static_cast<float>(anchors > 10 ? 1.0 : 0.1 * anchors);
+  pen_cm = std::min(pen_s1, pen_cm);
 
-  // Score strength: 0 to score_range, saturates at score = score_range * 10
-  double score_bonus = std::min(score_range, pri_score / 10.0);
+  double subsc = std::max(sec_score, static_cast<double>(min_chain_sc));
+  float x = static_cast<float>(subsc / pri_score);
 
-  // Standout: 0 to standout_range based on primary/secondary ratio
-  double standout =
-      (sec_score <= 0.0) ? standout_range : standout_range * (1.0 - sec_score / pri_score);
-  standout = std::clamp(standout, 0.0, standout_range);
-
-  // Anchor robustness: caps total mapq. <=1 anchor=0, 10+=full
-  double anchor_factor = std::clamp(static_cast<double>(anchors) / 10.0, 0.0, 1.0);
-
-  double mapq = (standout + score_bonus) * anchor_factor;
-  return static_cast<int>(std::clamp(mapq, 0.0, 60.0) + 0.499);
+  int mapq = static_cast<int>(pen_cm * q_coef * (1.0f - x) * std::log(pri_score));
+  mapq = std::max(mapq, 0);
+  return std::min(mapq, 60);
 }
 
 }  // namespace
@@ -139,6 +136,12 @@ PipelineComponents BatchMapper::create_components() const {
     auto path_config = PathChainerConfig::from_parsed(config_.chainer_parsed);
     path_config.merge_anchors = config_.enable_anchor_merge;
     path_config.pore_k = config_.pore_k;
+    // Normalize gap penalty by anchor span (matching RH2: scale * 0.01 * (e + k - 1))
+    if (config_.pore_k > 0 && config_.seed_config.k > 0) {
+      float span = static_cast<float>(config_.seed_config.k + config_.pore_k - 1);
+      path_config.chn_pen_gap = path_config.chn_pen_gap * 0.01f * span;
+      path_config.chn_pen_skip = path_config.chn_pen_skip * 0.01f * span;
+    }
     comps.chainer = std::make_unique<PathChainer>(path_config, *config_.linearization_coords,
                                                   *config_.path_lengths);
   } else if (config_.chainer_backend == "sort-chain") {
@@ -149,6 +152,11 @@ PipelineComponents BatchMapper::create_components() const {
     }
     auto sort_config = SortChainerConfig::from_parsed(config_.chainer_parsed);
     sort_config.pore_k = config_.pore_k;
+    if (config_.pore_k > 0 && config_.seed_config.k > 0) {
+      float span = static_cast<float>(config_.seed_config.k + config_.pore_k - 1);
+      sort_config.chn_pen_gap = sort_config.chn_pen_gap * 0.01f * span;
+      sort_config.chn_pen_skip = sort_config.chn_pen_skip * 0.01f * span;
+    }
     std::vector<std::uint32_t> bp_lens(config_.graph_store->nodeCount());
     for (std::size_t i = 0; i < bp_lens.size(); ++i)
       bp_lens[i] = static_cast<std::uint32_t>(config_.graph_store->sequenceLen(i));
@@ -167,6 +175,11 @@ PipelineComponents BatchMapper::create_components() const {
     }
     auto pan_config = PanChainerConfig::from_parsed(config_.chainer_parsed);
     pan_config.pore_k = config_.pore_k;
+    if (config_.pore_k > 0 && config_.seed_config.k > 0) {
+      float span = static_cast<float>(config_.seed_config.k + config_.pore_k - 1);
+      pan_config.chn_pen_gap = pan_config.chn_pen_gap * 0.01f * span;
+      pan_config.chn_pen_skip = pan_config.chn_pen_skip * 0.01f * span;
+    }
     comps.chainer = std::make_unique<PanChainer>(
         pan_config, *config_.node_1d_coords, *config_.linearization_coords, *config_.path_lengths);
   } else {
@@ -387,18 +400,13 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
         all_hits = std::move(survivors);
       }
 
-      // /* Early exit: real chain + confident mapq -> stop chunking */
-      // if (!chunk_chains.chains.empty()) {
-      //   const auto& primary = chunk_chains.chains[0];
-      //   bool is_real = primary.anchors.size() >= config_.map_min_anchors &&
-      //                  primary.score >= config_.map_min_score;
-      //   if (is_real) {
-      //     double sec = (chunk_chains.chains.size() > 1) ? chunk_chains.chains[1].score : 0.0;
-      //     int mapq =
-      //         computeMapq(primary.score, sec, primary.anchors.size(), config_.map_standout_ratio);
-      //     if (mapq >= config_.map_min_mapq_exit) break;
-      //   }
-      // }
+      /* Early exit: single chain with mapq >= min_mapq (RH2-style) */
+      if (chunk_chains.chains.size() == 1) {
+        const auto& primary = chunk_chains.chains[0];
+        double sec = 0.0;
+        int mapq = computeMapq(primary.score, sec, primary.anchors.size(), 15);
+        if (mapq >= config_.map_min_mapq) break;
+      }
 
       ++chunk_idx;
     }
@@ -431,38 +439,50 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
     result.mappings.push_back(std::move(mapping));
   }
 
-  /* Mapping decision: noise floor, density, then mapq */
-  if (!result.mappings.empty()) {
-    const auto& primary = result.mappings[0];
-
-    // Query event span from anchor positions
-    std::uint32_t min_qpos = primary.anchors.front().read_pos;
-    std::uint32_t max_qpos = primary.anchors.front().read_pos;
-    for (const auto& a : primary.anchors) {
-      min_qpos = std::min(min_qpos, a.read_pos);
-      max_qpos = std::max(max_qpos, a.read_pos);
-    }
-    std::size_t query_span = max_qpos - min_qpos;
-
-    // Step 1: noise floor
-    bool is_real = primary.anchors.size() >= config_.map_min_anchors &&
-                   query_span >= config_.map_min_query_span;
-
-    // Step 2: density check (score / query_event_count)
-    if (is_real && query_span > 0) {
-      double score_per_event = primary.chain_score / static_cast<double>(query_span);
-      is_real = score_per_event >= config_.map_min_score_per_event;
-    }
-
-    result.is_mapped = is_real;
-  }
-
-  /* Compute mapq for all reads (mapped and unmapped) for diagnostics */
+  /* Compute mapq for all chains (needed for decision) */
+  const int min_chain_sc = 15;  // RH2 default min_chaining_score
   for (std::size_t i = 0; i < result.mappings.size(); ++i) {
     double sec = (i + 1 < result.mappings.size()) ? result.mappings[i + 1].chain_score : 0.0;
     result.mappings[i].mapq =
         computeMapq(result.mappings[i].chain_score, sec, result.mappings[i].anchors.size(),
-                    config_.map_standout_ratio);
+                    min_chain_sc);
+  }
+
+  /* RH2-style mapping decision (three-tier) */
+  if (!result.mappings.empty()) {
+    const auto& primary = result.mappings[0];
+
+    // Tier 1: single chain with mapq >= min_mapq
+    if (result.mappings.size() == 1 && primary.mapq >= config_.map_min_mapq) {
+      result.is_mapped = true;
+    } else {
+      // Tier 2: weighted standout formula
+      float bestQ = static_cast<float>(primary.mapq);
+      float bestC = static_cast<float>(primary.chain_score);
+      float meanQ = 0.0f, meanC = 0.0f;
+      for (const auto& m : result.mappings) {
+        meanQ += static_cast<float>(m.mapq);
+        meanC += static_cast<float>(m.chain_score);
+      }
+      meanQ /= static_cast<float>(result.mappings.size());
+      meanC /= static_cast<float>(result.mappings.size());
+
+      float r_bestq = std::min(bestQ / 30.0f, 1.0f);
+      float r_bestmq = (bestQ > 0) ? std::max(0.0f, 1.0f - meanQ / bestQ) : 0.0f;
+      float r_bestmc = (bestC > 0) ? std::max(0.0f, 1.0f - meanC / bestC) : 0.0f;
+
+      float weighted = config_.map_w_bestq * r_bestq + config_.map_w_bestmq * r_bestmq +
+                        config_.map_w_bestmc * r_bestmc;
+
+      if (weighted >= config_.map_w_threshold) {
+        result.is_mapped = true;
+      }
+    }
+
+    // Tier 3: fallback -- mapq > min_mapq
+    if (!result.is_mapped && primary.mapq > config_.map_min_mapq) {
+      result.is_mapped = true;
+    }
   }
 
 }
