@@ -36,6 +36,12 @@ cd piru && mkdir build && cd build && cmake .. && make -j8
 
 # Map reads (GAF to stdout by default)
 ./piru map --index ref.pirx reads.blow5 -o out.gaf
+
+# Map with tuned landmark filters
+./piru map --index ref.pirx reads.blow5 \
+  --map-min-score 15 --map-min-anchors 2 \
+  --map-min-query-span 10 --map-min-score-per-event 0.13 \
+  -o out.gaf
 ```
 
 ## Subcommands
