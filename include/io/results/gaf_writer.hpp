@@ -18,6 +18,8 @@ struct GafWriterConfig {
   bool primary_only{true};
   std::size_t max_secondary{9};
   double min_secondary_ratio{0.7};
+  const std::vector<float>* node_1d_coords{nullptr};
+  const std::vector<std::uint32_t>* component_ids{nullptr};
 };
 
 class GafWriter : public ResultWriter {

@@ -202,17 +202,8 @@ int handle_map(const std::vector<std::string>& args) {
     }
   }
 
-  // Create result writer (needs graph for GAF path lookups)
   bool primary_only = !parsed.values.count("secondary");
   const auto& flat_graph = loaded.graph->flat();
-
-  piru::io::ResultWriterPtr result_writer;
-  if (!output_path.empty()) {
-    result_writer = piru::io::make_result_writer(output_path, flat_graph, primary_only);
-    LOG_INFO("Writing results to: " + output_path);
-  } else {
-    result_writer = piru::io::make_result_writer_stdout(flat_graph, primary_only);
-  }
 
   auto graph_store = std::move(loaded.graph);
   auto seed_store = std::move(loaded.seeds);
@@ -271,6 +262,26 @@ int handle_map(const std::vector<std::string>& args) {
     node_1d_coords =
         piru::index::import_1d_coords_odgi(parsed.values.at("1d-coords-file"), num_nodes);
     map_config.node_1d_coords = &node_1d_coords;
+  }
+
+  // Load component IDs from index
+  std::vector<std::uint32_t> component_ids;
+  if (!loaded.component_ids.empty()) {
+    component_ids = std::move(loaded.component_ids);
+    map_config.component_ids = &component_ids;
+  }
+
+  // Create result writer (needs graph for GAF path lookups, and 1D coords for canonical tags)
+  const std::vector<float>* writer_1d = node_1d_coords.empty() ? nullptr : &node_1d_coords;
+  const std::vector<std::uint32_t>* writer_cc = component_ids.empty() ? nullptr : &component_ids;
+  piru::io::ResultWriterPtr result_writer;
+  if (!output_path.empty()) {
+    result_writer =
+        piru::io::make_result_writer(output_path, flat_graph, primary_only, writer_1d, writer_cc);
+    LOG_INFO("Writing results to: " + output_path);
+  } else {
+    result_writer =
+        piru::io::make_result_writer_stdout(flat_graph, primary_only, writer_1d, writer_cc);
   }
 
   // Configure tokenizer to match index-time settings.

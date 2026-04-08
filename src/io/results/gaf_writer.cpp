@@ -217,6 +217,45 @@ void GafWriter::write(const mapping::ReadMapResult& result, const std::string& r
       }
     }
 
+    // Canonical 1D interval in forward-node space (ci:f: start, ce:f: end, cc:i: component_id).
+    // Reverse nodes map back to their forward partner with offset flipping.
+    if (config_.node_1d_coords && config_.component_ids) {
+      const auto& coords = *config_.node_1d_coords;
+      const auto& comp = *config_.component_ids;
+      float ci = std::numeric_limits<float>::max();
+      float ce = std::numeric_limits<float>::lowest();
+      for (const auto& a : mapping.anchors) {
+        std::uint32_t fwd_id = a.node_id & ~1u;
+        float fwd_start = coords[fwd_id];
+        float fwd_end = coords[fwd_id + 1];
+        float canon_span = fwd_end - fwd_start;
+        float base_len = static_cast<float>(graph_.seqLen(fwd_id));
+        // Interpolate offset within canonical span using base length ratio
+        float pos, pos_end;
+        if (base_len < 1.0f) {
+          pos = pos_end = fwd_start;
+        } else if (a.node_id & 1u) {
+          // Reverse node: offset 0 on rev = fwd_end, increasing offset moves toward fwd_start
+          float frac = static_cast<float>(a.offset) / base_len;
+          float frac_end = static_cast<float>(a.offset + a.length) / base_len;
+          pos = fwd_start + (1.0f - frac_end) * canon_span;
+          pos_end = fwd_start + (1.0f - frac) * canon_span;
+        } else {
+          float frac = static_cast<float>(a.offset) / base_len;
+          float frac_end = static_cast<float>(a.offset + a.length) / base_len;
+          pos = fwd_start + frac * canon_span;
+          pos_end = fwd_start + frac_end * canon_span;
+        }
+        ci = std::min(ci, std::min(pos, pos_end));
+        ce = std::max(ce, std::max(pos, pos_end));
+      }
+      std::uint32_t cc = comp[mapping.anchors[0].node_id & ~1u];
+      char ci_buf[32], ce_buf[32];
+      std::snprintf(ci_buf, sizeof(ci_buf), "ci:f:%.1f", ci);
+      std::snprintf(ce_buf, sizeof(ce_buf), "ce:f:%.1f", ce);
+      ss << '\t' << ci_buf << '\t' << ce_buf << "\tcc:i:" << cc;
+    }
+
     // Per-read timing (primary only)
     if (is_primary) {
       ss << "\tck:i:" << result.chunks_processed;

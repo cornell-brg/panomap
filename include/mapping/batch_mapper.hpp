@@ -68,6 +68,8 @@ struct BatchMapperConfig {
   const std::vector<std::size_t>* path_lengths{nullptr};
   /* 1D sort coordinates for SortChainer (non-owning, from index) */
   const std::vector<float>* node_1d_coords{nullptr};
+  /* Connected component IDs per node (non-owning, from index) */
+  const std::vector<std::uint32_t>* component_ids{nullptr};
 
   /* Result writer for output (non-owning, optional) */
   io::ResultWriter* result_writer{nullptr};

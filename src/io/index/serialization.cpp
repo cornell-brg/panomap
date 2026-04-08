@@ -57,7 +57,8 @@ std::string read_string(std::istream& in) {
 void save_index(const std::string& path, const piru::index::GraphStore& graph_store,
                 const piru::index::SeedStore& seed_store,
                 const std::vector<std::vector<piru::index::LinearCoordinate>>& linearization_coords,
-                const IndexMetadata& metadata, const std::vector<float>& node_1d_coords) {
+                const IndexMetadata& metadata, const std::vector<float>& node_1d_coords,
+                const std::vector<std::uint32_t>& component_ids) {
   const auto* adj_store = dynamic_cast<const piru::index::AdjListGraphStore*>(&graph_store);
   if (!adj_store) {
     throw std::runtime_error("Unsupported GraphStore backend for serialization");
@@ -99,6 +100,7 @@ void save_index(const std::string& path, const piru::index::GraphStore& graph_st
     auto name = fg.name(i);
     write_string(out, std::string(name));
     write_pod<uint8_t>(out, fg.isReverse(i) ? 1 : 0);
+    write_pod<uint32_t>(out, static_cast<uint32_t>(fg.seqLen(i)));
   }
 
   /* 4. Graph - edges (from FlatGraph CSR) */
@@ -189,6 +191,15 @@ void save_index(const std::string& path, const piru::index::GraphStore& graph_st
               static_cast<std::streamsize>(n_1d * sizeof(float)));
   }
 
+  /* 9. Connected component IDs (optional, uint32 bulk write) */
+
+  uint64_t n_comp = component_ids.size();
+  write_pod<uint64_t>(out, n_comp);
+  if (n_comp > 0) {
+    out.write(reinterpret_cast<const char*>(component_ids.data()),
+              static_cast<std::streamsize>(n_comp * sizeof(uint32_t)));
+  }
+
   auto pos_end = out.tellp();
   auto total = pos_end - pos_start;
   auto sz_meta = pos_graph - pos_start;
@@ -256,11 +267,15 @@ LoadedIndex load_index(const std::string& path) {
   std::vector<std::uint16_t> name_len_nodes(node_count);
   std::vector<std::uint8_t> is_reverse(node_count);
 
+  std::vector<std::uint32_t> saved_seq_len(node_count);
   for (uint64_t i = 0; i < node_count; ++i) {
     std::string orig_id = read_string(in);
     uint8_t rev;
     read_pod(in, rev);
     is_reverse[i] = rev;
+    uint32_t slen;
+    read_pod(in, slen);
+    saved_seq_len[i] = slen;
 
     name_offset_nodes[i] = static_cast<std::uint32_t>(name_data.size());
     name_len_nodes[i] = static_cast<std::uint16_t>(orig_id.size());
@@ -321,7 +336,7 @@ LoadedIndex load_index(const std::string& path) {
   }
   path_step_offset[path_count] = static_cast<std::uint32_t>(step_data.size());
 
-  // Assemble FlatGraph
+  // Assemble FlatGraph (seq_len passed as zeros; real lengths set below)
   fg = piru::index::FlatGraph::fromRawArrays(
       static_cast<std::uint32_t>(node_count), static_cast<std::uint32_t>(path_count),
       std::move(seq_data), std::move(seq_offset), std::move(seq_len), std::move(name_data),
@@ -329,6 +344,7 @@ LoadedIndex load_index(const std::string& path) {
       std::move(edge_target), std::move(out_edge_offset), std::move(step_data),
       std::move(path_step_offset), std::move(path_name_offset), std::move(path_name_len),
       std::move(path_length));
+  fg.setSeqLens(std::move(saved_seq_len));
 
   /* 6. Linearization */
 
@@ -423,12 +439,27 @@ LoadedIndex load_index(const std::string& path) {
     }
   }
 
+  /* 9. Connected component IDs (optional, backwards-compatible) */
+
+  std::vector<std::uint32_t> component_ids;
+  if (in.peek() != std::ifstream::traits_type::eof()) {
+    uint64_t n_comp;
+    read_pod(in, n_comp);
+    if (n_comp > 0) {
+      component_ids.resize(n_comp);
+      in.read(reinterpret_cast<char*>(component_ids.data()),
+              static_cast<std::streamsize>(n_comp * sizeof(uint32_t)));
+      LOG_INFO("Loaded component IDs: " + std::to_string(n_comp) + " nodes");
+    }
+  }
+
   LOG_INFO("Loaded index: " + std::to_string(node_count) + " nodes, " +
            std::to_string(seeds->size()) + " seeds (" + std::to_string(total_hits) + " hits) ← " +
            path);
 
   return {std::move(metadata), std::make_unique<piru::index::FlatGraphStore>(std::move(fg)),
-          std::move(seeds), std::move(linearization_coords), std::move(node_1d_coords)};
+          std::move(seeds), std::move(linearization_coords), std::move(node_1d_coords),
+          std::move(component_ids)};
 }
 
 bool is_pirx_index(const std::string& path) {

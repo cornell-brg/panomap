@@ -1,7 +1,7 @@
 /**
  * path_chainer.hpp
  *
- * Path-space chainer, per-path DP, node walk dedup.
+ * Path-space chainer, per-path DP, component-aware interval dedup.
  *
  * Related:
  *  - path_chainer.cpp
@@ -13,6 +13,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <vector>
 
 #include "cli/parse.hpp"
@@ -60,9 +61,12 @@ class PathChainer : public Chainer {
 public:
   // coords[node_id] = linearization coordinates for that node (non-owning)
   // path_lengths[path_id] = length of that path for bounds checking (non-owning)
+  // node_1d_coords, component_ids: optional, enables interval-overlap dedup
   PathChainer(PathChainerConfig config,
               const std::vector<std::vector<index::LinearCoordinate>>& coords,
-              const std::vector<std::size_t>& path_lengths);
+              const std::vector<std::size_t>& path_lengths,
+              const std::vector<float>* node_1d_coords = nullptr,
+              const std::vector<std::uint32_t>* component_ids = nullptr);
 
   ChainResult chain(const std::vector<NodeAnchor>& hits) const override;
   std::string name() const override { return "path-chain"; }
@@ -71,6 +75,8 @@ private:
   PathChainerConfig config_;
   const std::vector<std::vector<index::LinearCoordinate>>& coords_;
   const std::vector<std::size_t>& path_lengths_;
+  const std::vector<float>* node_1d_coords_;
+  const std::vector<std::uint32_t>* component_ids_;
 };
 
 }  // namespace piru::mapping

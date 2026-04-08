@@ -143,7 +143,8 @@ PipelineComponents BatchMapper::create_components() const {
       path_config.chn_pen_skip = path_config.chn_pen_skip * 0.01f * span;
     }
     comps.chainer = std::make_unique<PathChainer>(path_config, *config_.linearization_coords,
-                                                  *config_.path_lengths);
+                                                  *config_.path_lengths, config_.node_1d_coords,
+                                                  config_.component_ids);
   } else if (config_.chainer_backend == "sort-chain") {
     if (!config_.node_1d_coords) {
       throw std::runtime_error(

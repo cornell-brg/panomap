@@ -22,7 +22,9 @@
 #include <algorithm>
 #include <cmath>
 #include <fstream>
+#include <numeric>
 #include <random>
+#include <unordered_map>
 #include <vector>
 
 #include "dirty_zipfian_int_distribution.h"
@@ -30,17 +32,78 @@
 
 namespace piru::index {
 
+std::vector<std::uint32_t> compute_components(const FlatGraph& graph) {
+  std::uint32_t n = graph.nodeCount();
+  std::vector<std::uint32_t> parent(n);
+  std::iota(parent.begin(), parent.end(), static_cast<std::uint32_t>(0));
+  std::vector<std::uint32_t> rnk(n, 0);
+
+  // Find with path splitting (iterative, no recursion)
+  auto find = [&](std::uint32_t x) -> std::uint32_t {
+    while (parent[x] != x) {
+      parent[x] = parent[parent[x]];
+      x = parent[x];
+    }
+    return x;
+  };
+
+  auto unite = [&](std::uint32_t a, std::uint32_t b) {
+    a = find(a);
+    b = find(b);
+    if (a == b) return;
+    if (rnk[a] < rnk[b]) std::swap(a, b);
+    parent[b] = a;
+    if (rnk[a] == rnk[b]) ++rnk[a];
+  };
+
+  // Union all edge endpoints
+  for (std::uint32_t u = 0; u < n; ++u) {
+    const auto* begin = graph.outBegin(u);
+    const auto* end = graph.outEnd(u);
+    for (const auto* e = begin; e != end; ++e) {
+      unite(u, *e);
+    }
+  }
+
+  // Assign contiguous component IDs, largest component = 0
+  std::unordered_map<std::uint32_t, std::uint32_t> root_count;
+  for (std::uint32_t i = 0; i < n; ++i) {
+    root_count[find(i)]++;
+  }
+
+  // Sort roots by descending component size
+  std::vector<std::pair<std::uint32_t, std::uint32_t>> sorted_roots(root_count.begin(),
+                                                                     root_count.end());
+  std::sort(sorted_roots.begin(), sorted_roots.end(),
+            [](const auto& a, const auto& b) { return a.second > b.second; });
+
+  std::unordered_map<std::uint32_t, std::uint32_t> root_to_id;
+  for (std::uint32_t i = 0; i < sorted_roots.size(); ++i) {
+    root_to_id[sorted_roots[i].first] = i;
+  }
+
+  std::vector<std::uint32_t> comp(n);
+  for (std::uint32_t i = 0; i < n; ++i) {
+    comp[i] = root_to_id[find(i)];
+  }
+
+  LOG_INFO("Connected components: " + std::to_string(sorted_roots.size()) + " components, " +
+           std::to_string(n) + " nodes");
+  return comp;
+}
+
 namespace {
 
 // Build a path step index for SGD sampling.
-// For each path, store the ordered list of (node_id, cumulative_ref_pos).
+// For each path, store the ordered list of (node_id, cumulative_ref_pos, node_length).
 struct PathStep {
   std::uint32_t node_id;
-  std::int64_t ref_pos;  // cumulative position along path
+  std::int64_t ref_pos;      // cumulative position along path (start of node)
+  std::uint32_t node_length;  // base length of this node
 };
 using PathStepIndex = std::vector<std::vector<PathStep>>;
 
-PathStepIndex build_path_step_index(const FlatGraph& /*graph*/,
+PathStepIndex build_path_step_index(const FlatGraph& graph,
                                     const std::vector<std::vector<LinearCoordinate>>& coords) {
   // Determine number of paths
   std::size_t num_paths = 0;
@@ -56,9 +119,10 @@ PathStepIndex build_path_step_index(const FlatGraph& /*graph*/,
   PathStepIndex index(num_paths);
   for (std::size_t nid = 0; nid < coords.size(); nid += 2) {
     std::uint32_t fwd_idx = static_cast<std::uint32_t>(nid / 2);
+    auto nlen = static_cast<std::uint32_t>(graph.seqLen(static_cast<std::uint32_t>(nid)));
     for (const auto& lc : coords[nid]) {
       if (lc.path_id % 2 != 0) continue;  // skip reverse-strand paths
-      index[lc.path_id].push_back({fwd_idx, lc.ref_coord});
+      index[lc.path_id].push_back({fwd_idx, lc.ref_coord, nlen});
     }
   }
 
@@ -93,20 +157,22 @@ std::vector<double> compute_schedule(double w_min, double w_max, std::uint64_t i
 std::vector<float> compute_1d_sort(const FlatGraph& graph,
                                    const std::vector<std::vector<LinearCoordinate>>& coords,
                                    const std::vector<std::size_t>& /*path_lengths*/,
-                                   const Sort1DConfig& config) {
+                                   const Sort1DConfig& config,
+                                   const std::vector<std::uint32_t>& component_ids) {
   const std::size_t num_nodes = graph.nodeCount();
 
-  /* 1. Initialize positions: cumulative sequence length (matches odgi).
-   * Only forward nodes participate in SGD. Reverse nodes derive positions
-   * from their forward partner at the end.
+  /* 1. Initialize positions: two SGD variables per original node (start + end).
+   * X[2*i] = node start, X[2*i+1] = node end. Both are optimized by SGD so
+   * that node widths in canonical space are SGD-tuned, not forced to base length.
    * Node ID scheme from simpleExpand: forward = orig*2, reverse = orig*2+1. */
   std::size_t num_fwd = num_nodes / 2;
-  std::vector<double> X(num_fwd);
+  std::vector<double> X(2 * num_fwd);
   std::vector<std::size_t> fwd_lengths(num_fwd);
   std::uint64_t cumulative = 0;
   for (std::size_t i = 0; i < num_fwd; ++i) {
-    X[i] = static_cast<double>(cumulative);
     fwd_lengths[i] = graph.seqLen(i * 2);
+    X[2 * i] = static_cast<double>(cumulative);
+    X[2 * i + 1] = static_cast<double>(cumulative + fwd_lengths[i]);
     cumulative += fwd_lengths[i];
   }
 
@@ -122,7 +188,12 @@ std::vector<float> compute_1d_sort(const FlatGraph& graph,
   }
   if (valid_paths.empty()) {
     LOG_WARN("No valid paths for 1D SGD (all paths have <= 1 step)");
-    return std::vector<float>(X.begin(), X.end());
+    // X is already 2*num_fwd = num_nodes sized, convert to float and return
+    std::vector<float> X_full(num_nodes);
+    for (std::size_t i = 0; i < num_nodes; ++i) {
+      X_full[i] = static_cast<float>(X[i]);
+    }
+    return X_full;
   }
 
   // Total steps across all valid paths (for uniform sampling)
@@ -249,12 +320,20 @@ std::vector<float> compute_1d_sort(const FlatGraph& graph,
       std::uint32_t node_j = steps[s_rank_b].node_id;
       if (node_i == node_j) continue;
 
-      double target_dist = std::abs(static_cast<double>(steps[s_rank].ref_pos) -
-                                    static_cast<double>(steps[s_rank_b].ref_pos));
+      // Coin flip: use start (0) or end (1) of each node.
+      // Adjust target distance to match which end is chosen.
+      std::uint32_t offset_i = flip(rng);  // 0 = start, 1 = end
+      std::uint32_t offset_j = flip(rng);
+      double pos_a = static_cast<double>(steps[s_rank].ref_pos);
+      double pos_b = static_cast<double>(steps[s_rank_b].ref_pos);
+      if (offset_i) pos_a += static_cast<double>(steps[s_rank].node_length);
+      if (offset_j) pos_b += static_cast<double>(steps[s_rank_b].node_length);
+
+      double target_dist = std::abs(pos_a - pos_b);
       if (target_dist == 0) continue;
 
-      // Current distance in layout
-      double dx = X[node_i] - X[node_j];
+      // Current distance in layout (between chosen ends)
+      double dx = X[2 * node_i + offset_i] - X[2 * node_j + offset_j];
       if (dx == 0) dx = 1e-9;
       double mag = std::abs(dx);
 
@@ -263,13 +342,13 @@ std::vector<float> compute_1d_sort(const FlatGraph& graph,
       double mu = eta * w_ij;
       if (mu > 1.0) mu = 1.0;
 
-      // SGD update
+      // SGD update: only update the chosen end of each node
       double delta = mu * (mag - target_dist) / 2.0;
       double r = delta / mag;
       double r_x = r * dx;
 
-      X[node_i] -= r_x;
-      X[node_j] += r_x;
+      X[2 * node_i + offset_i] -= r_x;
+      X[2 * node_j + offset_j] += r_x;
 
       double delta_abs = std::abs(delta);
       if (delta_abs > delta_max) delta_max = delta_abs;
@@ -283,15 +362,27 @@ std::vector<float> compute_1d_sort(const FlatGraph& graph,
     }
   }
 
-  LOG_INFO("1D SGD complete: " + std::to_string(num_fwd) + " forward nodes, " +
-           std::to_string(config.iter_max) + " iterations");
+  LOG_INFO("1D SGD complete: " + std::to_string(num_fwd) + " nodes (" + std::to_string(2 * num_fwd) +
+           " endpoints), " + std::to_string(config.iter_max) + " iterations");
 
-  // Expand to full node count and convert double -> float32
+  // Convert double -> float32. X is already [start0, end0, start1, end1, ...] = num_nodes entries.
   std::vector<float> X_full(num_nodes);
-  for (std::size_t i = 0; i < num_fwd; ++i) {
-    X_full[i * 2] = static_cast<float>(X[i]);  // forward: start
-    X_full[i * 2 + 1] =
-        static_cast<float>(X[i] + static_cast<double>(fwd_lengths[i]));  // reverse: end
+  for (std::size_t i = 0; i < num_nodes; ++i) {
+    X_full[i] = static_cast<float>(X[i]);
+  }
+
+  /* Zero-base each component's coordinates so they start from 0.
+   * Without this, disconnected components carry meaningless cumulative offsets. */
+  if (!component_ids.empty()) {
+    // Find per-component minimum (using forward node coords)
+    std::uint32_t num_components = *std::max_element(component_ids.begin(), component_ids.end()) + 1;
+    std::vector<float> comp_min(num_components, std::numeric_limits<float>::max());
+    for (std::size_t i = 0; i < num_nodes; ++i) {
+      comp_min[component_ids[i]] = std::min(comp_min[component_ids[i]], X_full[i]);
+    }
+    for (std::size_t i = 0; i < num_nodes; ++i) {
+      X_full[i] -= comp_min[component_ids[i]];
+    }
   }
 
   return X_full;

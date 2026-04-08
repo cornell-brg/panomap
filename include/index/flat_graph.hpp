@@ -167,6 +167,7 @@ public:
   const std::vector<std::uint8_t>& seqNMask() const { return seq_n_mask_; }
   const std::vector<std::uint32_t>& seqBaseOffsets() const { return seq_base_offset_; }
   const std::vector<std::uint32_t>& seqLens() const { return seq_len_; }
+  void setSeqLens(std::vector<std::uint32_t> lens) { seq_len_ = std::move(lens); }
   std::size_t totalBases() const { return total_bases_; }
   const std::vector<char>& nameData() const { return name_data_; }
   const std::vector<std::uint32_t>& nameOffsets() const { return name_offset_; }

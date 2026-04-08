@@ -10,7 +10,9 @@
 #include "commands/inspect.hpp"
 
 #include <chrono>
+#include <cmath>
 #include <ctime>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <string>
@@ -27,6 +29,7 @@ int handle_inspect(const std::vector<std::string>& args) {
   config.positional_help = {"<index.pirx>    Index file to inspect"};
   config.options = {
       {'h', "help", false, "Show help"},
+      {'\0', "dump-path-coords", true, "Dump per-path canonical coordinate mapping to TSV"},
   };
   config.on_error = [](const std::string&) { std::cerr << "inspect: invalid option\n"; };
 
@@ -93,6 +96,31 @@ int handle_inspect(const std::vector<std::string>& args) {
   std::cout << "\n";
   std::cout << "linearization: " << loaded.linearization_coords.size() << " nodes\n";
   std::cout << "1d_coordinates: " << (loaded.node_1d_coords.empty() ? "no" : "yes") << "\n";
+  std::cout << "component_ids: " << (loaded.component_ids.empty() ? "no" : "yes") << "\n";
+
+  /* Dump per-node canonical coordinates.
+   * One row per node: node_id, canon_start (fwd), canon_end (rev), component_id.
+   * Eval scripts use this + GFA paths to map base-space positions to canonical space. */
+  if (parsed.values.count("dump-path-coords")) {
+    if (loaded.node_1d_coords.empty() || loaded.component_ids.empty()) {
+      LOG_ERROR("dump-path-coords requires 1D coordinates and component IDs in the index");
+      return 1;
+    }
+    const auto& coords_1d = loaded.node_1d_coords;
+    const auto& comp_ids = loaded.component_ids;
+
+    std::ofstream ofs(parsed.values.at("dump-path-coords"));
+    if (!ofs) {
+      LOG_ERROR("Failed to open output: " + parsed.values.at("dump-path-coords"));
+      return 1;
+    }
+    ofs << "node_id\tcanon_start\tcanon_end\tcomponent_id\n";
+    for (std::uint32_t i = 0; i < fg.nodeCount(); i += 2) {
+      ofs << i << '\t' << coords_1d[i] << '\t' << coords_1d[i + 1] << '\t' << comp_ids[i] << '\n';
+    }
+    LOG_INFO("Dumped node coords: " + std::to_string(fg.nodeCount() / 2) + " nodes to " +
+             parsed.values.at("dump-path-coords"));
+  }
 
   return 0;
 }

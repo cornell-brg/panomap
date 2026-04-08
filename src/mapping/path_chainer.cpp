@@ -1,7 +1,8 @@
 /**
  * path_chainer.cpp
  *
- * Path-space DP chainer with SoA layout and node walk dedup.
+ * Path-space DP chainer with SoA layout and component-aware interval dedup.
+ * Falls back to node-walk hash dedup when 1D coords are not available.
  *
  * Related:
  *  - path_chainer.hpp
@@ -153,6 +154,7 @@ void apply_permutation(DPBuffers& dp, std::size_t n) {
 
 // Hash the ordered node_id sequence of a chain's anchors.
 // Chains traversing the same nodes (on different paths) produce the same hash.
+// Used as fallback when 1D coords / component IDs are not available.
 std::size_t hash_node_walk(const std::vector<ChainedAnchor>& anchors) {
   std::size_t h = 14695981039346656037ULL;  // FNV-1a offset basis
   std::uint32_t prev_node = std::numeric_limits<std::uint32_t>::max();
@@ -165,12 +167,50 @@ std::size_t hash_node_walk(const std::vector<ChainedAnchor>& anchors) {
   return h;
 }
 
+// Compute 1D interval [start, end] for a chain from node_1d_coords.
+struct Interval1D {
+  float start;
+  float end;
+  std::uint32_t component;
+};
+
+Interval1D chain_interval(const Chain& chain, const std::vector<float>& node_1d_coords,
+                          const std::vector<std::uint32_t>& component_ids) {
+  float lo = std::numeric_limits<float>::max();
+  float hi = std::numeric_limits<float>::lowest();
+  for (const auto& a : chain.anchors) {
+    float pos = node_1d_coords[a.node_id] + static_cast<float>(a.offset);
+    lo = std::min(lo, pos);
+    hi = std::max(hi, pos + static_cast<float>(a.length));
+  }
+  return {lo, hi, component_ids[chain.anchors[0].node_id]};
+}
+
+// Reciprocal overlap fraction between two intervals.
+// Returns min(overlap/len_a, overlap/len_b).
+float reciprocal_overlap(const Interval1D& a, const Interval1D& b) {
+  float overlap = std::min(a.end, b.end) - std::max(a.start, b.start);
+  if (overlap <= 0.0f) return 0.0f;
+  float len_a = a.end - a.start;
+  float len_b = b.end - b.start;
+  if (len_a <= 0.0f || len_b <= 0.0f) return 0.0f;
+  return std::min(overlap / len_a, overlap / len_b);
+}
+
+constexpr float kDedupOverlapThreshold = 0.8f;
+
 }  // namespace
 
 PathChainer::PathChainer(PathChainerConfig config,
                          const std::vector<std::vector<index::LinearCoordinate>>& coords,
-                         const std::vector<std::size_t>& path_lengths)
-    : config_(std::move(config)), coords_(coords), path_lengths_(path_lengths) {}
+                         const std::vector<std::size_t>& path_lengths,
+                         const std::vector<float>* node_1d_coords,
+                         const std::vector<std::uint32_t>* component_ids)
+    : config_(std::move(config)),
+      coords_(coords),
+      path_lengths_(path_lengths),
+      node_1d_coords_(node_1d_coords),
+      component_ids_(component_ids) {}
 
 /* Expand NodeAnchors to PathAnchors grouped by path_id. */
 PathAnchorGroups expand(const std::vector<NodeAnchor>& hits,
@@ -224,10 +264,13 @@ ChainResult PathChainer::chain(const std::vector<NodeAnchor>& hits) const {
     total_anchors += group.size();
   }
 
-  /* Run DP per path, dedup chains by node walk hash. */
-  std::unordered_map<std::size_t, Chain> walk_map;
-  std::vector<bool> input_used(hits.size(), false);  // track which input hits are chained
-  DPBuffers dp;                                      // Reused across paths within this call
+  /* Run DP per path, collect chains for dedup. */
+  bool use_interval_dedup = node_1d_coords_ && component_ids_;
+  std::unordered_map<std::size_t, Chain> walk_map;          // fallback: node-walk hash dedup
+  std::vector<Chain> kept_chains;                            // interval dedup: kept chains
+  std::vector<Interval1D> kept_intervals;                    // interval dedup: their 1D intervals
+  std::vector<bool> input_used(hits.size(), false);          // track which input hits are chained
+  DPBuffers dp;                                              // Reused across paths within this call
 
   for (std::size_t path_id = 0; path_id < groups.size(); ++path_id) {
     const auto& anchors = groups[path_id];
@@ -465,13 +508,34 @@ ChainResult PathChainer::chain(const std::vector<NodeAnchor>& hits) const {
           chain.anchors.push_back(ca);
         }
 
-        /* Dedup by node walk: keep higher-scoring chain for each unique walk. */
-        std::size_t walk_hash = hash_node_walk(chain.anchors);
-        auto it = walk_map.find(walk_hash);
-        if (it == walk_map.end()) {
-          walk_map.emplace(walk_hash, std::move(chain));
-        } else if (chain.score > it->second.score) {
-          it->second = std::move(chain);
+        /* Dedup: interval overlap (preferred) or node-walk hash (fallback). */
+        if (use_interval_dedup) {
+          auto iv = chain_interval(chain, *node_1d_coords_, *component_ids_);
+          bool is_dup = false;
+          for (std::size_t ci = 0; ci < kept_chains.size(); ++ci) {
+            if (kept_intervals[ci].component != iv.component) continue;
+            if (reciprocal_overlap(kept_intervals[ci], iv) >= kDedupOverlapThreshold) {
+              // Same region: keep higher score
+              if (chain.score > kept_chains[ci].score) {
+                kept_chains[ci] = std::move(chain);
+                kept_intervals[ci] = iv;
+              }
+              is_dup = true;
+              break;
+            }
+          }
+          if (!is_dup) {
+            kept_chains.push_back(std::move(chain));
+            kept_intervals.push_back(iv);
+          }
+        } else {
+          std::size_t walk_hash = hash_node_walk(chain.anchors);
+          auto it = walk_map.find(walk_hash);
+          if (it == walk_map.end()) {
+            walk_map.emplace(walk_hash, std::move(chain));
+          } else if (chain.score > it->second.score) {
+            it->second = std::move(chain);
+          }
         }
       }
       ++path_chain_count;
@@ -480,9 +544,13 @@ ChainResult PathChainer::chain(const std::vector<NodeAnchor>& hits) const {
 
   /* Collect deduplicated chains, sort by score descending */
   std::vector<Chain> deduped;
-  deduped.reserve(walk_map.size());
-  for (auto& [hash, chain] : walk_map) {
-    deduped.push_back(std::move(chain));
+  if (use_interval_dedup) {
+    deduped = std::move(kept_chains);
+  } else {
+    deduped.reserve(walk_map.size());
+    for (auto& [hash, chain] : walk_map) {
+      deduped.push_back(std::move(chain));
+    }
   }
   std::sort(deduped.begin(), deduped.end(),
             [](const Chain& a, const Chain& b) { return a.score > b.score; });

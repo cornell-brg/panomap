@@ -100,12 +100,15 @@ IndexPipelineResult run_index_pipeline(io::ImportedGraph imported, const io::Kme
   // Package graph store
   result.graph_store = std::make_unique<FlatGraphStore>(std::move(flat_graph));
 
-  /* 3. Compute 1D sort coordinates (for SortChainer) */
+  /* 3. Connected components + 1D sort coordinates */
+
+  result.component_ids = compute_components(result.graph_store->flat());
 
   if (config.compute_1d_sort) {
     auto sort_start = std::chrono::high_resolution_clock::now();
     result.node_1d_coords = compute_1d_sort(result.graph_store->flat(), result.linearization_coords,
-                                            path_lengths, config.sort_1d_config);
+                                            path_lengths, config.sort_1d_config,
+                                            result.component_ids);
     auto sort_elapsed =
         std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - sort_start)
             .count();

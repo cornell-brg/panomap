@@ -42,6 +42,13 @@ struct Sort1DConfig {
 };
 
 /**
+ * Compute connected components of the graph via Union-Find.
+ * Returns component_id[node_id] with contiguous IDs starting from 0.
+ * Components are numbered by size (largest = 0).
+ */
+std::vector<std::uint32_t> compute_components(const FlatGraph& graph);
+
+/**
  * Compute 1D coordinates for all nodes via path-guided SGD.
  *
  * @param graph       The alignment graph (for node count, sequence lengths)
@@ -53,7 +60,8 @@ struct Sort1DConfig {
 std::vector<float> compute_1d_sort(const FlatGraph& graph,
                                    const std::vector<std::vector<LinearCoordinate>>& coords,
                                    const std::vector<std::size_t>& path_lengths,
-                                   const Sort1DConfig& config = {});
+                                   const Sort1DConfig& config = {},
+                                   const std::vector<std::uint32_t>& component_ids = {});
 
 /**
  * Import 1D coordinates from odgi layout TSV.

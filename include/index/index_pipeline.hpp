@@ -85,7 +85,8 @@ struct IndexPipelineResult {
   std::unique_ptr<GraphStore> graph_store;
   std::unique_ptr<SeedStore> seed_store;
   std::vector<std::vector<LinearCoordinate>> linearization_coords;
-  std::vector<float> node_1d_coords;  // 1D SGD positions for SortChainer (empty if not computed)
+  std::vector<float> node_1d_coords;          // 1D SGD positions (empty if not computed)
+  std::vector<std::uint32_t> component_ids;  // connected component per node
   std::vector<std::size_t> path_lengths;
   std::size_t pore_k{0};
   std::string model_name;

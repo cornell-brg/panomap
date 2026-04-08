@@ -35,14 +35,16 @@ struct LoadedIndex {
   std::unique_ptr<piru::index::FlatGraphStore> graph;
   std::unique_ptr<piru::index::SeedStore> seeds;
   std::vector<std::vector<piru::index::LinearCoordinate>> linearization_coords;
-  std::vector<float> node_1d_coords;  // empty if not computed at index time
+  std::vector<float> node_1d_coords;          // empty if not computed at index time
+  std::vector<std::uint32_t> component_ids;  // connected component per node
 };
 
 /** Save an index to a single .pirx file. */
 void save_index(const std::string& path, const piru::index::GraphStore& graph,
                 const piru::index::SeedStore& seeds,
                 const std::vector<std::vector<piru::index::LinearCoordinate>>& linearization_coords,
-                const IndexMetadata& metadata, const std::vector<float>& node_1d_coords = {});
+                const IndexMetadata& metadata, const std::vector<float>& node_1d_coords = {},
+                const std::vector<std::uint32_t>& component_ids = {});
 
 /** Load an index from a .pirx file. */
 LoadedIndex load_index(const std::string& path);
