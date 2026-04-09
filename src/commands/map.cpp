@@ -111,8 +111,6 @@ int handle_map(const std::vector<std::string>& args) {
   config.options.push_back({'\0', "", false, "\nOutput Options:"});
   config.options.push_back({'o', "output", true, "Output file (.paf or .gaf, default: GAF to stdout)"});
   config.options.push_back({'\0', "secondary", false, "Output secondary alignments (default: primary only)"});
-  config.options.push_back({'\0', "min-secondary-ratio", true,
-                            "Min chain score ratio vs primary for secondaries (default: 0.4)"});
   config.options.push_back({'\0', "", false, "\nDebug Options:"});
   config.options.push_back({'\0', "dump-seed-store", true, "Dump full seed store hash table to TSV file"});
   config.options.push_back({'\0', "no-anchor-merge", false, "Disable anchor merging (for heatmap debugging)"});
@@ -387,9 +385,6 @@ int handle_map(const std::vector<std::string>& args) {
     map_config.enable_anchor_merge = false;
     LOG_INFO("Anchor merging disabled");
   }
-
-  // min-secondary-ratio is now handled by the GafWriter directly
-  // TODO: pass this to the writer config if needed
 
   /* Mapping decision params */
   if (parsed.values.count("map-min-mapq"))

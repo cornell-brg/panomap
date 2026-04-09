@@ -106,15 +106,9 @@ void GafWriter::write(const mapping::ReadMapResult& result, const std::string& r
     max_out = std::min(max_out, config_.max_secondary + 1);
   }
 
-  const double primary_score = result.mappings[0].chain_score;
-  const double min_score = primary_score * config_.min_secondary_ratio;
-
   for (std::size_t i = 0; i < max_out; ++i) {
     const auto& mapping = result.mappings[i];
     bool is_primary = (i == 0);
-
-    // Skip weak secondaries
-    if (!is_primary && mapping.chain_score < min_score) continue;
 
     bool is_canonical = (mapping.coord_space == mapping::CoordSpace::kCanonical);
 

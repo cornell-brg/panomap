@@ -555,8 +555,15 @@ ChainResult PathChainer::chain(const std::vector<NodeAnchor>& hits) const {
   std::sort(deduped.begin(), deduped.end(),
             [](const Chain& a, const Chain& b) { return a.score > b.score; });
 
-  if (deduped.size() > config_.max_chains) {
-    deduped.resize(config_.max_chains);
+  /* Trim: keep chains scoring >= secondary_ratio * primary, up to hard cap */
+  if (!deduped.empty()) {
+    double min_score = deduped[0].score * config_.secondary_ratio;
+    std::size_t keep = 1;  // always keep primary
+    while (keep < deduped.size() && keep < config_.max_chains &&
+           deduped[keep].score >= min_score) {
+      ++keep;
+    }
+    deduped.resize(keep);
   }
 
   ChainResult result;
@@ -577,7 +584,7 @@ std::vector<cli::Option> PathChainerConfig::cli_options() {
       {'\0', "chain-pen-skip", true, "DP chain: skip penalty factor (default: 0.0)"},
       {'\0', "chain-min-score", true, "DP chain: minimum chain score (default: 15)"},
       {'\0', "chain-min-anchors", true, "DP chain: minimum anchors per chain (default: 2)"},
-      {'\0', "chain-max-chains", true, "DP chain: max chains to extract (default: 10)"},
+      {'\0', "chain-secondary-ratio", true, "DP chain: stop extracting when score < ratio * primary (default: 0.7)"},
       {'\0', "chain-max-survivor-chains", true,
        "DP chain: max chains for cross-chunk survivor marking (default: 0 = unlimited)"},
       {'\0', "chain-max-skip", true, "DP chain: stop after N consecutive skips (default: 25)"},
@@ -603,8 +610,8 @@ PathChainerConfig PathChainerConfig::from_parsed(const cli::Parsed& parsed) {
     cfg.min_chain_score = std::stoull(parsed.values.at("chain-min-score"));
   if (parsed.values.count("chain-min-anchors"))
     cfg.min_chain_anchors = std::stoull(parsed.values.at("chain-min-anchors"));
-  if (parsed.values.count("chain-max-chains"))
-    cfg.max_chains = std::stoull(parsed.values.at("chain-max-chains"));
+  if (parsed.values.count("chain-secondary-ratio"))
+    cfg.secondary_ratio = std::stof(parsed.values.at("chain-secondary-ratio"));
   if (parsed.values.count("chain-max-survivor-chains"))
     cfg.max_survivor_chains = std::stoull(parsed.values.at("chain-max-survivor-chains"));
   if (parsed.values.count("chain-max-skip"))
