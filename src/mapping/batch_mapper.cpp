@@ -56,6 +56,40 @@ int computeMapq(double pri_score, double sec_score, std::size_t anchors, int min
   return std::min(mapq, 60);
 }
 
+// Unified mapping decision: is the best chain confident enough?
+// Used for both early exit (per-chunk) and final map/unmap decision.
+bool checkMappingDecision(const std::vector<Chain>& chains, int min_mapq, float w_bestq,
+                          float w_bestmq, float w_bestmc, float w_threshold) {
+  if (chains.empty()) return false;
+
+  const auto& best = chains[0];
+  double sec_score = (chains.size() > 1) ? chains[1].score : 0.0;
+  int best_mapq = computeMapq(best.score, sec_score, best.anchors.size(), 15);
+
+  // Fast path: single chain with sufficient mapq
+  if (chains.size() == 1 && best_mapq >= min_mapq) return true;
+
+  // Weighted standout
+  float bestQ = static_cast<float>(best_mapq);
+  float bestC = static_cast<float>(best.score);
+  float meanQ = 0.0f, meanC = 0.0f;
+  for (std::size_t i = 0; i < chains.size(); ++i) {
+    double sec = (i + 1 < chains.size()) ? chains[i + 1].score : 0.0;
+    int mq = computeMapq(chains[i].score, sec, chains[i].anchors.size(), 15);
+    meanQ += static_cast<float>(mq);
+    meanC += static_cast<float>(chains[i].score);
+  }
+  meanQ /= static_cast<float>(chains.size());
+  meanC /= static_cast<float>(chains.size());
+
+  float r_bestq = std::min(bestQ / 30.0f, 1.0f);
+  float r_bestmq = (bestQ > 0) ? std::max(0.0f, 1.0f - meanQ / bestQ) : 0.0f;
+  float r_bestmc = (bestC > 0) ? std::max(0.0f, 1.0f - meanC / bestC) : 0.0f;
+
+  float weighted = w_bestq * r_bestq + w_bestmq * r_bestmq + w_bestmc * r_bestmc;
+  return weighted >= w_threshold;
+}
+
 }  // namespace
 
 void SeedLookup::lookup(const signal::SeedBuffer& seeds, std::vector<NodeAnchor>& out_hits) const {
@@ -274,7 +308,8 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
   all_hits.clear();
 
   const std::size_t chunk_size = config_.event_pipeline_config.chunk_size;
-  std::size_t chunks_processed = 1;  // for mapping decision score scaling
+  std::size_t chunks_processed = 1;
+  ChainResult last_chains;  // holds the final chain result (from last chunk or single chain)
 
   if (chunk_size == 0) {
     /* Non-chunked path: process entire signal at once (original behavior) */
@@ -401,28 +436,34 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
         all_hits = std::move(survivors);
       }
 
-      /* Early exit: single chain with mapq >= min_mapq (RH2-style) */
-      if (chunk_chains.chains.size() == 1) {
-        const auto& primary = chunk_chains.chains[0];
-        double sec = 0.0;
-        int mapq = computeMapq(primary.score, sec, primary.anchors.size(), 15);
-        if (mapq >= config_.map_min_mapq) break;
+      /* Check mapping decision (early exit or last chunk) */
+      bool decided = checkMappingDecision(chunk_chains.chains, config_.map_min_mapq,
+                                          config_.map_w_bestq, config_.map_w_bestmq,
+                                          config_.map_w_bestmc, config_.map_w_threshold);
+
+      if (!config_.no_early_exit && decided) {
+        last_chains = std::move(chunk_chains);
+        ++chunk_idx;
+        break;
       }
 
+      last_chains = std::move(chunk_chains);
       ++chunk_idx;
     }
     chunks_processed = chunk_idx;
   }
 
-  /* Final chain with all accumulated hits */
-  const std::size_t total_hits = all_hits.size();
-  ChainResult chain_result = components_.chainer->chain(all_hits);
+  /* Use chunk chains directly (no re-chain). For non-chunked path, chain once. */
+  ChainResult& chain_result =
+      last_chains.chains.empty()
+          ? (last_chains = components_.chainer->chain(all_hits))  // non-chunked: first chain
+          : last_chains;                                          // chunked: last chunk's chains
 
-  /* Free seed hits */
+  const std::size_t total_hits = all_hits.size();
   all_hits.clear();
   all_hits.shrink_to_fit();
 
-  /* Build unified map result from chain result */
+  /* Build map result from chain result */
   ReadMapResult& result = batch.map_results[index];
   result.mappings.clear();
   result.total_seed_hits = total_hits;
@@ -440,8 +481,8 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
     result.mappings.push_back(std::move(mapping));
   }
 
-  /* Compute mapq for all chains (needed for decision) */
-  const int min_chain_sc = 15;  // RH2 default min_chaining_score
+  /* Compute mapq for all mappings */
+  const int min_chain_sc = 15;
   for (std::size_t i = 0; i < result.mappings.size(); ++i) {
     double sec = (i + 1 < result.mappings.size()) ? result.mappings[i + 1].chain_score : 0.0;
     result.mappings[i].mapq =
@@ -449,39 +490,17 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
                     min_chain_sc);
   }
 
-  /* RH2-style mapping decision (three-tier) */
-  if (!result.mappings.empty()) {
-    const auto& primary = result.mappings[0];
+  /* Mapping decision: same function used for early exit, applied to final chains */
+  result.is_mapped =
+      checkMappingDecision(chain_result.chains, config_.map_min_mapq, config_.map_w_bestq,
+                           config_.map_w_bestmq, config_.map_w_bestmc, config_.map_w_threshold);
 
-    // Tier 1: single chain with mapq >= min_mapq
-    if (result.mappings.size() == 1 && primary.mapq >= config_.map_min_mapq) {
-      result.is_mapped = true;
-    } else {
-      // Tier 2: weighted standout formula
-      float bestQ = static_cast<float>(primary.mapq);
-      float bestC = static_cast<float>(primary.chain_score);
-      float meanQ = 0.0f, meanC = 0.0f;
-      for (const auto& m : result.mappings) {
-        meanQ += static_cast<float>(m.mapq);
-        meanC += static_cast<float>(m.chain_score);
-      }
-      meanQ /= static_cast<float>(result.mappings.size());
-      meanC /= static_cast<float>(result.mappings.size());
-
-      float r_bestq = std::min(bestQ / 30.0f, 1.0f);
-      float r_bestmq = (bestQ > 0) ? std::max(0.0f, 1.0f - meanQ / bestQ) : 0.0f;
-      float r_bestmc = (bestC > 0) ? std::max(0.0f, 1.0f - meanC / bestC) : 0.0f;
-
-      float weighted = config_.map_w_bestq * r_bestq + config_.map_w_bestmq * r_bestmq +
-                        config_.map_w_bestmc * r_bestmc;
-
-      if (weighted >= config_.map_w_threshold) {
-        result.is_mapped = true;
-      }
-    }
-
-    // Tier 3: fallback -- mapq > min_mapq
-    if (!result.is_mapped && primary.mapq > config_.map_min_mapq) {
+  /* Fallback: if standout couldn't decide but best chain is objectively strong, accept.
+   * Only applies after all chunks processed (not for early exit). */
+  if (!result.is_mapped && !result.mappings.empty()) {
+    const auto& best = result.mappings[0];
+    if (best.chain_score >= config_.map_fallback_min_score &&
+        best.anchors.size() >= config_.map_fallback_min_anchors) {
       result.is_mapped = true;
     }
   }

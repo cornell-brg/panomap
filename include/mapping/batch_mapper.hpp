@@ -81,23 +81,22 @@ struct BatchMapperConfig {
   /* Seed lookup limits */
   std::size_t max_total_hits{100000};  // Per-read hit cap (0 = unlimited, default 100k)
 
-  /* Mapping decision (RH2-style three-tier).
-   * 1. Single-chain early exit: only 1 chain && mapq >= min_mapq -> mapped
-   * 2. Weighted standout: best chain stands out from crowd -> mapped
-   * 3. Fallback: after all chunks, mapq > min_mapq -> mapped */
-  std::size_t map_min_anchors{2};     // Min anchors (from chain extraction, noise floor)
-  int map_min_mapq{2};                // Min mapq to accept mapping
+  /* Mapping decision: weighted standout (RH2-style).
+   * Same function for both early exit (per-chunk) and final map/unmap.
+   * 1. Single chain + mapq >= min_mapq -> mapped (fast path)
+   * 2. Weighted standout of best chain vs crowd -> mapped
+   * 3. Otherwise -> unmapped (no fallback) */
+  int map_min_mapq{2};                // Min mapq for single-chain fast path
   float map_w_bestq{0.35f};           // Weight: absolute mapq strength (bestQ/30)
   float map_w_bestmq{0.05f};          // Weight: mapq standout vs mean
   float map_w_bestmc{0.6f};           // Weight: score standout vs mean
   float map_w_threshold{0.45f};       // Weighted sum threshold to accept
+  bool no_early_exit{false};          // If true, process all chunks before deciding
 
-  /* Legacy fields kept for CLI compat (unused in new decision) */
-  std::size_t map_min_query_span{20};
-  double map_min_score_per_event{0.10};
-  double map_min_score{30.0};
-  float map_standout_ratio{0.17f};
-  int map_min_mapq_exit{12};
+  /* Fallback: accept strong chains that standout couldn't decide on.
+   * Only applies after all chunks exhausted. */
+  double map_fallback_min_score{200.0};       // Min chain score for fallback accept
+  std::size_t map_fallback_min_anchors{20};   // Min anchors for fallback accept
 };
 
 struct BatchMapperStats {

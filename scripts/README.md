@@ -196,3 +196,65 @@ pip install pyslow5
 - Interactive: omit `--output` to show plots with matplotlib GUI
 - PNG: `--output plot.png`
 - Use `.pdf` or `.svg` for vector output
+
+---
+
+## eval_canonical.py
+
+Evaluate mapping accuracy using canonical 1D coordinates. Compares ground truth
+(from squigulator read names) against piru's canonical interval GAF tags.
+
+### Prerequisites
+
+Requires piru built with component-aware dedup (dev-94). GAF output must have
+`ci:f:`, `ce:f:`, `cc:i:` tags (automatic when index has 1D coords + component IDs).
+
+### Setup
+
+```bash
+# 1. Index
+piru index graph.gfa -o graph.pirx
+
+# 2. Dump node canonical coords
+piru inspect graph.pirx --dump-path-coords node_coords.tsv
+
+# 3. Map (squigulator-simulated reads)
+piru map --index graph.pirx reads.blow5 -o out.gaf
+```
+
+### Usage
+
+```bash
+python3 scripts/eval_canonical.py graph.gfa node_coords.tsv out.gaf
+```
+
+### How it works
+
+1. Parses truth from squigulator read names: `S1_N!contig!start!end!strand`
+2. Walks the GFA path for that contig in base space to find which nodes the
+   truth interval covers
+3. Looks up each node's canonical start/end from the coords TSV, interpolates
+   to get the truth canonical interval
+4. Compares against piru's `ci:f:`/`ce:f:` tags from GAF
+5. Reports overlap (correct) or no overlap (wrong)
+
+### Output
+
+```
+Total: 600
+Correct: 599 (99.8%)
+Wrong: 0
+Unmapped: 1
+No truth: 0
+
+UNMAPPED   S1_224!gi|568815567:3779003-3792415!9413!13413!-
+```
+
+Wrong entries include truth/piru canonical intervals and node walks for
+manual inspection.
+
+### Limitations
+
+- Only evaluates primary alignments
+- Read names must follow squigulator format (`ID!contig!start!end!strand`)
+- Reads with non-matching name format are silently skipped

@@ -105,12 +105,9 @@ int handle_map(const std::vector<std::string>& args) {
   config.options.push_back({'\0', "chain-pen-switch", true,
                             "PanChainer: penalty for switching haplotype path (default: 50)"});
   config.options.push_back({'\0', "", false, "\nMapping Decision Options:"});
-  config.options.push_back({'\0', "map-min-anchors", true, "Min anchors in primary chain (default: 3)"});
-  config.options.push_back({'\0', "map-min-query-span", true, "Min query event span (default: 50)"});
-  config.options.push_back({'\0', "map-min-score-per-event", true, "Min score/query_events (default: 0.10)"});
-  config.options.push_back({'\0', "map-min-score", true, "Min primary chain score (default: 30)"});
-  config.options.push_back({'\0', "map-standout-ratio", true, "Fraction of mapq from standout vs score (default: 0.17)"});
-  config.options.push_back({'\0', "map-min-mapq-exit", true, "Min mapq to call mapped and early exit (default: 12)"});
+  config.options.push_back({'\0', "map-min-mapq", true, "Min mapq for single-chain fast path (default: 2)"});
+  config.options.push_back({'\0', "map-w-threshold", true, "Weighted standout threshold to call mapped (default: 0.45)"});
+  config.options.push_back({'\0', "no-early-exit", false, "Disable early exit: process all chunks before deciding"});
   config.options.push_back({'\0', "", false, "\nOutput Options:"});
   config.options.push_back({'o', "output", true, "Output file (.paf or .gaf, default: GAF to stdout)"});
   config.options.push_back({'\0', "secondary", false, "Output secondary alignments (default: primary only)"});
@@ -395,24 +392,15 @@ int handle_map(const std::vector<std::string>& args) {
   // TODO: pass this to the writer config if needed
 
   /* Mapping decision params */
-  if (parsed.values.count("map-min-anchors"))
-    map_config.map_min_anchors = std::stoull(parsed.values.at("map-min-anchors"));
-  if (parsed.values.count("map-min-query-span"))
-    map_config.map_min_query_span = std::stoull(parsed.values.at("map-min-query-span"));
-  if (parsed.values.count("map-min-score-per-event"))
-    map_config.map_min_score_per_event = std::stod(parsed.values.at("map-min-score-per-event"));
-  if (parsed.values.count("map-min-score"))
-    map_config.map_min_score = std::stod(parsed.values.at("map-min-score"));
-  if (parsed.values.count("map-standout-ratio"))
-    map_config.map_standout_ratio = std::stof(parsed.values.at("map-standout-ratio"));
-  if (parsed.values.count("map-min-mapq-exit"))
-    map_config.map_min_mapq_exit = std::stoi(parsed.values.at("map-min-mapq-exit"));
-  LOG_INFO("Mapping decision: min-anchors=" + std::to_string(map_config.map_min_anchors) +
-           " min-query-span=" + std::to_string(map_config.map_min_query_span) +
-           " min-score-per-event=" + std::to_string(map_config.map_min_score_per_event) +
-           " min-score=" + std::to_string(map_config.map_min_score) +
-           " standout-ratio=" + std::to_string(map_config.map_standout_ratio) +
-           " min-mapq-exit=" + std::to_string(map_config.map_min_mapq_exit));
+  if (parsed.values.count("map-min-mapq"))
+    map_config.map_min_mapq = std::stoi(parsed.values.at("map-min-mapq"));
+  if (parsed.values.count("map-w-threshold"))
+    map_config.map_w_threshold = std::stof(parsed.values.at("map-w-threshold"));
+  if (parsed.values.count("no-early-exit"))
+    map_config.no_early_exit = true;
+  LOG_INFO("Mapping decision: min-mapq=" + std::to_string(map_config.map_min_mapq) +
+           " w-threshold=" + std::to_string(map_config.map_w_threshold) +
+           " early-exit=" + (map_config.no_early_exit ? "off" : "on"));
 
   /* Read processing */
 
