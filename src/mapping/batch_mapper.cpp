@@ -143,7 +143,29 @@ BatchMapper::BatchMapper(io::ReadProvider& provider, BatchMapperConfig config, s
       provider_(provider),
       executor_(concurrency::make_executor(config_.num_threads)),
       components_(create_components()),
-      output_(output) {}
+      output_(output),
+      ema_score_(config_.map_fallback_init_score),
+      ema_anchors_(config_.map_fallback_init_anchors) {}
+
+void BatchMapper::recordAcceptedChain(double score, std::size_t anchors) {
+  if (!config_.map_fallback_adaptive) return;
+  std::lock_guard<std::mutex> lock(adaptive_mutex_);
+  float a = config_.map_fallback_alpha;
+  ema_score_ = a * score + (1.0 - a) * ema_score_;
+  ema_anchors_ = a * static_cast<double>(anchors) + (1.0 - a) * ema_anchors_;
+}
+
+void BatchMapper::getAdaptiveThresholds(double& out_score, std::size_t& out_anchors) const {
+  if (!config_.map_fallback_adaptive) {
+    out_score = config_.map_fallback_init_score;
+    out_anchors = static_cast<std::size_t>(config_.map_fallback_init_anchors);
+    return;
+  }
+  std::lock_guard<std::mutex> lock(adaptive_mutex_);
+  out_score = ema_score_ * config_.map_fallback_fraction;
+  out_anchors = static_cast<std::size_t>(ema_anchors_ * config_.map_fallback_fraction);
+  if (out_anchors < 2) out_anchors = 2;  // floor
+}
 
 PipelineComponents BatchMapper::create_components() const {
   PipelineComponents comps;
@@ -300,7 +322,7 @@ void BatchMapper::process_batch(BatchBuffer& batch) {
   LOG_INFO("Batch complete: total_hits=" + std::to_string(total_hits));
 }
 
-void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
+void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) {
   const auto t_start = std::chrono::high_resolution_clock::now();
 
   const auto& read = batch.raw_reads[index];
@@ -495,12 +517,19 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) const {
       checkMappingDecision(chain_result.chains, config_.map_min_mapq, config_.map_w_bestq,
                            config_.map_w_bestmq, config_.map_w_bestmc, config_.map_w_threshold);
 
-  /* Fallback: if standout couldn't decide but best chain is objectively strong, accept.
-   * Only applies after all chunks processed (not for early exit). */
+  /* Record standout-accepted chains for adaptive fallback (not fallback-accepted) */
+  if (result.is_mapped && !result.mappings.empty()) {
+    recordAcceptedChain(result.mappings[0].chain_score, result.mappings[0].anchors.size());
+  }
+
+  /* Fallback: if standout couldn't decide but best chain meets adaptive threshold.
+   * Uses p10 of recently accepted chains, or fixed defaults until buffer fills. */
   if (!result.is_mapped && !result.mappings.empty()) {
+    double thresh_score;
+    std::size_t thresh_anchors;
+    getAdaptiveThresholds(thresh_score, thresh_anchors);
     const auto& best = result.mappings[0];
-    if (best.chain_score >= config_.map_fallback_min_score &&
-        best.anchors.size() >= config_.map_fallback_min_anchors) {
+    if (best.chain_score >= thresh_score && best.anchors.size() >= thresh_anchors) {
       result.is_mapped = true;
     }
   }

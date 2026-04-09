@@ -62,7 +62,16 @@ EventPipelineConfig apply_defaults(EventPipelineConfig config) {
     LOG_DEBUG("Event pipeline: using R9 defaults (w1=3, w2=9, t1=4.0, t2=3.5, ph=0.4)");
   }
 
-  // Apply user overrides after defaults
+  // Apply sensitivity scaling (before user overrides, so explicit --event-t1 wins)
+  if (config.sensitivity != 1.0f && config.sensitivity > 0.0f) {
+    config.threshold1 /= config.sensitivity;
+    config.threshold2 /= config.sensitivity;
+    LOG_DEBUG("Event pipeline: sensitivity=" + std::to_string(config.sensitivity) +
+              " -> t1=" + std::to_string(config.threshold1) +
+              ", t2=" + std::to_string(config.threshold2));
+  }
+
+  // Apply user overrides after defaults + sensitivity
   apply_user_overrides(config);
 
   return config;

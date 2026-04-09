@@ -16,6 +16,7 @@
 #include <cstddef>
 #include <iosfwd>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -94,9 +95,13 @@ struct BatchMapperConfig {
   bool no_early_exit{false};          // If true, process all chunks before deciding
 
   /* Fallback: accept strong chains that standout couldn't decide on.
-   * Only applies after all chunks exhausted. */
-  double map_fallback_min_score{200.0};       // Min chain score for fallback accept
-  std::size_t map_fallback_min_anchors{20};   // Min anchors for fallback accept
+   * Only applies after all chunks exhausted. Uses EMA of accepted chains
+   * to adaptively learn what "good enough" looks like. */
+  double map_fallback_init_score{200.0};      // Initial EMA score (before any data)
+  double map_fallback_init_anchors{20.0};     // Initial EMA anchors (before any data)
+  float map_fallback_alpha{0.02f};            // EMA smoothing (0.02 ~ 50-read memory)
+  float map_fallback_fraction{0.3f};          // Threshold = fraction * EMA
+  bool map_fallback_adaptive{true};           // false = use fixed init values only
 };
 
 struct BatchMapperStats {
@@ -142,15 +147,25 @@ private:
   void load_batch(BatchBuffer& batch);
   void process_batch(BatchBuffer& batch);
   BatchMapperStats output_batch(const BatchBuffer& batch) const;
-  void process_read(BatchBuffer& batch, std::size_t index) const;
+  void process_read(BatchBuffer& batch, std::size_t index);
   void lookup_seed_hits(const signal::SeedBuffer& seeds, std::vector<NodeAnchor>& hits_out) const;
   PipelineComponents create_components() const;
+
+  // Update EMA with a standout-accepted chain
+  void recordAcceptedChain(double score, std::size_t anchors);
+  // Get adaptive fallback thresholds
+  void getAdaptiveThresholds(double& out_score, std::size_t& out_anchors) const;
 
   BatchMapperConfig config_;
   io::ReadProvider& provider_;
   std::unique_ptr<concurrency::Executor> executor_;
   PipelineComponents components_;
   std::ostream& output_;
+
+  // Adaptive fallback: EMA of accepted chain stats
+  mutable std::mutex adaptive_mutex_;
+  double ema_score_;
+  double ema_anchors_;
 };
 
 }  // namespace piru::mapping

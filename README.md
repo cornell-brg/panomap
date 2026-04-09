@@ -37,11 +37,13 @@ cd piru && mkdir build && cd build && cmake .. && make -j8
 # Map reads (GAF to stdout by default)
 ./piru map --index ref.pirx reads.blow5 -o out.gaf
 
-# Map with tuned landmark filters
+# Map with viral preset params (good for small genomes)
 ./piru map --index ref.pirx reads.blow5 \
-  --map-min-score 15 --map-min-anchors 2 \
-  --map-min-query-span 10 --map-min-score-per-event 0.13 \
-  -o out.gaf
+  --chain-bw 100 --chain-max-dist 500 --chain-pen-gap 1.2 \
+  --chain-pen-skip 0.3 --max-chunks 5 -o out.gaf
+
+# Tune sensitivity (higher = more events, more seeds)
+./piru map --index ref.pirx reads.blow5 --sensitivity 1.5 -o out.gaf
 ```
 
 ## Subcommands
@@ -92,15 +94,27 @@ squigulator reference.fa -x dna-r10-min \
 mkdir build && cd build
 cmake ..
 make -j8
-ctest          # unit tests
-ctest -V       # verbose
+ctest              # all tests (unit + integration)
+ctest -V           # verbose
+ctest -L integration  # integration tests only
+ctest -E integration  # unit tests only
 ```
+
+### Tests
+
+- **Unit tests** (51): C++ tests for individual components (tokenizer, chainer,
+  seed store, etc.). Fast, no external deps.
+- **Integration tests**: End-to-end accuracy checks. Simulate reads with
+  squigulator, index, map, evaluate accuracy against ground truth.
+  - `integration.drb1_accuracy`: 1000 simulated reads on DRB1 pangenome,
+    asserts >= 90% accuracy. Requires squigulator + Python with pyslow5.
 
 ## Contributing
 
-1. Run `make && ctest` in the build directory before submitting changes
+1. Run `make -j8 && ctest` in the build directory before submitting changes
 2. Follow `.clang-format` style (Google base, 2-space indent, 100-col limit)
 3. Add tests for new functionality in `tests/`
+4. Integration tests go in `tests/integration/`
 
 ## License
 

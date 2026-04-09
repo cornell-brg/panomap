@@ -110,6 +110,8 @@ void print_help(const ParseConfig& config, std::ostream& os) {
   }
   os << "\nOptions:\n";
   for (const auto& o : config.options) {
+    // Skip hidden options (no help text, no short opt)
+    if (o.help.empty() && !o.short_opt && !o.long_opt.empty()) continue;
     std::ostringstream line;
     line << "  ";
     if (o.short_opt) line << "-" << o.short_opt;

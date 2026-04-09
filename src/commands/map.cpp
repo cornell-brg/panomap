@@ -74,13 +74,15 @@ int handle_map(const std::vector<std::string>& args) {
       {'\0', "", false, "\nSignal Processing Options:"},
       {'\0', "chunk-size", true, "Signal chunk size in samples (default: 4000, 0 = no chunking)"},
       {'\0', "max-chunks", true, "Max chunks to process per read (default: 10, 0 = unlimited)"},
-      {'\0', "event-w1", true, "Event detection short window (R10: 4, R9: 3)"},
-      {'\0', "event-w2", true, "Event detection long window (R10: 10, R9: 9)"},
-      {'\0', "event-t1", true, "Event detection threshold1 (R10: 4.0, R9: 4.0)"},
-      {'\0', "event-t2", true, "Event detection threshold2 (R10: 3.0, R9: 3.5)"},
-      {'\0', "event-peak", true, "Event detection peak height (R10: 0.4, R9: 0.4)"},
+      {'\0', "sensitivity", true, "Event detection sensitivity (default: 1.0, higher = more sensitive)"},
       {'\0', "diff", true,
        "Diff filter: skip events within diff of last emitted (default: 0.35)"},
+      // Hidden: individual event params (still work, override sensitivity)
+      {'\0', "event-w1", true, ""},
+      {'\0', "event-w2", true, ""},
+      {'\0', "event-t1", true, ""},
+      {'\0', "event-t2", true, ""},
+      {'\0', "event-peak", true, ""},
       {'\0', "", false, "\nSeed Lookup Options:"},
       {'\0', "seed-freq-cap", true,
        "Skip high-freq seeds: <N> for absolute, p<F> for percentile (default: p0.99)"},
@@ -108,6 +110,10 @@ int handle_map(const std::vector<std::string>& args) {
   config.options.push_back({'\0', "map-min-mapq", true, "Min mapq for single-chain fast path (default: 2)"});
   config.options.push_back({'\0', "map-w-threshold", true, "Weighted standout threshold to call mapped (default: 0.45)"});
   config.options.push_back({'\0', "no-early-exit", false, "Disable early exit: process all chunks before deciding"});
+  config.options.push_back({'\0', "map-fallback-score", true, "Fallback: initial EMA score (default: 200)"});
+  config.options.push_back({'\0', "map-fallback-anchors", true, "Fallback: initial EMA anchors (default: 20)"});
+  config.options.push_back({'\0', "no-adaptive", false, "Disable adaptive fallback, use fixed thresholds only"});
+  config.options.push_back({'\0', "adaptive-fraction", true, "Adaptive: threshold = fraction * EMA (default: 0.3, lower = stricter)"});
   config.options.push_back({'\0', "", false, "\nOutput Options:"});
   config.options.push_back({'o', "output", true, "Output file (.paf or .gaf, default: GAF to stdout)"});
   config.options.push_back({'\0', "secondary", false, "Output secondary alignments (default: primary only)"});
@@ -320,7 +326,10 @@ int handle_map(const std::vector<std::string>& args) {
 
   // Configure event pipeline
   map_config.event_pipeline_config.pore_model = pore_model_name;
-  // Event detection parameter overrides (take precedence over model defaults)
+  if (parsed.values.count("sensitivity")) {
+    map_config.event_pipeline_config.sensitivity = std::stof(parsed.values.at("sensitivity"));
+  }
+  // Event detection parameter overrides (take precedence over sensitivity scaling)
   if (parsed.values.count("event-w1")) {
     map_config.event_pipeline_config.override_window_length1 =
         std::stoi(parsed.values.at("event-w1"));
@@ -393,8 +402,19 @@ int handle_map(const std::vector<std::string>& args) {
     map_config.map_w_threshold = std::stof(parsed.values.at("map-w-threshold"));
   if (parsed.values.count("no-early-exit"))
     map_config.no_early_exit = true;
+  if (parsed.values.count("map-fallback-score"))
+    map_config.map_fallback_init_score = std::stod(parsed.values.at("map-fallback-score"));
+  if (parsed.values.count("map-fallback-anchors"))
+    map_config.map_fallback_init_anchors = std::stod(parsed.values.at("map-fallback-anchors"));
+  if (parsed.values.count("no-adaptive"))
+    map_config.map_fallback_adaptive = false;
+  if (parsed.values.count("adaptive-fraction"))
+    map_config.map_fallback_fraction = std::stof(parsed.values.at("adaptive-fraction"));
   LOG_INFO("Mapping decision: min-mapq=" + std::to_string(map_config.map_min_mapq) +
            " w-threshold=" + std::to_string(map_config.map_w_threshold) +
+           " fallback-score=" + std::to_string(map_config.map_fallback_init_score) +
+           " fallback-anchors=" + std::to_string(map_config.map_fallback_init_anchors) +
+           " adaptive=" + (map_config.map_fallback_adaptive ? "on" : "off") +
            " early-exit=" + (map_config.no_early_exit ? "off" : "on"));
 
   /* Read processing */

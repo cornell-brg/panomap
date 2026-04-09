@@ -28,7 +28,12 @@ struct EventPipelineConfig {
   float threshold2{9.0f};
   float peak_height{0.2f};
 
-  // User overrides (if set, take precedence over backend defaults)
+  // Sensitivity scaling: higher = more sensitive (more events).
+  // Scales t1 and t2 by 1/sensitivity after model defaults are set.
+  // 1.0 = default, 2.0 = 2x more sensitive, 0.5 = 2x less sensitive.
+  float sensitivity{1.0f};
+
+  // User overrides (if set, take precedence over sensitivity scaling)
   std::optional<int> override_window_length1;
   std::optional<int> override_window_length2;
   std::optional<float> override_threshold1;

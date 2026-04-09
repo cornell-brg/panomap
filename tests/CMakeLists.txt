@@ -119,6 +119,31 @@ if(DOCTEST_AVAILABLE)
         add_test(NAME piru_tests COMMAND piru_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
     endif()
 
+    # Integration test: DRB1 pangenome mapping accuracy
+    set(WORKSPACE_ROOT "${CMAKE_SOURCE_DIR}/..")
+    add_test(
+        NAME integration.drb1_accuracy
+        COMMAND bash ${CMAKE_SOURCE_DIR}/tests/integration/test_drb1_accuracy.sh
+                $<TARGET_FILE:piru> ${WORKSPACE_ROOT}
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    )
+    set_tests_properties(integration.drb1_accuracy PROPERTIES
+        TIMEOUT 120
+        LABELS "integration"
+    )
+
+    # Integration test: DRB1 with landmark tokenizer
+    add_test(
+        NAME integration.drb1_landmark
+        COMMAND bash ${CMAKE_SOURCE_DIR}/tests/integration/test_drb1_landmark.sh
+                $<TARGET_FILE:piru> ${WORKSPACE_ROOT}
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    )
+    set_tests_properties(integration.drb1_landmark PROPERTIES
+        TIMEOUT 120
+        LABELS "integration"
+    )
+
     add_custom_target(check
         COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
         DEPENDS piru_tests

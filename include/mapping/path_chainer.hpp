@@ -31,7 +31,7 @@ struct PathChainerConfig {
   std::size_t min_chain_score{15};     // Min score to report a chain
   std::size_t min_chain_anchors{2};    // Min anchors per chain
   std::size_t max_chains{10};          // Hard safety cap (internal, not a CLI knob)
-  float secondary_ratio{0.7f};        // Stop extracting when score < ratio * primary
+  float secondary_ratio{0.3f};        // Stop extracting when score < ratio * primary
   std::size_t max_survivor_chains{0};  // Max chains for survivor marking (0 = unlimited)
   std::size_t max_skip{25};            // Stop after N consecutive failed chain attempts
   std::size_t max_iterations{0};       // Max predecessors to check per anchor (0 = unlimited)
