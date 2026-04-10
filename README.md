@@ -55,6 +55,23 @@ cd piru && mkdir build && cd build && cmake .. && make -j8
 
 Run `piru <command> --help` for full options.
 
+## GAF Output Tags
+
+| Tag | Type | Description |
+|-----|------|-------------|
+| `pn:Z:` | string | Reference path name (or `*` if unmapped) |
+| `tp:A:` | char | Alignment type: `P` primary, `S` secondary, `U` unmapped |
+| `cs:i:` | int | Chain score |
+| `an:i:` | int | Anchor count in chain |
+| `se:f:` | float | Score per event span (chain_score / query_span) |
+| `ad:f:` | float | Anchor density (anchors / ref_span) |
+| `ci:f:` | float | Canonical 1D coordinate start |
+| `ce:f:` | float | Canonical 1D coordinate end |
+| `cc:i:` | int | 1D component ID |
+| `ws:f:` | float | Weighted standout score (mapping decision confidence) |
+| `ck:i:` | int | Chunks processed before decision |
+| `dt:f:` | float | Processing time (seconds) |
+
 ## Tokenizers
 
 PIRU supports two tokenization strategies for converting signal to seeds:

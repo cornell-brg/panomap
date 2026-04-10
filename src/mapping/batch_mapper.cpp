@@ -58,18 +58,20 @@ int computeMapq(double pri_score, double sec_score, std::size_t anchors, int min
 
 // Unified mapping decision: is the best chain confident enough?
 // Used for both early exit (per-chunk) and final map/unmap decision.
+// out_standout: if non-null, receives the weighted standout value.
 bool checkMappingDecision(const std::vector<Chain>& chains, int min_mapq, float w_bestq,
-                          float w_bestmq, float w_bestmc, float w_threshold) {
-  if (chains.empty()) return false;
+                          float w_bestmq, float w_bestmc, float w_threshold,
+                          float* out_standout = nullptr) {
+  if (chains.empty()) {
+    if (out_standout) *out_standout = 0.0f;
+    return false;
+  }
 
   const auto& best = chains[0];
   double sec_score = (chains.size() > 1) ? chains[1].score : 0.0;
   int best_mapq = computeMapq(best.score, sec_score, best.anchors.size(), 15);
 
-  // Fast path: single chain with sufficient mapq
-  if (chains.size() == 1 && best_mapq >= min_mapq) return true;
-
-  // Weighted standout
+  // Weighted standout (always compute so we can report it)
   float bestQ = static_cast<float>(best_mapq);
   float bestC = static_cast<float>(best.score);
   float meanQ = 0.0f, meanC = 0.0f;
@@ -87,6 +89,11 @@ bool checkMappingDecision(const std::vector<Chain>& chains, int min_mapq, float 
   float r_bestmc = (bestC > 0) ? std::max(0.0f, 1.0f - meanC / bestC) : 0.0f;
 
   float weighted = w_bestq * r_bestq + w_bestmq * r_bestmq + w_bestmc * r_bestmc;
+  if (out_standout) *out_standout = weighted;
+
+  // Fast path: single chain with sufficient mapq
+  if (chains.size() == 1 && best_mapq >= min_mapq) return true;
+
   return weighted >= w_threshold;
 }
 
@@ -513,9 +520,12 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) {
   }
 
   /* Mapping decision: same function used for early exit, applied to final chains */
+  float final_standout = 0.0f;
   result.is_mapped =
       checkMappingDecision(chain_result.chains, config_.map_min_mapq, config_.map_w_bestq,
-                           config_.map_w_bestmq, config_.map_w_bestmc, config_.map_w_threshold);
+                           config_.map_w_bestmq, config_.map_w_bestmc, config_.map_w_threshold,
+                           &final_standout);
+  result.standout = final_standout;
 
   /* Record standout-accepted chains for adaptive fallback (not fallback-accepted) */
   if (result.is_mapped && !result.mappings.empty()) {

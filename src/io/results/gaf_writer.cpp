@@ -86,6 +86,12 @@ void GafWriter::write(const mapping::ReadMapResult& result, const std::string& r
       ss << read_id << '\t' << read_length << "\t*\t*\t*\t*\t*\t*\t*\t0\t0\t0";
       ss << "\tpn:Z:*\ttp:A:U";
     }
+    // ws:f: weighted standout score from mapping decision
+    {
+      char ws_buf[32];
+      std::snprintf(ws_buf, sizeof(ws_buf), "ws:f:%.3f", result.standout);
+      ss << '\t' << ws_buf;
+    }
     ss << "\tck:i:" << result.chunks_processed;
     {
       char dt_buf[32];
@@ -252,6 +258,9 @@ void GafWriter::write(const mapping::ReadMapResult& result, const std::string& r
 
     // Per-read timing (primary only)
     if (is_primary) {
+      char ws_buf[32];
+      std::snprintf(ws_buf, sizeof(ws_buf), "ws:f:%.3f", result.standout);
+      ss << '\t' << ws_buf;
       ss << "\tck:i:" << result.chunks_processed;
       char dt_buf[32];
       std::snprintf(dt_buf, sizeof(dt_buf), "dt:f:%.6f", result.processing_time_sec);
