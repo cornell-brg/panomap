@@ -70,11 +70,11 @@ if [ -z "$TOTAL" ] || [ "$TOTAL" -eq 0 ]; then
   exit 1
 fi
 
-RECALL=$((CORRECT * 100 / TOTAL))
-PRECISION=$((MAPPED > 0 ? CORRECT * 100 / MAPPED : 0))
+RECALL=$((MAPPED * 100 / TOTAL))
+MAP_ACC=$((MAPPED > 0 ? CORRECT * 100 / MAPPED : 0))
 
 echo ""
-echo "Result: recall=$RECALL% precision=$PRECISION% ($CORRECT/$TOTAL correct, $WRONG wrong)"
+echo "Result: recall=$RECALL% mapping_accuracy=$MAP_ACC% ($CORRECT/$TOTAL correct, $WRONG wrong)"
 
 if [ "$RECALL" -lt "$MIN_ACCURACY" ]; then
   echo "FAIL: recall $RECALL% < ${MIN_ACCURACY}% threshold"

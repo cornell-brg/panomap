@@ -144,6 +144,42 @@ if(DOCTEST_AVAILABLE)
         LABELS "integration"
     )
 
+    # Integration test: COVID linear reference (real reads, mm2 truth)
+    add_test(
+        NAME integration.covid_accuracy
+        COMMAND bash ${CMAKE_SOURCE_DIR}/tests/integration/test_covid_accuracy.sh
+                $<TARGET_FILE:piru> ${WORKSPACE_ROOT}
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    )
+    set_tests_properties(integration.covid_accuracy PROPERTIES
+        TIMEOUT 120
+        LABELS "integration"
+    )
+
+    # Integration test: COVID with RH2 viral preset
+    add_test(
+        NAME integration.covid_viral
+        COMMAND bash ${CMAKE_SOURCE_DIR}/tests/integration/test_covid_viral.sh
+                $<TARGET_FILE:piru> ${WORKSPACE_ROOT}
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    )
+    set_tests_properties(integration.covid_viral PROPERTIES
+        TIMEOUT 120
+        LABELS "integration"
+    )
+
+    # Integration test: COVID with landmark tokenizer (best config)
+    add_test(
+        NAME integration.covid_landmark_viral
+        COMMAND bash ${CMAKE_SOURCE_DIR}/tests/integration/test_covid_landmark_viral.sh
+                $<TARGET_FILE:piru> ${WORKSPACE_ROOT}
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    )
+    set_tests_properties(integration.covid_landmark_viral PROPERTIES
+        TIMEOUT 120
+        LABELS "integration"
+    )
+
     add_custom_target(check
         COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
         DEPENDS piru_tests

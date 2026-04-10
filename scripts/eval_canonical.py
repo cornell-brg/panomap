@@ -256,8 +256,8 @@ def main():
                 )
 
     mapped = correct + wrong
-    recall = correct / total * 100 if total > 0 else 0
-    precision = correct / mapped * 100 if mapped > 0 else 0
+    recall = mapped / total * 100 if total > 0 else 0
+    map_acc = correct / mapped * 100 if mapped > 0 else 0
     print(f"Total: {total}")
     print(f"Mapped: {mapped}")
     print(f"Correct: {correct}")
@@ -265,7 +265,7 @@ def main():
     print(f"Unmapped: {unmapped}")
     print(f"No truth: {no_truth}")
     print(f"Recall: {recall:.1f}%")
-    print(f"Precision: {precision:.1f}%")
+    print(f"Mapping_accuracy: {map_acc:.1f}%")
     print()
 
     # Print non-OK
