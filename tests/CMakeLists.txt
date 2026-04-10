@@ -132,6 +132,30 @@ if(DOCTEST_AVAILABLE)
         LABELS "integration"
     )
 
+    # Integration test: DRB1 with sort-chain backend
+    add_test(
+        NAME integration.drb1_sort_chain
+        COMMAND bash ${CMAKE_SOURCE_DIR}/tests/integration/test_drb1_sort_chain.sh
+                $<TARGET_FILE:piru> ${WORKSPACE_ROOT}
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    )
+    set_tests_properties(integration.drb1_sort_chain PROPERTIES
+        TIMEOUT 120
+        LABELS "integration"
+    )
+
+    # Integration test: DRB1 with pan-chain backend
+    add_test(
+        NAME integration.drb1_pan_chain
+        COMMAND bash ${CMAKE_SOURCE_DIR}/tests/integration/test_drb1_pan_chain.sh
+                $<TARGET_FILE:piru> ${WORKSPACE_ROOT}
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    )
+    set_tests_properties(integration.drb1_pan_chain PROPERTIES
+        TIMEOUT 120
+        LABELS "integration"
+    )
+
     # Integration test: DRB1 with landmark tokenizer
     add_test(
         NAME integration.drb1_landmark
@@ -140,6 +164,30 @@ if(DOCTEST_AVAILABLE)
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     )
     set_tests_properties(integration.drb1_landmark PROPERTIES
+        TIMEOUT 120
+        LABELS "integration"
+    )
+
+    # Integration test: DRB1 with landmark tokenizer + sort-chain
+    add_test(
+        NAME integration.drb1_landmark_sort_chain
+        COMMAND bash ${CMAKE_SOURCE_DIR}/tests/integration/test_drb1_landmark_sort_chain.sh
+                $<TARGET_FILE:piru> ${WORKSPACE_ROOT}
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    )
+    set_tests_properties(integration.drb1_landmark_sort_chain PROPERTIES
+        TIMEOUT 120
+        LABELS "integration"
+    )
+
+    # Integration test: DRB1 with landmark tokenizer + pan-chain
+    add_test(
+        NAME integration.drb1_landmark_pan_chain
+        COMMAND bash ${CMAKE_SOURCE_DIR}/tests/integration/test_drb1_landmark_pan_chain.sh
+                $<TARGET_FILE:piru> ${WORKSPACE_ROOT}
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    )
+    set_tests_properties(integration.drb1_landmark_pan_chain PROPERTIES
         TIMEOUT 120
         LABELS "integration"
     )
