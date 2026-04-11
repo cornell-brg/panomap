@@ -18,6 +18,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "concurrency/executor.hpp"
@@ -72,8 +73,11 @@ struct BatchMapperConfig {
   /* Connected component IDs per node (non-owning, from index) */
   const std::vector<std::uint32_t>* component_ids{nullptr};
 
-  /* Result writer for output (non-owning, optional) */
+  /* Result writer for output (non-owning, optional).
+   * If per_file_writers is non-empty, routes each read to its source-file writer.
+   * Otherwise falls back to result_writer for all reads. */
   io::ResultWriter* result_writer{nullptr};
+  std::unordered_map<std::string, io::ResultWriter*> per_file_writers;
 
   /* Anchor merging (passed to chainer) */
   bool enable_anchor_merge{true};
@@ -99,14 +103,12 @@ struct BatchMapperConfig {
   float map_sc_ratio_hi{1.4f};        // Max event_span/ref_span ratio
 
   /* Fallback: accept strong chains that standout couldn't decide on.
-   * Only applies after all chunks exhausted. Uses EMA of accepted chains
-   * (mean + variance) to adaptively learn what "good enough" looks like.
-   * Threshold = ema_mean - k * ema_std. A chain passes if within k std devs of the mean. */
-  double map_fallback_init_score{200.0};      // Initial EMA score (before any data)
-  double map_fallback_init_anchors{20.0};     // Initial EMA anchors (before any data)
-  float map_fallback_alpha{0.02f};            // EMA smoothing (0.02 ~ 50-read memory)
-  float map_fallback_k{1.0f};                 // Threshold = mean - k * std (higher = stricter)
-  bool map_fallback_adaptive{true};           // false = use fixed init values only
+   * Conservative score-only floor with optional EMA assist.
+   * Threshold = max(ema_mean_at_ck, floor_score). Rescue if score >= threshold.
+   * Floor prevents EMA drift from dragging threshold into noise territory. */
+  double map_fallback_floor_score{100.0};   // Absolute minimum score to rescue
+  float map_fallback_alpha{0.02f};          // EMA smoothing (0.02 ~ 50-read memory)
+  bool map_fallback_adaptive{true};         // false = use floor only, no EMA learning
 };
 
 struct BatchMapperStats {
@@ -156,11 +158,10 @@ private:
   void lookup_seed_hits(const signal::SeedBuffer& seeds, std::vector<NodeAnchor>& hits_out) const;
   PipelineComponents create_components() const;
 
-  // Update EMA with a standout-accepted chain at a given chunk depth
-  void recordAcceptedChain(double score, std::size_t anchors, std::size_t chunks_processed);
-  // Get adaptive fallback thresholds for a given chunk depth
-  void getAdaptiveThresholds(std::size_t chunks_processed, double& out_score,
-                             std::size_t& out_anchors) const;
+  // Update EMA with a standout-accepted chain at a given chunk depth (score only)
+  void recordAcceptedChain(double score, std::size_t chunks_processed);
+  // Get fallback threshold for a given chunk depth: max(ema_mean, floor).
+  double getFallbackThreshold(std::size_t chunks_processed) const;
 
   BatchMapperConfig config_;
   io::ReadProvider& provider_;
@@ -168,14 +169,11 @@ private:
   PipelineComponents components_;
   std::ostream& output_;
 
-  // Adaptive fallback: per-chunk-depth EMA of accepted chain stats.
+  // Fallback: per-chunk-depth EMA of accepted chain scores.
   // Index 0 unused (ck=0 means no chunks processed). Indices 1..max_chunks active.
-  // Tracks both mean and variance (exponentially-weighted) of score and anchors.
+  // Tracks mean only (no variance, for order-independence). Starts at floor value.
   mutable std::mutex adaptive_mutex_;
   mutable std::vector<double> ema_score_per_ck_;
-  mutable std::vector<double> ema_score_var_per_ck_;
-  mutable std::vector<double> ema_anchors_per_ck_;
-  mutable std::vector<double> ema_anchors_var_per_ck_;
 };
 
 }  // namespace piru::mapping

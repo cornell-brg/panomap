@@ -184,62 +184,30 @@ BatchMapper::BatchMapper(io::ReadProvider& provider, BatchMapperConfig config, s
       executor_(concurrency::make_executor(config_.num_threads)),
       components_(create_components()),
       output_(output) {
-  // Pre-size per-chunk-depth EMA vectors. Index 0 unused, 1..max_chunks active.
-  // Variance starts at 0 (no data).
+  // Pre-size per-chunk-depth EMA vector. Index 0 unused, 1..max_chunks active.
+  // EMA starts at the floor value so threshold = max(ema, floor) begins at floor.
   const std::size_t mc = config_.event_pipeline_config.max_chunks;
   const std::size_t sz = (mc > 0 ? mc : 20) + 1;
-  ema_score_per_ck_.assign(sz, config_.map_fallback_init_score);
-  ema_anchors_per_ck_.assign(sz, config_.map_fallback_init_anchors);
-  ema_score_var_per_ck_.assign(sz, 0.0);
-  ema_anchors_var_per_ck_.assign(sz, 0.0);
+  ema_score_per_ck_.assign(sz, config_.map_fallback_floor_score);
 }
 
-void BatchMapper::recordAcceptedChain(double score, std::size_t anchors,
-                                      std::size_t chunks_processed) {
+void BatchMapper::recordAcceptedChain(double score, std::size_t chunks_processed) {
   if (!config_.map_fallback_adaptive) return;
   if (chunks_processed == 0 || chunks_processed >= ema_score_per_ck_.size()) return;
   std::lock_guard<std::mutex> lock(adaptive_mutex_);
   const double a = config_.map_fallback_alpha;
-  const double one_minus_a = 1.0 - a;
-
-  // Score: exponentially-weighted mean + variance
-  double delta_s = score - ema_score_per_ck_[chunks_processed];
-  ema_score_per_ck_[chunks_processed] += a * delta_s;
-  ema_score_var_per_ck_[chunks_processed] =
-      one_minus_a * (ema_score_var_per_ck_[chunks_processed] + a * delta_s * delta_s);
-
-  // Anchors: same
-  double a_val = static_cast<double>(anchors);
-  double delta_a = a_val - ema_anchors_per_ck_[chunks_processed];
-  ema_anchors_per_ck_[chunks_processed] += a * delta_a;
-  ema_anchors_var_per_ck_[chunks_processed] =
-      one_minus_a * (ema_anchors_var_per_ck_[chunks_processed] + a * delta_a * delta_a);
+  ema_score_per_ck_[chunks_processed] =
+      a * score + (1.0 - a) * ema_score_per_ck_[chunks_processed];
 }
 
-void BatchMapper::getAdaptiveThresholds(std::size_t chunks_processed, double& out_score,
-                                        std::size_t& out_anchors) const {
-  if (!config_.map_fallback_adaptive) {
-    out_score = config_.map_fallback_init_score;
-    out_anchors = static_cast<std::size_t>(config_.map_fallback_init_anchors);
-    return;
-  }
-  if (chunks_processed == 0 || chunks_processed >= ema_score_per_ck_.size()) {
-    out_score = config_.map_fallback_init_score;
-    out_anchors = static_cast<std::size_t>(config_.map_fallback_init_anchors);
-    return;
-  }
+double BatchMapper::getFallbackThreshold(std::size_t chunks_processed) const {
+  const double floor = config_.map_fallback_floor_score;
+  if (!config_.map_fallback_adaptive) return floor;
+  if (chunks_processed == 0 || chunks_processed >= ema_score_per_ck_.size()) return floor;
   std::lock_guard<std::mutex> lock(adaptive_mutex_);
-  const double k = config_.map_fallback_k;
-  // Threshold = mean - k * std. Clamped to 0.
-  double s_mean = ema_score_per_ck_[chunks_processed];
-  double s_std = std::sqrt(ema_score_var_per_ck_[chunks_processed]);
-  out_score = std::max(0.0, s_mean - k * s_std);
-
-  double a_mean = ema_anchors_per_ck_[chunks_processed];
-  double a_std = std::sqrt(ema_anchors_var_per_ck_[chunks_processed]);
-  double a_thresh = std::max(0.0, a_mean - k * a_std);
-  out_anchors = static_cast<std::size_t>(a_thresh);
-  if (out_anchors < 2) out_anchors = 2;  // floor
+  // Conservative: max of learned mean and absolute floor. Floor prevents
+  // EMA drift from dragging threshold into noise territory.
+  return std::max(ema_score_per_ck_[chunks_processed], floor);
 }
 
 PipelineComponents BatchMapper::create_components() const {
@@ -596,22 +564,18 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) {
       config_.map_sc_ratio_hi, &final_standout);
   result.standout = final_standout;
 
-  /* Record accepted chain for adaptive fallback at this chunk depth.
-   * Per-chunk-depth EMA avoids cross-chunk scale mismatch.
+  /* Record accepted chain score at this chunk depth.
    * Only records multi-chain accepts; single-chain uses its own gate, not EMA. */
   if (result.is_mapped && !result.mappings.empty() && result.mappings.size() > 1) {
-    recordAcceptedChain(result.mappings[0].chain_score, result.mappings[0].anchors.size(),
-                        chunks_processed);
+    recordAcceptedChain(result.mappings[0].chain_score, chunks_processed);
   }
 
-  /* Fallback: if multi-chain standout couldn't decide but best chain meets adaptive threshold.
-   * Threshold is learned from previously-accepted reads at the SAME chunk depth. */
+  /* Fallback: multi-chain reads that failed standout. Score-only check.
+   * Threshold = max(ema_mean, floor). Floor prevents EMA drift to noise territory. */
   if (!result.is_mapped && result.mappings.size() > 1) {
-    double thresh_score;
-    std::size_t thresh_anchors;
-    getAdaptiveThresholds(chunks_processed, thresh_score, thresh_anchors);
+    double thresh = getFallbackThreshold(chunks_processed);
     const auto& best = result.mappings[0];
-    if (best.chain_score >= thresh_score && best.anchors.size() >= thresh_anchors) {
+    if (best.chain_score >= thresh) {
       result.is_mapped = true;
     }
   }
@@ -645,9 +609,17 @@ BatchMapperStats BatchMapper::output_batch(const BatchBuffer& batch) const {
               "score=" + std::to_string(static_cast<int>(pri_score)) + "\t" +
               "anchors=" + std::to_string(pri_anchors));
 
-    /* Write to result file if configured */
-    if (config_.result_writer) {
-      config_.result_writer->write(map_result, read.read_id, read.len_raw_signal);
+    /* Write to result file if configured.
+     * Per-file routing: look up writer by source_file, fall back to single writer. */
+    io::ResultWriter* writer = config_.result_writer;
+    if (!config_.per_file_writers.empty()) {
+      auto it = config_.per_file_writers.find(read.source_file);
+      if (it != config_.per_file_writers.end()) {
+        writer = it->second;
+      }
+    }
+    if (writer) {
+      writer->write(map_result, read.read_id, read.len_raw_signal);
       if (is_mapped) {
         ++stats.primary_alignments;
         std::size_t sec_count = map_result.mappings.size() > 1 ? map_result.mappings.size() - 1 : 0;

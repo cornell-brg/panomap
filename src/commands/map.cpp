@@ -18,6 +18,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <unordered_map>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -112,10 +113,8 @@ int handle_map(const std::vector<std::string>& args) {
   config.options.push_back({'\0', "map-sc-ratio-lo", true, "Single-chain: min event/ref ratio (default: 0.7)"});
   config.options.push_back({'\0', "map-sc-ratio-hi", true, "Single-chain: max event/ref ratio (default: 1.4)"});
   config.options.push_back({'\0', "no-early-exit", false, "Disable early exit: process all chunks before deciding"});
-  config.options.push_back({'\0', "map-fallback-score", true, "Fallback: initial EMA score (default: 200)"});
-  config.options.push_back({'\0', "map-fallback-anchors", true, "Fallback: initial EMA anchors (default: 20)"});
-  config.options.push_back({'\0', "no-adaptive", false, "Disable adaptive fallback, use fixed thresholds only"});
-  config.options.push_back({'\0', "adaptive-k", true, "Adaptive: threshold = mean - k*std (default: 1.0, higher = stricter)"});
+  config.options.push_back({'\0', "map-fallback-floor", true, "Fallback: absolute score floor (default: 100). Threshold = max(ema_mean, floor)."});
+  config.options.push_back({'\0', "no-adaptive", false, "Disable EMA assist, use floor score only"});
   config.options.push_back({'\0', "", false, "\nOutput Options:"});
   config.options.push_back({'o', "output", true, "Output file (.paf or .gaf, default: GAF to stdout)"});
   config.options.push_back({'\0', "secondary", false, "Output secondary alignments (default: primary only)"});
@@ -274,17 +273,49 @@ int handle_map(const std::vector<std::string>& args) {
     map_config.component_ids = &component_ids;
   }
 
-  // Create result writer (needs graph for GAF path lookups, and 1D coords for canonical tags)
+  // Create result writer(s).
+  //   - output_path empty -> stdout
+  //   - output_path is an existing directory OR ends with '/' -> per-file writers
+  //     (one output per input file, named <basename>.gaf inside the dir)
+  //   - otherwise -> single writer to the given path
   const std::vector<float>* writer_1d = node_1d_coords.empty() ? nullptr : &node_1d_coords;
   const std::vector<std::uint32_t>* writer_cc = component_ids.empty() ? nullptr : &component_ids;
-  piru::io::ResultWriterPtr result_writer;
-  if (!output_path.empty()) {
+  piru::io::ResultWriterPtr result_writer;                    // single-file mode
+  std::vector<piru::io::ResultWriterPtr> per_file_writers;    // per-file mode (owning)
+  std::unordered_map<std::string, piru::io::ResultWriter*> per_file_writer_map;
+
+  auto is_per_file_output = [&]() {
+    if (output_path.empty()) return false;
+    std::error_code ec;
+    if (std::filesystem::is_directory(output_path, ec)) return true;
+    if (!output_path.empty() && output_path.back() == '/') return true;
+    return false;
+  }();
+
+  if (output_path.empty()) {
+    result_writer =
+        piru::io::make_result_writer_stdout(flat_graph, primary_only, writer_1d, writer_cc);
+  } else if (is_per_file_output) {
+    // Ensure output dir exists.
+    std::error_code ec;
+    std::filesystem::create_directories(output_path, ec);
+    // Determine output extension from first input file (default .gaf).
+    const std::string out_ext = ".gaf";
+    for (const auto& f : files) {
+      const std::string base = f.stem().string();  // filename without extension
+      std::string out_file = output_path;
+      if (out_file.back() != '/') out_file += '/';
+      out_file += base + out_ext;
+      auto writer = piru::io::make_result_writer(out_file, flat_graph, primary_only,
+                                                 writer_1d, writer_cc);
+      per_file_writer_map[f.string()] = writer.get();
+      per_file_writers.push_back(std::move(writer));
+      LOG_INFO("Per-file output: " + f.string() + " -> " + out_file);
+    }
+  } else {
     result_writer =
         piru::io::make_result_writer(output_path, flat_graph, primary_only, writer_1d, writer_cc);
     LOG_INFO("Writing results to: " + output_path);
-  } else {
-    result_writer =
-        piru::io::make_result_writer_stdout(flat_graph, primary_only, writer_1d, writer_cc);
   }
 
   // Configure tokenizer to match index-time settings.
@@ -390,7 +421,8 @@ int handle_map(const std::vector<std::string>& args) {
            " (seeds with freq > " + std::to_string(seed_store->frequency_threshold()) +
            " will be skipped)");
 
-  map_config.result_writer = result_writer.get();
+  map_config.result_writer = result_writer.get();  // null in per-file mode
+  map_config.per_file_writers = per_file_writer_map;
 
   if (parsed.values.count("no-anchor-merge")) {
     map_config.enable_anchor_merge = false;
@@ -408,20 +440,15 @@ int handle_map(const std::vector<std::string>& args) {
     map_config.map_sc_ratio_hi = std::stof(parsed.values.at("map-sc-ratio-hi"));
   if (parsed.values.count("no-early-exit"))
     map_config.no_early_exit = true;
-  if (parsed.values.count("map-fallback-score"))
-    map_config.map_fallback_init_score = std::stod(parsed.values.at("map-fallback-score"));
-  if (parsed.values.count("map-fallback-anchors"))
-    map_config.map_fallback_init_anchors = std::stod(parsed.values.at("map-fallback-anchors"));
+  if (parsed.values.count("map-fallback-floor"))
+    map_config.map_fallback_floor_score = std::stod(parsed.values.at("map-fallback-floor"));
   if (parsed.values.count("no-adaptive"))
     map_config.map_fallback_adaptive = false;
-  if (parsed.values.count("adaptive-k"))
-    map_config.map_fallback_k = std::stof(parsed.values.at("adaptive-k"));
   LOG_INFO("Mapping decision: w-threshold=" + std::to_string(map_config.map_w_threshold) +
            " sc-min-anchors=" + std::to_string(map_config.map_sc_min_anchors) +
            " sc-ratio=[" + std::to_string(map_config.map_sc_ratio_lo) + "," +
            std::to_string(map_config.map_sc_ratio_hi) + "]" +
-           " fallback-score=" + std::to_string(map_config.map_fallback_init_score) +
-           " fallback-anchors=" + std::to_string(map_config.map_fallback_init_anchors) +
+           " fallback-floor=" + std::to_string(map_config.map_fallback_floor_score) +
            " adaptive=" + (map_config.map_fallback_adaptive ? "on" : "off") +
            " early-exit=" + (map_config.no_early_exit ? "off" : "on"));
 
@@ -429,6 +456,11 @@ int handle_map(const std::vector<std::string>& args) {
 
   PIRU_PROFILE_START(profile, "mapping");
 
+  // One BatchMapper per input file. Each file gets its own EMA state so the
+  // adaptive fallback isn't corrupted by cross-file contamination (an artifact
+  // of eval setups where on-target and off-target reads are in separate files).
+  // In a real mixed stream, interleaving naturally produces balanced EMA;
+  // sequential per-file processing requires per-file reset to approximate that.
   std::size_t total_reads = 0;
   std::size_t total_batches = 0;
   std::size_t files_processed = 0;

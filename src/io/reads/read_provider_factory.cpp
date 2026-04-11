@@ -1,6 +1,7 @@
 #include "io/reads/read_provider_factory.hpp"
 
 #include <algorithm>
+#include <filesystem>
 
 #include "io/reads/pod5_provider.hpp"
 #include "io/reads/slow5_provider.hpp"
@@ -24,6 +25,12 @@ std::string extension_of(const std::string& path) {
 }  // namespace
 
 ReadProviderPtr make_read_provider(const std::string& path) {
+  // Directories: assume slow5/blow5 (Slow5Provider walks the tree).
+  std::error_code ec;
+  if (std::filesystem::is_directory(path, ec)) {
+    return std::make_unique<Slow5Provider>(path);
+  }
+
   const std::string ext = extension_of(path);
   if (ext == "slow5" || ext == "blow5") {
     return std::make_unique<Slow5Provider>(path);

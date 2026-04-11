@@ -25,6 +25,9 @@ public:
   void reset() override;
   std::string get_format_name() const override { return "slow5"; }
 
+  // Expose input files (used for per-file output routing).
+  const std::vector<std::string>& input_files() const { return filenames_; }
+
 private:
   void open();
   void close();

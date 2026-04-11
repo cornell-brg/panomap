@@ -132,6 +132,7 @@ bool Slow5Provider::get_next(RawRead& read) {
     }
 
     read.read_id = record->read_id ? record->read_id : "";
+    read.source_file = filenames_[current_file_index_];
     read.len_raw_signal = record->len_raw_signal;
     read.raw_signal.assign(record->raw_signal, record->raw_signal + record->len_raw_signal);
     read.range = static_cast<float>(record->range);

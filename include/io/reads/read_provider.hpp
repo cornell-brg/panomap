@@ -12,6 +12,7 @@ namespace piru::io {
 
 struct RawRead {
   std::string read_id;
+  std::string source_file;  // Input file this read came from (for per-file output routing)
   std::vector<int16_t> raw_signal;
   std::uint64_t len_raw_signal{0};
   float range{0.0f};
