@@ -69,6 +69,7 @@ Run `piru <command> --help` for full options.
 | `ce:f:` | float | Canonical 1D coordinate end |
 | `cc:i:` | int | 1D component ID |
 | `ws:f:` | float | Weighted standout score (mapping decision confidence) |
+| `nc:i:` | int | Number of competitive chains (after secondary ratio filter) |
 | `ck:i:` | int | Chunks processed before decision |
 | `dt:f:` | float | Processing time (seconds) |
 

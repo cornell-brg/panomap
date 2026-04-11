@@ -107,13 +107,15 @@ int handle_map(const std::vector<std::string>& args) {
   config.options.push_back({'\0', "chain-pen-switch", true,
                             "PanChainer: penalty for switching haplotype path (default: 50)"});
   config.options.push_back({'\0', "", false, "\nMapping Decision Options:"});
-  config.options.push_back({'\0', "map-min-mapq", true, "Min mapq for single-chain fast path (default: 2)"});
-  config.options.push_back({'\0', "map-w-threshold", true, "Weighted standout threshold to call mapped (default: 0.45)"});
+  config.options.push_back({'\0', "map-w-threshold", true, "Multi-chain: weighted standout threshold to call mapped (default: 0.45)"});
+  config.options.push_back({'\0', "map-sc-min-anchors", true, "Single-chain: min anchors to accept (default: 5)"});
+  config.options.push_back({'\0', "map-sc-ratio-lo", true, "Single-chain: min event/ref ratio (default: 0.7)"});
+  config.options.push_back({'\0', "map-sc-ratio-hi", true, "Single-chain: max event/ref ratio (default: 1.4)"});
   config.options.push_back({'\0', "no-early-exit", false, "Disable early exit: process all chunks before deciding"});
   config.options.push_back({'\0', "map-fallback-score", true, "Fallback: initial EMA score (default: 200)"});
   config.options.push_back({'\0', "map-fallback-anchors", true, "Fallback: initial EMA anchors (default: 20)"});
   config.options.push_back({'\0', "no-adaptive", false, "Disable adaptive fallback, use fixed thresholds only"});
-  config.options.push_back({'\0', "adaptive-fraction", true, "Adaptive: threshold = fraction * EMA (default: 0.3, lower = stricter)"});
+  config.options.push_back({'\0', "adaptive-k", true, "Adaptive: threshold = mean - k*std (default: 1.0, higher = stricter)"});
   config.options.push_back({'\0', "", false, "\nOutput Options:"});
   config.options.push_back({'o', "output", true, "Output file (.paf or .gaf, default: GAF to stdout)"});
   config.options.push_back({'\0', "secondary", false, "Output secondary alignments (default: primary only)"});
@@ -396,10 +398,14 @@ int handle_map(const std::vector<std::string>& args) {
   }
 
   /* Mapping decision params */
-  if (parsed.values.count("map-min-mapq"))
-    map_config.map_min_mapq = std::stoi(parsed.values.at("map-min-mapq"));
   if (parsed.values.count("map-w-threshold"))
     map_config.map_w_threshold = std::stof(parsed.values.at("map-w-threshold"));
+  if (parsed.values.count("map-sc-min-anchors"))
+    map_config.map_sc_min_anchors = std::stoull(parsed.values.at("map-sc-min-anchors"));
+  if (parsed.values.count("map-sc-ratio-lo"))
+    map_config.map_sc_ratio_lo = std::stof(parsed.values.at("map-sc-ratio-lo"));
+  if (parsed.values.count("map-sc-ratio-hi"))
+    map_config.map_sc_ratio_hi = std::stof(parsed.values.at("map-sc-ratio-hi"));
   if (parsed.values.count("no-early-exit"))
     map_config.no_early_exit = true;
   if (parsed.values.count("map-fallback-score"))
@@ -408,10 +414,12 @@ int handle_map(const std::vector<std::string>& args) {
     map_config.map_fallback_init_anchors = std::stod(parsed.values.at("map-fallback-anchors"));
   if (parsed.values.count("no-adaptive"))
     map_config.map_fallback_adaptive = false;
-  if (parsed.values.count("adaptive-fraction"))
-    map_config.map_fallback_fraction = std::stof(parsed.values.at("adaptive-fraction"));
-  LOG_INFO("Mapping decision: min-mapq=" + std::to_string(map_config.map_min_mapq) +
-           " w-threshold=" + std::to_string(map_config.map_w_threshold) +
+  if (parsed.values.count("adaptive-k"))
+    map_config.map_fallback_k = std::stof(parsed.values.at("adaptive-k"));
+  LOG_INFO("Mapping decision: w-threshold=" + std::to_string(map_config.map_w_threshold) +
+           " sc-min-anchors=" + std::to_string(map_config.map_sc_min_anchors) +
+           " sc-ratio=[" + std::to_string(map_config.map_sc_ratio_lo) + "," +
+           std::to_string(map_config.map_sc_ratio_hi) + "]" +
            " fallback-score=" + std::to_string(map_config.map_fallback_init_score) +
            " fallback-anchors=" + std::to_string(map_config.map_fallback_init_anchors) +
            " adaptive=" + (map_config.map_fallback_adaptive ? "on" : "off") +

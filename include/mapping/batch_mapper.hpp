@@ -82,25 +82,30 @@ struct BatchMapperConfig {
   /* Seed lookup limits */
   std::size_t max_total_hits{100000};  // Per-read hit cap (0 = unlimited, default 100k)
 
-  /* Mapping decision: weighted standout (RH2-style).
-   * Same function for both early exit (per-chunk) and final map/unmap.
-   * 1. Single chain + mapq >= min_mapq -> mapped (fast path)
-   * 2. Weighted standout of best chain vs crowd -> mapped
-   * 3. Otherwise -> unmapped (no fallback) */
-  int map_min_mapq{2};                // Min mapq for single-chain fast path
+  /* Mapping decision.
+   * Single-chain reads: anchor count + event/ref ratio gate.
+   * Multi-chain reads: weighted standout (RH2-style) vs threshold. */
+  int map_min_mapq{2};                // (unused, kept for CLI compatibility)
   float map_w_bestq{0.35f};           // Weight: absolute mapq strength (bestQ/30)
   float map_w_bestmq{0.05f};          // Weight: mapq standout vs mean
   float map_w_bestmc{0.6f};           // Weight: score standout vs mean
   float map_w_threshold{0.45f};       // Weighted sum threshold to accept
   bool no_early_exit{false};          // If true, process all chunks before deciding
 
+  /* Single-chain gate: replaces old fast path.
+   * A single chain is accepted if anchors >= min AND event/ref ratio in [lo, hi]. */
+  std::size_t map_sc_min_anchors{5};  // Min anchors for single-chain accept
+  float map_sc_ratio_lo{0.7f};        // Min event_span/ref_span ratio
+  float map_sc_ratio_hi{1.4f};        // Max event_span/ref_span ratio
+
   /* Fallback: accept strong chains that standout couldn't decide on.
    * Only applies after all chunks exhausted. Uses EMA of accepted chains
-   * to adaptively learn what "good enough" looks like. */
+   * (mean + variance) to adaptively learn what "good enough" looks like.
+   * Threshold = ema_mean - k * ema_std. A chain passes if within k std devs of the mean. */
   double map_fallback_init_score{200.0};      // Initial EMA score (before any data)
   double map_fallback_init_anchors{20.0};     // Initial EMA anchors (before any data)
   float map_fallback_alpha{0.02f};            // EMA smoothing (0.02 ~ 50-read memory)
-  float map_fallback_fraction{0.3f};          // Threshold = fraction * EMA
+  float map_fallback_k{1.0f};                 // Threshold = mean - k * std (higher = stricter)
   bool map_fallback_adaptive{true};           // false = use fixed init values only
 };
 
@@ -151,10 +156,11 @@ private:
   void lookup_seed_hits(const signal::SeedBuffer& seeds, std::vector<NodeAnchor>& hits_out) const;
   PipelineComponents create_components() const;
 
-  // Update EMA with a standout-accepted chain
-  void recordAcceptedChain(double score, std::size_t anchors);
-  // Get adaptive fallback thresholds
-  void getAdaptiveThresholds(double& out_score, std::size_t& out_anchors) const;
+  // Update EMA with a standout-accepted chain at a given chunk depth
+  void recordAcceptedChain(double score, std::size_t anchors, std::size_t chunks_processed);
+  // Get adaptive fallback thresholds for a given chunk depth
+  void getAdaptiveThresholds(std::size_t chunks_processed, double& out_score,
+                             std::size_t& out_anchors) const;
 
   BatchMapperConfig config_;
   io::ReadProvider& provider_;
@@ -162,10 +168,14 @@ private:
   PipelineComponents components_;
   std::ostream& output_;
 
-  // Adaptive fallback: EMA of accepted chain stats
+  // Adaptive fallback: per-chunk-depth EMA of accepted chain stats.
+  // Index 0 unused (ck=0 means no chunks processed). Indices 1..max_chunks active.
+  // Tracks both mean and variance (exponentially-weighted) of score and anchors.
   mutable std::mutex adaptive_mutex_;
-  double ema_score_;
-  double ema_anchors_;
+  mutable std::vector<double> ema_score_per_ck_;
+  mutable std::vector<double> ema_score_var_per_ck_;
+  mutable std::vector<double> ema_anchors_per_ck_;
+  mutable std::vector<double> ema_anchors_var_per_ck_;
 };
 
 }  // namespace piru::mapping

@@ -56,12 +56,37 @@ int computeMapq(double pri_score, double sec_score, std::size_t anchors, int min
   return std::min(mapq, 60);
 }
 
+// Compute event_span (query) and ref_span from a chain's anchors.
+void computeChainSpans(const Chain& chain, std::uint32_t& event_span, std::int64_t& ref_span) {
+  if (chain.anchors.empty()) {
+    event_span = 0;
+    ref_span = 0;
+    return;
+  }
+  std::uint32_t min_q = chain.anchors.front().read_pos;
+  std::uint32_t max_q = chain.anchors.front().read_pos;
+  std::int64_t min_r = chain.anchors.front().ref_coord;
+  std::int64_t max_r = chain.anchors.front().ref_coord;
+  for (const auto& a : chain.anchors) {
+    min_q = std::min(min_q, a.read_pos);
+    max_q = std::max(max_q, a.read_pos + a.length);
+    min_r = std::min(min_r, a.ref_coord);
+    max_r = std::max(max_r, a.ref_coord + static_cast<std::int64_t>(a.length));
+  }
+  event_span = max_q - min_q;
+  ref_span = max_r - min_r;
+}
+
 // Unified mapping decision: is the best chain confident enough?
 // Used for both early exit (per-chunk) and final map/unmap decision.
+//
+// Single-chain reads: must have anchors >= sc_min_anchors AND event/ref ratio in [sc_ratio_lo, sc_ratio_hi].
+// Multi-chain reads: weighted standout of best chain vs others must exceed w_threshold.
+//
 // out_standout: if non-null, receives the weighted standout value.
-bool checkMappingDecision(const std::vector<Chain>& chains, int min_mapq, float w_bestq,
-                          float w_bestmq, float w_bestmc, float w_threshold,
-                          float* out_standout = nullptr) {
+bool checkMappingDecision(const std::vector<Chain>& chains, float w_bestq, float w_bestmq,
+                          float w_bestmc, float w_threshold, std::size_t sc_min_anchors,
+                          float sc_ratio_lo, float sc_ratio_hi, float* out_standout = nullptr) {
   if (chains.empty()) {
     if (out_standout) *out_standout = 0.0f;
     return false;
@@ -69,9 +94,9 @@ bool checkMappingDecision(const std::vector<Chain>& chains, int min_mapq, float 
 
   const auto& best = chains[0];
   double sec_score = (chains.size() > 1) ? chains[1].score : 0.0;
-  int best_mapq = computeMapq(best.score, sec_score, best.anchors.size(), 15);
 
-  // Weighted standout (always compute so we can report it)
+  // Always compute standout so we can report it (even for single-chain reads).
+  int best_mapq = computeMapq(best.score, sec_score, best.anchors.size(), 15);
   float bestQ = static_cast<float>(best_mapq);
   float bestC = static_cast<float>(best.score);
   float meanQ = 0.0f, meanC = 0.0f;
@@ -87,13 +112,21 @@ bool checkMappingDecision(const std::vector<Chain>& chains, int min_mapq, float 
   float r_bestq = std::min(bestQ / 30.0f, 1.0f);
   float r_bestmq = (bestQ > 0) ? std::max(0.0f, 1.0f - meanQ / bestQ) : 0.0f;
   float r_bestmc = (bestC > 0) ? std::max(0.0f, 1.0f - meanC / bestC) : 0.0f;
-
   float weighted = w_bestq * r_bestq + w_bestmq * r_bestmq + w_bestmc * r_bestmc;
   if (out_standout) *out_standout = weighted;
 
-  // Fast path: single chain with sufficient mapq
-  if (chains.size() == 1 && best_mapq >= min_mapq) return true;
+  // Single-chain gate: anchor count + event/ref ratio
+  if (chains.size() == 1) {
+    if (best.anchors.size() < sc_min_anchors) return false;
+    std::uint32_t event_span = 0;
+    std::int64_t ref_span = 0;
+    computeChainSpans(best, event_span, ref_span);
+    if (ref_span <= 0) return false;
+    float ratio = static_cast<float>(event_span) / static_cast<float>(ref_span);
+    return ratio >= sc_ratio_lo && ratio <= sc_ratio_hi;
+  }
 
+  // Multi-chain: weighted standout threshold
   return weighted >= w_threshold;
 }
 
@@ -150,27 +183,62 @@ BatchMapper::BatchMapper(io::ReadProvider& provider, BatchMapperConfig config, s
       provider_(provider),
       executor_(concurrency::make_executor(config_.num_threads)),
       components_(create_components()),
-      output_(output),
-      ema_score_(config_.map_fallback_init_score),
-      ema_anchors_(config_.map_fallback_init_anchors) {}
-
-void BatchMapper::recordAcceptedChain(double score, std::size_t anchors) {
-  if (!config_.map_fallback_adaptive) return;
-  std::lock_guard<std::mutex> lock(adaptive_mutex_);
-  float a = config_.map_fallback_alpha;
-  ema_score_ = a * score + (1.0 - a) * ema_score_;
-  ema_anchors_ = a * static_cast<double>(anchors) + (1.0 - a) * ema_anchors_;
+      output_(output) {
+  // Pre-size per-chunk-depth EMA vectors. Index 0 unused, 1..max_chunks active.
+  // Variance starts at 0 (no data).
+  const std::size_t mc = config_.event_pipeline_config.max_chunks;
+  const std::size_t sz = (mc > 0 ? mc : 20) + 1;
+  ema_score_per_ck_.assign(sz, config_.map_fallback_init_score);
+  ema_anchors_per_ck_.assign(sz, config_.map_fallback_init_anchors);
+  ema_score_var_per_ck_.assign(sz, 0.0);
+  ema_anchors_var_per_ck_.assign(sz, 0.0);
 }
 
-void BatchMapper::getAdaptiveThresholds(double& out_score, std::size_t& out_anchors) const {
+void BatchMapper::recordAcceptedChain(double score, std::size_t anchors,
+                                      std::size_t chunks_processed) {
+  if (!config_.map_fallback_adaptive) return;
+  if (chunks_processed == 0 || chunks_processed >= ema_score_per_ck_.size()) return;
+  std::lock_guard<std::mutex> lock(adaptive_mutex_);
+  const double a = config_.map_fallback_alpha;
+  const double one_minus_a = 1.0 - a;
+
+  // Score: exponentially-weighted mean + variance
+  double delta_s = score - ema_score_per_ck_[chunks_processed];
+  ema_score_per_ck_[chunks_processed] += a * delta_s;
+  ema_score_var_per_ck_[chunks_processed] =
+      one_minus_a * (ema_score_var_per_ck_[chunks_processed] + a * delta_s * delta_s);
+
+  // Anchors: same
+  double a_val = static_cast<double>(anchors);
+  double delta_a = a_val - ema_anchors_per_ck_[chunks_processed];
+  ema_anchors_per_ck_[chunks_processed] += a * delta_a;
+  ema_anchors_var_per_ck_[chunks_processed] =
+      one_minus_a * (ema_anchors_var_per_ck_[chunks_processed] + a * delta_a * delta_a);
+}
+
+void BatchMapper::getAdaptiveThresholds(std::size_t chunks_processed, double& out_score,
+                                        std::size_t& out_anchors) const {
   if (!config_.map_fallback_adaptive) {
     out_score = config_.map_fallback_init_score;
     out_anchors = static_cast<std::size_t>(config_.map_fallback_init_anchors);
     return;
   }
+  if (chunks_processed == 0 || chunks_processed >= ema_score_per_ck_.size()) {
+    out_score = config_.map_fallback_init_score;
+    out_anchors = static_cast<std::size_t>(config_.map_fallback_init_anchors);
+    return;
+  }
   std::lock_guard<std::mutex> lock(adaptive_mutex_);
-  out_score = ema_score_ * config_.map_fallback_fraction;
-  out_anchors = static_cast<std::size_t>(ema_anchors_ * config_.map_fallback_fraction);
+  const double k = config_.map_fallback_k;
+  // Threshold = mean - k * std. Clamped to 0.
+  double s_mean = ema_score_per_ck_[chunks_processed];
+  double s_std = std::sqrt(ema_score_var_per_ck_[chunks_processed]);
+  out_score = std::max(0.0, s_mean - k * s_std);
+
+  double a_mean = ema_anchors_per_ck_[chunks_processed];
+  double a_std = std::sqrt(ema_anchors_var_per_ck_[chunks_processed]);
+  double a_thresh = std::max(0.0, a_mean - k * a_std);
+  out_anchors = static_cast<std::size_t>(a_thresh);
   if (out_anchors < 2) out_anchors = 2;  // floor
 }
 
@@ -466,9 +534,10 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) {
       }
 
       /* Check mapping decision (early exit or last chunk) */
-      bool decided = checkMappingDecision(chunk_chains.chains, config_.map_min_mapq,
-                                          config_.map_w_bestq, config_.map_w_bestmq,
-                                          config_.map_w_bestmc, config_.map_w_threshold);
+      bool decided = checkMappingDecision(chunk_chains.chains, config_.map_w_bestq,
+                                          config_.map_w_bestmq, config_.map_w_bestmc,
+                                          config_.map_w_threshold, config_.map_sc_min_anchors,
+                                          config_.map_sc_ratio_lo, config_.map_sc_ratio_hi);
 
       if (!config_.no_early_exit && decided) {
         last_chains = std::move(chunk_chains);
@@ -521,23 +590,26 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) {
 
   /* Mapping decision: same function used for early exit, applied to final chains */
   float final_standout = 0.0f;
-  result.is_mapped =
-      checkMappingDecision(chain_result.chains, config_.map_min_mapq, config_.map_w_bestq,
-                           config_.map_w_bestmq, config_.map_w_bestmc, config_.map_w_threshold,
-                           &final_standout);
+  result.is_mapped = checkMappingDecision(
+      chain_result.chains, config_.map_w_bestq, config_.map_w_bestmq, config_.map_w_bestmc,
+      config_.map_w_threshold, config_.map_sc_min_anchors, config_.map_sc_ratio_lo,
+      config_.map_sc_ratio_hi, &final_standout);
   result.standout = final_standout;
 
-  /* Record standout-accepted chains for adaptive fallback (not fallback-accepted) */
-  if (result.is_mapped && !result.mappings.empty()) {
-    recordAcceptedChain(result.mappings[0].chain_score, result.mappings[0].anchors.size());
+  /* Record accepted chain for adaptive fallback at this chunk depth.
+   * Per-chunk-depth EMA avoids cross-chunk scale mismatch.
+   * Only records multi-chain accepts; single-chain uses its own gate, not EMA. */
+  if (result.is_mapped && !result.mappings.empty() && result.mappings.size() > 1) {
+    recordAcceptedChain(result.mappings[0].chain_score, result.mappings[0].anchors.size(),
+                        chunks_processed);
   }
 
-  /* Fallback: if standout couldn't decide but best chain meets adaptive threshold.
-   * Uses p10 of recently accepted chains, or fixed defaults until buffer fills. */
-  if (!result.is_mapped && !result.mappings.empty()) {
+  /* Fallback: if multi-chain standout couldn't decide but best chain meets adaptive threshold.
+   * Threshold is learned from previously-accepted reads at the SAME chunk depth. */
+  if (!result.is_mapped && result.mappings.size() > 1) {
     double thresh_score;
     std::size_t thresh_anchors;
-    getAdaptiveThresholds(thresh_score, thresh_anchors);
+    getAdaptiveThresholds(chunks_processed, thresh_score, thresh_anchors);
     const auto& best = result.mappings[0];
     if (best.chain_score >= thresh_score && best.anchors.size() >= thresh_anchors) {
       result.is_mapped = true;

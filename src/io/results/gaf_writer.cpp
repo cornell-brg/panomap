@@ -87,10 +87,12 @@ void GafWriter::write(const mapping::ReadMapResult& result, const std::string& r
       ss << "\tpn:Z:*\ttp:A:U";
     }
     // ws:f: weighted standout score from mapping decision
+    // nc:i: number of competitive chains (after secondary ratio filter)
     {
       char ws_buf[32];
       std::snprintf(ws_buf, sizeof(ws_buf), "ws:f:%.3f", result.standout);
       ss << '\t' << ws_buf;
+      ss << "\tnc:i:" << result.mappings.size();
     }
     ss << "\tck:i:" << result.chunks_processed;
     {
@@ -261,6 +263,7 @@ void GafWriter::write(const mapping::ReadMapResult& result, const std::string& r
       char ws_buf[32];
       std::snprintf(ws_buf, sizeof(ws_buf), "ws:f:%.3f", result.standout);
       ss << '\t' << ws_buf;
+      ss << "\tnc:i:" << result.mappings.size();
       ss << "\tck:i:" << result.chunks_processed;
       char dt_buf[32];
       std::snprintf(dt_buf, sizeof(dt_buf), "dt:f:%.6f", result.processing_time_sec);
