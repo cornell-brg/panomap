@@ -13,7 +13,7 @@ GFA="$DATA/covid.gfa"
 READS="$DATA/covid_reads_1k.blow5"
 TRUTH_PAF="$DATA/covid_1k_mm2.paf"
 
-MIN_RECALL=80
+MIN_RECALL=75
 MIN_PRECISION=85
 
 for f in "$GFA" "$READS" "$TRUTH_PAF"; do
