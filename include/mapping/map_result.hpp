@@ -35,12 +35,28 @@ struct Mapping {
 };
 
 /**
+ * Which decision path accepted a read (or U if unmapped).
+ *
+ * G: single-chain gate (anchor count + event/ref ratio)
+ * S: multi-chain standout (weighted standout >= threshold)
+ * F: fallback (score >= max(ema_mean, floor))
+ * U: unmapped (no path accepted)
+ */
+enum class DecisionPath : char {
+  kUnmapped = 'U',
+  kGate = 'G',
+  kStandout = 'S',
+  kFallback = 'F',
+};
+
+/**
  * All mappings for a single read.
  */
 struct ReadMapResult {
   std::vector<Mapping> mappings;  // primary (index 0) + secondaries
   bool is_mapped{false};                // passed mapping decision filters
   float standout{0.0f};                 // weighted standout score from mapping decision
+  DecisionPath decision_path{DecisionPath::kUnmapped};  // which rule accepted the read
   std::size_t total_seed_hits{0};       // raw seed lookup hits (before chaining)
   std::size_t expanded_anchor_count{0};
 

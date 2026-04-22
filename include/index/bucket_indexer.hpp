@@ -31,7 +31,7 @@ namespace piru::index {
 
 struct BucketIndexConfig {
   /* Seed extraction params (must match extractor config) */
-  std::size_t seed_k{6};
+  std::size_t seed_k;  // Set by IndexPipelineConfig, no default.
   /* Signal processing */
   float diff_filter{0.0f};  // Diff filter threshold (0 = disabled)
 

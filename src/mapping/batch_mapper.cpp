@@ -84,9 +84,13 @@ void computeChainSpans(const Chain& chain, std::uint32_t& event_span, std::int64
 // Multi-chain reads: weighted standout of best chain vs others must exceed w_threshold.
 //
 // out_standout: if non-null, receives the weighted standout value.
+// out_path: if non-null, receives the decision path (kGate/kStandout/kUnmapped). Fallback
+//           decisions are applied later in the caller.
 bool checkMappingDecision(const std::vector<Chain>& chains, float w_bestq, float w_bestmq,
                           float w_bestmc, float w_threshold, std::size_t sc_min_anchors,
-                          float sc_ratio_lo, float sc_ratio_hi, float* out_standout = nullptr) {
+                          float sc_ratio_lo, float sc_ratio_hi, float* out_standout = nullptr,
+                          DecisionPath* out_path = nullptr) {
+  if (out_path) *out_path = DecisionPath::kUnmapped;
   if (chains.empty()) {
     if (out_standout) *out_standout = 0.0f;
     return false;
@@ -123,11 +127,19 @@ bool checkMappingDecision(const std::vector<Chain>& chains, float w_bestq, float
     computeChainSpans(best, event_span, ref_span);
     if (ref_span <= 0) return false;
     float ratio = static_cast<float>(event_span) / static_cast<float>(ref_span);
-    return ratio >= sc_ratio_lo && ratio <= sc_ratio_hi;
+    if (ratio >= sc_ratio_lo && ratio <= sc_ratio_hi) {
+      if (out_path) *out_path = DecisionPath::kGate;
+      return true;
+    }
+    return false;
   }
 
   // Multi-chain: weighted standout threshold
-  return weighted >= w_threshold;
+  if (weighted >= w_threshold) {
+    if (out_path) *out_path = DecisionPath::kStandout;
+    return true;
+  }
+  return false;
 }
 
 }  // namespace
@@ -260,8 +272,10 @@ PipelineComponents BatchMapper::create_components() const {
     std::vector<std::uint32_t> bp_lens(config_.graph_store->nodeCount());
     for (std::size_t i = 0; i < bp_lens.size(); ++i)
       bp_lens[i] = static_cast<std::uint32_t>(config_.graph_store->sequenceLen(i));
-    comps.chainer =
-        std::make_unique<SortChainer>(sort_config, *config_.node_1d_coords, std::move(bp_lens));
+    static const std::vector<std::uint32_t> kEmptyCC;
+    const auto& cc_ids = config_.component_ids ? *config_.component_ids : kEmptyCC;
+    comps.chainer = std::make_unique<SortChainer>(sort_config, *config_.node_1d_coords,
+                                                  std::move(bp_lens), cc_ids);
   } else if (config_.chainer_backend == "pan-chain") {
     if (!config_.node_1d_coords) {
       throw std::runtime_error(
@@ -558,10 +572,11 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) {
 
   /* Mapping decision: same function used for early exit, applied to final chains */
   float final_standout = 0.0f;
+  DecisionPath decision_path = DecisionPath::kUnmapped;
   result.is_mapped = checkMappingDecision(
       chain_result.chains, config_.map_w_bestq, config_.map_w_bestmq, config_.map_w_bestmc,
       config_.map_w_threshold, config_.map_sc_min_anchors, config_.map_sc_ratio_lo,
-      config_.map_sc_ratio_hi, &final_standout);
+      config_.map_sc_ratio_hi, &final_standout, &decision_path);
   result.standout = final_standout;
 
   /* Record accepted chain score at this chunk depth.
@@ -577,8 +592,10 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) {
     const auto& best = result.mappings[0];
     if (best.chain_score >= thresh) {
       result.is_mapped = true;
+      decision_path = DecisionPath::kFallback;
     }
   }
+  result.decision_path = decision_path;
 
 }
 

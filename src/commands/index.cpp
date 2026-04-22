@@ -65,7 +65,7 @@ int handle_index(const std::vector<std::string>& args) {
        "Diff filter: skip events within diff of last emitted (default: 0.35, ignored for peak)"},
       {'\0', "", false, "\nSeed Generation Options:"},
       {'\0', "seed-type", true, "Seed extractor type: kmer (default), minimizer"},
-      {'\0', "seed-k", true, "Seed k-mer size (default: 6)"},
+      {'\0', "seed-k", true, "Seed k-mer size (default: 8)"},
       {'\0', "minimizer-window", true,
        "Minimizer window size (default: 5, only with --seed-type minimizer)"},
       {'\0', "", false, "\nIndexer Options:"},
@@ -168,8 +168,8 @@ int handle_index(const std::vector<std::string>& args) {
 
   LOG_INFO("input: " + graph_path);
   LOG_INFO("model: " + model->name() + " (k=" + std::to_string(pore_k) + ")");
-  LOG_INFO("seeds: type=" + seed_type + ", k=" + std::to_string(seed_k) + ", window=" +
-           std::to_string(minimizer_window));
+  LOG_INFO("seeds: type=" + seed_type + ", k=" + std::to_string(seed_k) +
+           (seed_type == "minimizer" ? ", window=" + std::to_string(minimizer_window) : ""));
   LOG_INFO("output: " + output_base);
 
   /* Run indexing pipeline */

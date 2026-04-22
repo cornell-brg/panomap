@@ -55,7 +55,8 @@ struct SortChainerConfig {
 class SortChainer : public Chainer {
 public:
   SortChainer(SortChainerConfig config, const std::vector<float>& node_1d_coords,
-              std::vector<std::uint32_t> node_bp_lens);
+              std::vector<std::uint32_t> node_bp_lens,
+              const std::vector<std::uint32_t>& component_ids);
 
   ChainResult chain(const std::vector<NodeAnchor>& hits) const override;
   std::string name() const override { return "sort-chain"; }
@@ -64,6 +65,7 @@ private:
   SortChainerConfig config_;
   const std::vector<float>& node_1d_coords_;
   std::vector<std::uint32_t> node_bp_lens_;
+  const std::vector<std::uint32_t>& component_ids_;
 };
 
 }  // namespace piru::mapping

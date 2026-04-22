@@ -54,6 +54,7 @@ struct DPBuffers {
   std::vector<std::uint16_t> query_pos;
   std::vector<std::uint16_t> span;
   std::vector<std::uint32_t> src_idx;
+  std::vector<std::uint32_t> cc_id;  // connected component of the anchor's node
 
   /* Precomputed per-anchor */
   std::vector<std::int32_t> q_span;
@@ -70,6 +71,7 @@ struct DPBuffers {
     query_pos.resize(n);
     span.resize(n);
     src_idx.resize(n);
+    cc_id.resize(n);
     q_span.resize(n);
     f.resize(n);
     v.resize(n);
@@ -101,15 +103,21 @@ void apply_permutation(DPBuffers& dp, std::size_t n) {
   /* span (uint16) */
   for (std::size_t i = 0; i < n; ++i) tmp_u16[i] = dp.span[dp.order[i]];
   std::copy(tmp_u16.begin(), tmp_u16.begin() + n, dp.span.begin());
+
+  /* cc_id (uint32) */
+  for (std::size_t i = 0; i < n; ++i) tmp_u32[i] = dp.cc_id[dp.order[i]];
+  std::copy(tmp_u32.begin(), tmp_u32.begin() + n, dp.cc_id.begin());
 }
 
 }  // namespace
 
 SortChainer::SortChainer(SortChainerConfig config, const std::vector<float>& node_1d_coords,
-                         std::vector<std::uint32_t> node_bp_lens)
+                         std::vector<std::uint32_t> node_bp_lens,
+                         const std::vector<std::uint32_t>& component_ids)
     : config_(std::move(config)),
       node_1d_coords_(node_1d_coords),
-      node_bp_lens_(std::move(node_bp_lens)) {}
+      node_bp_lens_(std::move(node_bp_lens)),
+      component_ids_(component_ids) {}
 
 ChainResult SortChainer::chain(const std::vector<NodeAnchor>& hits) const {
   ChainResult result;
@@ -120,6 +128,7 @@ ChainResult SortChainer::chain(const std::vector<NodeAnchor>& hits) const {
   DPBuffers dp;
   dp.resize(hits.size());
 
+  const bool has_cc = !component_ids_.empty();
   std::size_t na = 0;
   for (std::size_t i = 0; i < hits.size(); ++i) {
     const auto& h = hits[i];
@@ -139,6 +148,8 @@ ChainResult SortChainer::chain(const std::vector<NodeAnchor>& hits) const {
     dp.query_pos[na] = static_cast<std::uint16_t>(h.read_pos);
     dp.span[na] = h.span;
     dp.src_idx[na] = static_cast<std::uint32_t>(i);
+    // Look up CC by node id. If component_ids empty, treat as single CC=0.
+    dp.cc_id[na] = has_cc && h.node_id < component_ids_.size() ? component_ids_[h.node_id] : 0u;
     dp.order[na] = static_cast<std::uint32_t>(na);
     ++na;
   }
@@ -146,9 +157,12 @@ ChainResult SortChainer::chain(const std::vector<NodeAnchor>& hits) const {
   result.expanded_anchor_count = na;
   if (na < config_.min_chain_anchors) return result;
 
-  /* 2. Sort by (ref_coord, query_pos) via index permutation */
+  /* 2. Sort by (cc_id, ref_coord, query_pos) via index permutation.
+   *    CC-first keeps each CC contiguous so the outer DP loop can reset its
+   *    window at CC boundaries (preventing cross-CC chaining). */
 
   std::sort(dp.order.begin(), dp.order.begin() + na, [&dp](std::uint32_t a, std::uint32_t b) {
+    if (dp.cc_id[a] != dp.cc_id[b]) return dp.cc_id[a] < dp.cc_id[b];
     if (dp.ref_coord[a] != dp.ref_coord[b]) return dp.ref_coord[a] < dp.ref_coord[b];
     return dp.query_pos[a] < dp.query_pos[b];
   });
@@ -185,6 +199,7 @@ ChainResult SortChainer::chain(const std::vector<NodeAnchor>& hits) const {
   const auto* rc = dp.ref_coord.data();
   const auto* qp = dp.query_pos.data();
   const auto* qs = dp.q_span.data();
+  const auto* cc = dp.cc_id.data();
   auto* f = dp.f.data();
   auto* v = dp.v.data();
   auto* pred = dp.pred.data();
@@ -192,13 +207,21 @@ ChainResult SortChainer::chain(const std::vector<NodeAnchor>& hits) const {
   auto* ratio = dp.ratio.data();
 
   std::size_t st = 0;
+  std::uint32_t prev_cc = ~0u;  // sentinel: no CC seen yet
   std::int64_t max_ii = -1;
 
   for (std::size_t i = 0; i < na; ++i) {
     std::int32_t max_f = qs[i];
     std::int32_t max_j = -1;
 
-    // Advance start pointer past anchors too far back in ref
+    // CC boundary: anchors are sorted by (cc_id, ref_coord), so when we cross
+    // into a new CC, all earlier anchors are in different CCs. Reset st to i
+    // so the predecessor scan only considers same-CC anchors.
+    if (cc[i] != prev_cc) {
+      st = i;
+      prev_cc = cc[i];
+    }
+    // Advance start pointer past anchors too far back in ref (same CC guaranteed)
     while (st < i && rc[i] > rc[st] + max_dist_ref) ++st;
 
     /* Scan backwards for predecessor candidates */

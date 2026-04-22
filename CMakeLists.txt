@@ -45,6 +45,7 @@ if(PIRU_USE_TBB)
             GIT_REPOSITORY https://github.com/oneapi-src/oneTBB.git
             GIT_TAG v2021.10.0
         )
+        set(TBB_TEST OFF CACHE BOOL "" FORCE)
         FetchContent_MakeAvailable(TBB)
     endif()
     if(TBB_FOUND OR TARGET TBB::tbb)
