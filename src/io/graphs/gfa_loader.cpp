@@ -141,6 +141,50 @@ bool GfaLoader::load(ImportedGraph& graph) {
       graph.add_path(std::move(path));
       continue;
     }
+
+    // GFA 1.1 W (walk) lines. Format:
+    //   W  SampleId  HapIndex  SeqId  SeqStart  SeqEnd  Walk
+    // Walk uses '>' (forward) / '<' (reverse) prefix per segment, no commas.
+    // Emit as a path named "Sample#Hap#Seq" (PanSN-spec) for piru's path index.
+    if (line.rfind("W\t", 0) == 0) {
+      auto fields = split_tab(line);
+      if (fields.size() < 7) {
+        LOG_ERROR("Malformed GFA walk at line " + std::to_string(line_no));
+        ok = false;
+        continue;
+      }
+      ImportedPath path;
+      path.name = fields[1] + "#" + fields[2] + "#" + fields[3];
+
+      const std::string& walk = fields[6];
+      std::size_t i = 0;
+      bool walk_ok = true;
+      while (i < walk.size()) {
+        char marker = walk[i];
+        if (marker != '>' && marker != '<') {
+          LOG_ERROR("Invalid walk char '" + std::string(1, marker) + "' in W line at " +
+                    std::to_string(line_no));
+          ok = false;
+          walk_ok = false;
+          break;
+        }
+        ++i;
+        std::size_t start = i;
+        while (i < walk.size() && walk[i] != '>' && walk[i] != '<') ++i;
+        if (i == start) {
+          LOG_ERROR("Empty segment id in W walk at line " + std::to_string(line_no));
+          ok = false;
+          walk_ok = false;
+          break;
+        }
+        ImportedPathStep step;
+        step.segment_id = walk.substr(start, i - start);
+        step.is_reverse = (marker == '<');
+        path.steps.push_back(std::move(step));
+      }
+      if (walk_ok) graph.add_path(std::move(path));
+      continue;
+    }
   }
 
   return ok;
