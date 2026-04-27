@@ -61,6 +61,9 @@ int handle_index(const std::vector<std::string>& args) {
       {'p', "profile", false, "Emit timing profile (tree)"},
       {'\0', "", false, "\nSignal Processing Options:"},
       {'\0', "tokenizer", true, "Tokenizer backend: rh2 (default), landmark"},
+      {'\0', "landmark-prominence", true,
+       "Landmark: min peak prominence in normalized units (default: 0.5; "
+       "higher = stricter, fewer tokens)"},
       {'\0', "diff", true,
        "Diff filter: skip events within diff of last emitted (default: 0.35, ignored for peak)"},
       {'\0', "", false, "\nSeed Generation Options:"},
@@ -181,6 +184,10 @@ int handle_index(const std::vector<std::string>& args) {
   index_config.diff_filter = diff_filter;
   index_config.tokenizer =
       parsed.values.count("tokenizer") ? parsed.values.at("tokenizer") : "rh2";
+  if (parsed.values.count("landmark-prominence")) {
+    index_config.tokenizer_landmark_prominence =
+        std::stof(parsed.values.at("landmark-prominence"));
+  }
   if (parsed.values.count("no-1d-sort")) {
     index_config.compute_1d_sort = false;
   }

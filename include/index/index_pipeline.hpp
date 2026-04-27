@@ -51,6 +51,7 @@ struct IndexPipelineConfig {
   float tokenizer_fine_max{2.0f};
   float tokenizer_fine_range{0.4f};
   std::uint32_t tokenizer_n_bins{0};  // 0 = use 2^qbits = 16
+  float tokenizer_landmark_prominence{0.5f};  // Landmark: drop peaks below this prominence
   float diff_filter{0.35f};  // Skip events within diff of last emitted (0 = disabled)
 
   /* Seed extraction */

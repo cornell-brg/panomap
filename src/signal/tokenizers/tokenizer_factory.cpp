@@ -17,7 +17,7 @@ TokenizerPtr make_tokenizer(const TokenizerConfig& config) {
     lm_cfg.rise_bits = 2;
     lm_cfg.fall_bits = 2;
     lm_cfg.max_amp = 4.0f;
-    lm_cfg.min_prominence = 0.5f;
+    lm_cfg.min_prominence = config.landmark_min_prominence;
     return std::make_unique<LandmarkTokenizer>(config, lm_cfg);
   }
 

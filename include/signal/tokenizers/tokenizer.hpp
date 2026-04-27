@@ -19,6 +19,7 @@ struct TokenizerConfig {
   float fine_range{0.85f};  // Original default: 0.4f (DEV025: R9=0.9, R10=0.8)
   std::uint32_t qbits{4};
   std::uint32_t n_bins{10};  // Original default: 0 (=16). DEV025: 10 works well
+  float landmark_min_prominence{0.5f};  // Landmark: drop peaks with prominence below this
   bool operator==(const TokenizerConfig& other) const = default;
 };
 

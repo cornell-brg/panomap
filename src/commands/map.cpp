@@ -78,6 +78,9 @@ int handle_map(const std::vector<std::string>& args) {
       {'\0', "sensitivity", true, "Event detection sensitivity (default: 1.0, higher = more sensitive)"},
       {'\0', "diff", true,
        "Diff filter: skip events within diff of last emitted (default: 0.35)"},
+      {'\0', "landmark-prominence", true,
+       "Landmark: min peak prominence in normalized units (default: 0.5; "
+       "must match index-time setting)"},
       // Hidden: individual event params (still work, override sensitivity)
       {'\0', "event-w1", true, ""},
       {'\0', "event-w2", true, ""},
@@ -330,6 +333,10 @@ int handle_map(const std::vector<std::string>& args) {
   map_config.tokenizer_config.fine_range = 0.4f;  // must match IndexPipelineConfig::tokenizer_fine_range
   map_config.tokenizer_config.n_bins =
       0;  // must match IndexPipelineConfig::tokenizer_n_bins (0 = use qbits)
+  if (parsed.values.count("landmark-prominence")) {
+    map_config.tokenizer_config.landmark_min_prominence =
+        std::stof(parsed.values.at("landmark-prominence"));
+  }
   if (parsed.values.count("diff")) {
     map_config.diff_filter = std::stof(parsed.values.at("diff"));
   }
