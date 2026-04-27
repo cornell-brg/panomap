@@ -1,19 +1,16 @@
 /**
- * inspect.cpp
+ * inspect.cpp (base mode)
  *
- * CLI handler for `piru inspect`. Loads a .pirx index and prints
- * metadata, graph stats, and seed store stats.
+ * CLI handler for `piru-base inspect`. Loads a .pirx index, refuses
+ * non-base indexes, and prints metadata + graph + seed stats.
  *
  * SPDX-License-Identifier: MIT
  */
 
-#include "signal/commands/inspect.hpp"
+#include "base/commands/inspect.hpp"
 
-#include <chrono>
-#include <cmath>
 #include <ctime>
 #include <fstream>
-#include <iomanip>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -22,14 +19,14 @@
 #include "core/io/index/serialization.hpp"
 #include "core/util/logging.hpp"
 
-int handle_inspect(const std::vector<std::string>& args) {
+int handle_base_inspect(const std::vector<std::string>& args) {
   piru::cli::Parsed parsed;
   piru::cli::ParseConfig config;
-  config.usage = "Usage: piru inspect <index.pirx>";
+  config.usage = "Usage: piru-base inspect <index.pirx>";
   config.positional_help = {"<index.pirx>    Index file to inspect"};
   config.options = {
       {'h', "help", false, "Show help"},
-      {'\0', "dump-path-coords", true, "Dump per-path canonical coordinate mapping to TSV"},
+      {'\0', "dump-path-coords", true, "Dump per-node canonical coordinate mapping to TSV"},
   };
   config.on_error = [](const std::string&) { std::cerr << "inspect: invalid option\n"; };
 
@@ -56,10 +53,10 @@ int handle_inspect(const std::vector<std::string>& args) {
 
   auto loaded = piru::io::index::load_index(index_path);
 
-  if (loaded.metadata.mode != piru::io::index::IndexMode::kSignal) {
+  if (loaded.metadata.mode != piru::io::index::IndexMode::kBase) {
     LOG_ERROR(std::string("inspect: index was built in mode '") +
               piru::io::index::mode_name(loaded.metadata.mode) +
-              "', but piru-signal only loads 'signal' indexes. Use piru-base instead.");
+              "', but piru-base only loads 'base' indexes. Use piru-signal instead.");
     return 1;
   }
 
@@ -74,6 +71,7 @@ int handle_inspect(const std::vector<std::string>& args) {
   };
 
   std::cout << "index: " << index_path << "\n";
+  std::cout << "mode: " << piru::io::index::mode_name(meta.mode) << "\n";
   std::cout << "piru_version: " << (meta.version.empty() ? "unknown" : meta.version) << "\n";
   if (meta.build_timestamp > 0) {
     auto t = static_cast<std::time_t>(meta.build_timestamp);
@@ -81,12 +79,9 @@ int handle_inspect(const std::vector<std::string>& args) {
     std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", std::localtime(&t));
     std::cout << "built: " << buf << "\n";
   }
-  std::cout << "model: " << meta.model_name << "\n";
-  std::cout << "pore_k: " << meta.pore_k << "\n";
-  std::cout << "tokenizer: " << meta.tokenizer << "\n";
   std::cout << "seed_extractor: " << seeds.extractor_name() << "\n";
   std::cout << "seed_k: " << get("k") << "\n";
-  std::cout << "seed_qbits: " << get("qbits") << "\n";
+  std::cout << "seed_window: " << get("window") << "\n";
   std::cout << "\n";
   std::cout << "graph:\n";
   std::cout << "  nodes: " << fg.nodeCount() << "\n";
@@ -105,9 +100,6 @@ int handle_inspect(const std::vector<std::string>& args) {
   std::cout << "1d_coordinates: " << (loaded.node_1d_coords.empty() ? "no" : "yes") << "\n";
   std::cout << "component_ids: " << (loaded.component_ids.empty() ? "no" : "yes") << "\n";
 
-  /* Dump per-node canonical coordinates.
-   * One row per node: node_id, canon_start (fwd), canon_end (rev), component_id.
-   * Eval scripts use this + GFA paths to map base-space positions to canonical space. */
   if (parsed.values.count("dump-path-coords")) {
     if (loaded.node_1d_coords.empty() || loaded.component_ids.empty()) {
       LOG_ERROR("dump-path-coords requires 1D coordinates and component IDs in the index");

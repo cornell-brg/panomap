@@ -225,6 +225,7 @@ int handle_index(const std::vector<std::string>& args) {
   metadata.version = PIRU_VERSION;
   metadata.build_timestamp = static_cast<uint64_t>(
       std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()));
+  metadata.mode = piru::io::index::IndexMode::kSignal;
   metadata.model_name = result.model_name;
   metadata.pore_k = result.pore_k;
   metadata.tokenizer = result.tokenizer;

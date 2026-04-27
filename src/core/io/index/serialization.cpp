@@ -22,9 +22,8 @@ namespace {
 
 constexpr char kMagic[4] = {'P', 'I', 'R', 'X'};
 // Version: (major << 16) | minor. Major = breaking format change, minor = compatible.
-// NOTE: bump version after first public release. Pre-release format changes
-// are breaking but we have no external consumers yet.
-constexpr uint32_t kVersionMajor = 1;
+// v2: added mode byte after flags (signal vs. base).
+constexpr uint32_t kVersionMajor = 2;
 constexpr uint32_t kVersionMinor = 0;
 constexpr uint32_t kVersion = (kVersionMajor << 16) | kVersionMinor;
 
@@ -53,6 +52,14 @@ std::string read_string(std::istream& in) {
 }
 
 }  // namespace
+
+const char* mode_name(IndexMode mode) {
+  switch (mode) {
+    case IndexMode::kSignal: return "signal";
+    case IndexMode::kBase:   return "base";
+  }
+  return "unknown";
+}
 
 void save_index(const std::string& path, const piru::index::GraphStore& graph_store,
                 const piru::index::SeedStore& seed_store,
@@ -83,6 +90,7 @@ void save_index(const std::string& path, const piru::index::GraphStore& graph_st
   write_pod<uint32_t>(out, kVersion);
   uint32_t flags = 0;
   write_pod<uint32_t>(out, flags);
+  write_pod<uint8_t>(out, static_cast<uint8_t>(metadata.mode));
 
   /* 2. Metadata */
 
@@ -244,9 +252,16 @@ LoadedIndex load_index(const std::string& path) {
   uint32_t flags;
   read_pod(in, flags);
 
+  uint8_t mode_byte;
+  read_pod(in, mode_byte);
+  if (mode_byte > static_cast<uint8_t>(IndexMode::kBase)) {
+    throw std::runtime_error("Unknown index mode byte: " + std::to_string(mode_byte));
+  }
+
   /* 2. Metadata */
 
   IndexMetadata metadata;
+  metadata.mode = static_cast<IndexMode>(mode_byte);
   metadata.version = read_string(in);
   read_pod(in, metadata.build_timestamp);
   metadata.model_name = read_string(in);

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(piru VERSION 0.0.1 LANGUAGES CXX)
+project(piru VERSION 0.0.2 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -155,6 +155,38 @@ if(PIRU_ENABLE_WARNINGS)
         target_compile_options(piru-signal PRIVATE /W4 /permissive-)
     else()
         target_compile_options(piru-signal PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+endif()
+
+# ----- piru_base: base-mode static library -----
+add_library(piru_base STATIC
+    src/base/index/base_indexer.cpp
+    src/base/commands/index.cpp
+    src/base/commands/inspect.cpp
+)
+target_include_directories(piru_base
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+target_link_libraries(piru_base PUBLIC piru_core)
+if(PIRU_ENABLE_WARNINGS)
+    if(MSVC)
+        target_compile_options(piru_base PRIVATE /W4 /permissive-)
+    else()
+        target_compile_options(piru_base PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+endif()
+
+# ----- piru-base executable -----
+add_executable(piru-base
+    src/cli/base_main.cpp
+    src/cli/parse.cpp
+)
+target_link_libraries(piru-base PRIVATE piru_base)
+if(PIRU_ENABLE_WARNINGS)
+    if(MSVC)
+        target_compile_options(piru-base PRIVATE /W4 /permissive-)
+    else()
+        target_compile_options(piru-base PRIVATE -Wall -Wextra -Wpedantic)
     endif()
 endif()
 

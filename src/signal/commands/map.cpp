@@ -193,6 +193,13 @@ int handle_map(const std::vector<std::string>& args) {
 
   auto loaded = piru::io::index::load_index(index_path);
 
+  if (loaded.metadata.mode != piru::io::index::IndexMode::kSignal) {
+    LOG_ERROR(std::string("map: index was built in mode '") +
+              piru::io::index::mode_name(loaded.metadata.mode) +
+              "', but piru-signal only loads 'signal' indexes. Use piru-base instead.");
+    return 1;
+  }
+
   LOG_INFO("index loaded: " + std::to_string(loaded.graph->nodeCount()) + " nodes");
   LOG_INFO("index metadata: model=" + loaded.metadata.model_name + ", tokenizer=" +
            loaded.metadata.tokenizer + ", seeds=" + loaded.seeds->extractor_name());
