@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
 
-#include "util/metrics.hpp"
+#include "core/util/metrics.hpp"
 
 TEST_CASE("realtime is monotonic") {
   const double t1 = piru::realtime();

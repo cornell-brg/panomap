@@ -15,7 +15,7 @@ TEST_CASE("CLI smoke test: piru index") {
   std::filesystem::remove(index_file);
 
   const std::string graph_path = "../tests/data/graphs/sample.gfa";
-  const std::string command = "./piru index --output " + output_base + " " + graph_path;
+  const std::string command = "./piru-signal index --output " + output_base + " " + graph_path;
 
   // The command needs to be run from the build directory.
   // The test runner (ctest) runs from piru/build, so the relative path is correct.

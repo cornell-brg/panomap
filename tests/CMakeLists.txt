@@ -57,59 +57,11 @@ if(DOCTEST_AVAILABLE)
     )
 
     target_include_directories(piru_tests PRIVATE
-        ${CMAKE_SOURCE_DIR}/include
         ${CMAKE_SOURCE_DIR}/src
-        ${CMAKE_BINARY_DIR}/generated
-        ${CMAKE_SOURCE_DIR}/third_party/slow5lib/include
-        ${CMAKE_SOURCE_DIR}/third_party/dirtyzipf
-        ${CMAKE_SOURCE_DIR}/third_party/concurrentqueue
     )
 
-    target_sources(piru_tests PRIVATE
-        ${CMAKE_SOURCE_DIR}/src/concurrency/executor.cpp
-        ${CMAKE_SOURCE_DIR}/src/io/reads/read_provider_factory.cpp
-        ${CMAKE_SOURCE_DIR}/src/io/reads/slow5_provider.cpp
-        ${CMAKE_SOURCE_DIR}/src/io/reads/pod5_provider.cpp
-        ${CMAKE_SOURCE_DIR}/src/io/graphs/graph_loader_factory.cpp
-        ${CMAKE_SOURCE_DIR}/src/io/graphs/gfa_loader.cpp
-        ${CMAKE_SOURCE_DIR}/src/io/graphs/gfa_exporter.cpp
-        ${CMAKE_SOURCE_DIR}/src/io/results/gaf_writer.cpp
-        ${CMAKE_SOURCE_DIR}/src/io/results/paf_writer.cpp
-        ${CMAKE_SOURCE_DIR}/src/io/results/result_writer_factory.cpp
-        ${CMAKE_SOURCE_DIR}/src/io/models/builtin_models.cpp
-        ${CMAKE_SOURCE_DIR}/src/signal/diff_filter.cpp
-        ${CMAKE_SOURCE_DIR}/src/signal/event_pipeline_factory.cpp
-        ${CMAKE_SOURCE_DIR}/src/signal/event_pipelines/standard_event_pipeline.cpp
-        ${CMAKE_SOURCE_DIR}/src/signal/tokenizers/tokenizer_factory.cpp
-        ${CMAKE_SOURCE_DIR}/src/signal/tokenizers/rh2_tokenizer.cpp
-        ${CMAKE_SOURCE_DIR}/src/signal/tokenizers/landmark_tokenizer.cpp
-        ${CMAKE_SOURCE_DIR}/src/signal/seed_extractors/seed_extractor_factory.cpp
-        ${CMAKE_SOURCE_DIR}/src/signal/seed_extractors/kmer_seed_extractor.cpp
-        ${CMAKE_SOURCE_DIR}/src/signal/seed_extractors/minimizer_seed_extractor.cpp
-        ${CMAKE_SOURCE_DIR}/src/index/flat_graph.cpp
-        ${CMAKE_SOURCE_DIR}/src/index/simple_expand.cpp
-        ${CMAKE_SOURCE_DIR}/src/index/bucket_indexer.cpp
-        ${CMAKE_SOURCE_DIR}/src/index/index_pipeline.cpp
-        ${CMAKE_SOURCE_DIR}/src/index/sort_1d.cpp
-        ${CMAKE_SOURCE_DIR}/src/io/index/serialization.cpp
-        ${CMAKE_SOURCE_DIR}/src/io/models/model.cpp
-        ${CMAKE_SOURCE_DIR}/src/io/models/builtin_models.cpp
-        ${CMAKE_SOURCE_DIR}/src/mapping/batch_mapper.cpp
-        ${CMAKE_SOURCE_DIR}/src/mapping/seed_merger.cpp
-        ${CMAKE_SOURCE_DIR}/src/mapping/path_chainer.cpp
-        ${CMAKE_SOURCE_DIR}/src/mapping/sort_chainer.cpp
-        ${CMAKE_SOURCE_DIR}/src/mapping/pan_chainer.cpp
+    target_link_libraries(piru_tests PRIVATE piru_signal doctest::doctest)
 
-        ${CMAKE_SOURCE_DIR}/src/util/timing.cpp
-        ${CMAKE_SOURCE_DIR}/src/util/trace.cpp
-    )
-
-    target_link_libraries(piru_tests PRIVATE doctest::doctest)
-    if(PIRU_TBB_AVAILABLE)
-        target_link_libraries(piru_tests PRIVATE TBB::tbb)
-        target_compile_definitions(piru_tests PRIVATE PIRU_USE_TBB)
-    endif()
-    target_link_libraries(piru_tests PRIVATE slow5 ZLIB::ZLIB)
     if(DOCTEST_DISCOVERY_CMAKE)
         doctest_discover_tests(piru_tests
             TEST_PREFIX unit.
@@ -124,7 +76,7 @@ if(DOCTEST_AVAILABLE)
     add_test(
         NAME integration.drb1_accuracy
         COMMAND bash ${CMAKE_SOURCE_DIR}/tests/integration/test_drb1_accuracy.sh
-                $<TARGET_FILE:piru> ${WORKSPACE_ROOT}
+                $<TARGET_FILE:piru-signal> ${WORKSPACE_ROOT}
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     )
     set_tests_properties(integration.drb1_accuracy PROPERTIES
@@ -136,7 +88,7 @@ if(DOCTEST_AVAILABLE)
     add_test(
         NAME integration.drb1_sort_chain
         COMMAND bash ${CMAKE_SOURCE_DIR}/tests/integration/test_drb1_sort_chain.sh
-                $<TARGET_FILE:piru> ${WORKSPACE_ROOT}
+                $<TARGET_FILE:piru-signal> ${WORKSPACE_ROOT}
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     )
     set_tests_properties(integration.drb1_sort_chain PROPERTIES
@@ -148,7 +100,7 @@ if(DOCTEST_AVAILABLE)
     add_test(
         NAME integration.drb1_pan_chain
         COMMAND bash ${CMAKE_SOURCE_DIR}/tests/integration/test_drb1_pan_chain.sh
-                $<TARGET_FILE:piru> ${WORKSPACE_ROOT}
+                $<TARGET_FILE:piru-signal> ${WORKSPACE_ROOT}
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     )
     set_tests_properties(integration.drb1_pan_chain PROPERTIES
@@ -160,7 +112,7 @@ if(DOCTEST_AVAILABLE)
     add_test(
         NAME integration.drb1_landmark
         COMMAND bash ${CMAKE_SOURCE_DIR}/tests/integration/test_drb1_landmark.sh
-                $<TARGET_FILE:piru> ${WORKSPACE_ROOT}
+                $<TARGET_FILE:piru-signal> ${WORKSPACE_ROOT}
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     )
     set_tests_properties(integration.drb1_landmark PROPERTIES
@@ -172,7 +124,7 @@ if(DOCTEST_AVAILABLE)
     add_test(
         NAME integration.drb1_landmark_sort_chain
         COMMAND bash ${CMAKE_SOURCE_DIR}/tests/integration/test_drb1_landmark_sort_chain.sh
-                $<TARGET_FILE:piru> ${WORKSPACE_ROOT}
+                $<TARGET_FILE:piru-signal> ${WORKSPACE_ROOT}
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     )
     set_tests_properties(integration.drb1_landmark_sort_chain PROPERTIES
@@ -184,7 +136,7 @@ if(DOCTEST_AVAILABLE)
     add_test(
         NAME integration.drb1_landmark_pan_chain
         COMMAND bash ${CMAKE_SOURCE_DIR}/tests/integration/test_drb1_landmark_pan_chain.sh
-                $<TARGET_FILE:piru> ${WORKSPACE_ROOT}
+                $<TARGET_FILE:piru-signal> ${WORKSPACE_ROOT}
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     )
     set_tests_properties(integration.drb1_landmark_pan_chain PROPERTIES
@@ -196,7 +148,7 @@ if(DOCTEST_AVAILABLE)
     add_test(
         NAME integration.covid_accuracy
         COMMAND bash ${CMAKE_SOURCE_DIR}/tests/integration/test_covid_accuracy.sh
-                $<TARGET_FILE:piru> ${WORKSPACE_ROOT}
+                $<TARGET_FILE:piru-signal> ${WORKSPACE_ROOT}
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     )
     set_tests_properties(integration.covid_accuracy PROPERTIES
@@ -208,7 +160,7 @@ if(DOCTEST_AVAILABLE)
     add_test(
         NAME integration.covid_viral
         COMMAND bash ${CMAKE_SOURCE_DIR}/tests/integration/test_covid_viral.sh
-                $<TARGET_FILE:piru> ${WORKSPACE_ROOT}
+                $<TARGET_FILE:piru-signal> ${WORKSPACE_ROOT}
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     )
     set_tests_properties(integration.covid_viral PROPERTIES
@@ -220,7 +172,7 @@ if(DOCTEST_AVAILABLE)
     add_test(
         NAME integration.covid_landmark_viral
         COMMAND bash ${CMAKE_SOURCE_DIR}/tests/integration/test_covid_landmark_viral.sh
-                $<TARGET_FILE:piru> ${WORKSPACE_ROOT}
+                $<TARGET_FILE:piru-signal> ${WORKSPACE_ROOT}
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     )
     set_tests_properties(integration.covid_landmark_viral PROPERTIES

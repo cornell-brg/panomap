@@ -55,25 +55,60 @@ if(PIRU_USE_TBB)
     endif()
 endif()
 
-add_executable(piru
-    src/main.cpp
-    src/commands/index.cpp
-    src/commands/inspect.cpp
-    src/commands/map.cpp
-    src/concurrency/executor.cpp
-    src/io/graphs/graph_loader_factory.cpp
-    src/io/graphs/gfa_loader.cpp
-    src/io/graphs/gfa_exporter.cpp
-    src/io/results/gaf_writer.cpp
-    src/io/results/paf_writer.cpp
-    src/io/results/result_writer_factory.cpp
-    src/io/reads/read_provider_factory.cpp
-    src/io/reads/pod5_provider.cpp
-    src/io/reads/slow5_provider.cpp
-    src/io/models/builtin_models.cpp
-    src/io/models/model.cpp
-    src/io/index/serialization.cpp
-    src/cli/parse.cpp
+# slow5lib (signal-mode read I/O). Pulled in early so piru_signal can link against it.
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/third_party/slow5lib/CMakeLists.txt)
+    add_subdirectory(third_party/slow5lib)
+else()
+    message(FATAL_ERROR "slow5lib submodule not present; required for signal-mode read I/O.")
+endif()
+
+# ----- piru_core: modality-agnostic static library -----
+add_library(piru_core STATIC
+    src/core/mapping/path_chainer.cpp
+    src/core/mapping/sort_chainer.cpp
+    src/core/mapping/pan_chainer.cpp
+    src/core/mapping/seed_merger.cpp
+    src/core/index/flat_graph.cpp
+    src/core/index/simple_expand.cpp
+    src/core/index/sort_1d.cpp
+    src/core/concurrency/executor.cpp
+    src/core/util/signal_handlers.cpp
+    src/core/util/system_memory.cpp
+    src/core/util/timing.cpp
+    src/core/util/trace.cpp
+    src/core/io/graphs/gfa_exporter.cpp
+    src/core/io/graphs/gfa_loader.cpp
+    src/core/io/graphs/graph_loader_factory.cpp
+    src/core/io/index/serialization.cpp
+    src/core/io/results/gaf_writer.cpp
+    src/core/io/results/paf_writer.cpp
+    src/core/io/results/result_writer_factory.cpp
+)
+target_include_directories(piru_core PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${PIRU_GENERATED_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/dirtyzipf
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/concurrentqueue
+)
+if(PIRU_TBB_AVAILABLE)
+    target_link_libraries(piru_core PUBLIC TBB::tbb)
+    target_compile_definitions(piru_core PUBLIC PIRU_USE_TBB)
+else()
+    message(STATUS "oneTBB not found; using serial concurrency backend.")
+endif()
+if(PIRU_ENABLE_WARNINGS)
+    if(MSVC)
+        target_compile_options(piru_core PRIVATE /W4 /permissive-)
+    else()
+        target_compile_options(piru_core PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+endif()
+
+# ----- piru_signal: signal-mode static library -----
+add_library(piru_signal STATIC
+    src/signal/mapping/batch_mapper.cpp
+    src/signal/index/bucket_indexer.cpp
+    src/signal/index/index_pipeline.cpp
     src/signal/diff_filter.cpp
     src/signal/event_pipeline_factory.cpp
     src/signal/event_pipelines/standard_event_pipeline.cpp
@@ -83,49 +118,44 @@ add_executable(piru
     src/signal/seed_extractors/seed_extractor_factory.cpp
     src/signal/seed_extractors/kmer_seed_extractor.cpp
     src/signal/seed_extractors/minimizer_seed_extractor.cpp
-    src/index/flat_graph.cpp
-    src/index/simple_expand.cpp
-    src/index/bucket_indexer.cpp
-    src/index/index_pipeline.cpp
-    src/index/sort_1d.cpp
-    src/mapping/batch_mapper.cpp
-    src/mapping/seed_merger.cpp
-    src/mapping/path_chainer.cpp
-    src/mapping/sort_chainer.cpp
-    src/mapping/pan_chainer.cpp
-
-    src/util/signal_handlers.cpp
-    src/util/timing.cpp
-    src/util/trace.cpp
+    src/signal/io/reads/pod5_provider.cpp
+    src/signal/io/reads/read_provider_factory.cpp
+    src/signal/io/reads/slow5_provider.cpp
+    src/signal/io/models/builtin_models.cpp
+    src/signal/io/models/model.cpp
+    src/signal/commands/index.cpp
+    src/signal/commands/inspect.cpp
+    src/signal/commands/map.cpp
 )
-
-target_include_directories(piru PRIVATE include ${CMAKE_CURRENT_SOURCE_DIR}/src ${PIRU_GENERATED_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/dirtyzipf
-    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/concurrentqueue)
-
+target_include_directories(piru_signal
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
+           ${CMAKE_CURRENT_SOURCE_DIR}/third_party/slow5lib/include
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+target_link_libraries(piru_signal
+    PUBLIC piru_core slow5 ZLIB::ZLIB
+)
+target_compile_definitions(piru_signal PUBLIC PIRU_HAS_SLOW5)
 if(PIRU_ENABLE_WARNINGS)
     if(MSVC)
-        target_compile_options(piru PRIVATE /W4 /permissive-)
+        target_compile_options(piru_signal PRIVATE /W4 /permissive-)
     else()
-        target_compile_options(piru PRIVATE -Wall -Wextra -Wpedantic)
+        target_compile_options(piru_signal PRIVATE -Wall -Wextra -Wpedantic)
     endif()
 endif()
 
-
-if(PIRU_TBB_AVAILABLE)
-    target_link_libraries(piru PRIVATE TBB::tbb)
-    target_compile_definitions(piru PRIVATE PIRU_USE_TBB)
-else()
-    message(STATUS "oneTBB not found; using serial concurrency backend.")
-endif()
-
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/third_party/slow5lib/CMakeLists.txt)
-    add_subdirectory(third_party/slow5lib)
-    target_link_libraries(piru PRIVATE slow5 ZLIB::ZLIB)
-    target_compile_definitions(piru PRIVATE PIRU_HAS_SLOW5)
-    target_include_directories(piru PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/third_party/slow5lib/include)
-else()
-    message(FATAL_ERROR "slow5lib submodule not present; required for read I/O.")
+# ----- piru-signal executable -----
+add_executable(piru-signal
+    src/cli/signal_main.cpp
+    src/cli/parse.cpp
+)
+target_link_libraries(piru-signal PRIVATE piru_signal)
+if(PIRU_ENABLE_WARNINGS)
+    if(MSVC)
+        target_compile_options(piru-signal PRIVATE /W4 /permissive-)
+    else()
+        target_compile_options(piru-signal PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
 endif()
 
 include(CTest)

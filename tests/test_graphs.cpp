@@ -2,8 +2,8 @@
 #include <filesystem>
 #include <fstream>
 
-#include "io/graphs/graph.hpp"
-#include "io/graphs/graph_loader_factory.hpp"
+#include "core/io/graphs/graph.hpp"
+#include "core/io/graphs/graph_loader_factory.hpp"
 
 TEST_CASE("GFA loader parses segments and links") {
   const auto src_dir = std::filesystem::path(__FILE__).parent_path();

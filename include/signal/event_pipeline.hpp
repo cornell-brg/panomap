@@ -11,7 +11,7 @@
 #include <optional>
 #include <string>
 
-#include "io/reads/read_provider.hpp"
+#include "signal/io/reads/read_provider.hpp"
 #include "signal/signal_types.hpp"
 
 namespace piru::signal {

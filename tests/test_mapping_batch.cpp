@@ -4,8 +4,8 @@
 #include <sstream>
 #include <string>
 
-#include "io/reads/read_provider_factory.hpp"
-#include "mapping/batch_mapper.hpp"
+#include "signal/io/reads/read_provider_factory.hpp"
+#include "signal/mapping/batch_mapper.hpp"
 
 using namespace piru;
 

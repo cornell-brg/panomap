@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
 
-#include "index/flat_graph.hpp"
+#include "core/index/flat_graph.hpp"
 
 using namespace piru::index;
 

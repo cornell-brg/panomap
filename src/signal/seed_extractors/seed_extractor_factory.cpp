@@ -4,7 +4,7 @@
 
 #include "signal/seed_extractors/kmer_seed_extractor.hpp"
 #include "signal/seed_extractors/minimizer_seed_extractor.hpp"
-#include "util/logging.hpp"
+#include "core/util/logging.hpp"
 
 namespace piru::signal {
 

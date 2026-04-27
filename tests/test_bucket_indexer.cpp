@@ -15,13 +15,13 @@
 #include <string>
 #include <vector>
 
-#include "index/bucket_indexer.hpp"
-#include "index/bucket_seed_store.hpp"
-#include "index/flat_graph.hpp"
-#include "index/simple_expand.hpp"
-#include "io/graphs/graph.hpp"
-#include "io/models/model.hpp"
-#include "io/models/model_factory.hpp"
+#include "signal/index/bucket_indexer.hpp"
+#include "core/index/bucket_seed_store.hpp"
+#include "core/index/flat_graph.hpp"
+#include "core/index/simple_expand.hpp"
+#include "core/io/graphs/graph.hpp"
+#include "signal/io/models/model.hpp"
+#include "signal/io/models/model_factory.hpp"
 #include "signal/tokenizers/tokenizer_factory.hpp"
 #include "signal/seed_extractors/seed_extractor_factory.hpp"
 

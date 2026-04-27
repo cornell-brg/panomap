@@ -1,7 +1,7 @@
 #include <doctest/doctest.h>
 #include <filesystem>
 
-#include "io/models/model_factory.hpp"
+#include "signal/io/models/model_factory.hpp"
 
 TEST_CASE("built-in r9.4 model loads and exposes entries") {
   auto model = piru::io::load_builtin_model("r9.4");

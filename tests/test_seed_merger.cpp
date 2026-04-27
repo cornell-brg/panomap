@@ -2,7 +2,7 @@
 
 #include <doctest/doctest.h>
 
-#include "mapping/seed_merger.hpp"
+#include "core/mapping/seed_merger.hpp"
 
 using namespace piru::mapping;
 

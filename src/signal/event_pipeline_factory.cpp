@@ -3,7 +3,7 @@
 #include "signal/event_pipelines/event_pipeline_factory.hpp"
 
 #include "signal/event_pipelines/standard_event_pipeline.hpp"
-#include "util/logging.hpp"
+#include "core/util/logging.hpp"
 
 namespace piru::signal {
 

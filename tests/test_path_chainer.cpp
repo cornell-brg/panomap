@@ -2,7 +2,7 @@
 
 #include <doctest/doctest.h>
 
-#include "mapping/path_chainer.hpp"
+#include "core/mapping/path_chainer.hpp"
 
 using namespace piru::mapping;
 using namespace piru::index;
