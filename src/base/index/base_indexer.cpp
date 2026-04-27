@@ -43,6 +43,7 @@
 #endif
 
 #include "core/index/bucket_seed_store.hpp"
+#include "core/util/kmer_hash.hpp"
 #include "core/util/logging.hpp"
 #include "core/util/timing.hpp"
 
@@ -82,19 +83,6 @@ std::pair<std::uint32_t, std::uint32_t> basePosToNodeOffset(
                        [](std::size_t pos, const NodeBoundary& b) { return pos < b.base_start; });
   if (it != boundaries.begin()) --it;
   return {it->node_id, static_cast<std::uint32_t>(base_pos - it->base_start)};
-}
-
-// minimap2's hash64 mixer. Spreads small input bits across all output bits
-// so that lex-min in 2-bit-packed space does not bias minimizer selection.
-inline std::uint64_t hash64(std::uint64_t key, std::uint64_t mask) {
-  key = (~key + (key << 21)) & mask;
-  key = key ^ (key >> 24);
-  key = ((key + (key << 3)) + (key << 8)) & mask;
-  key = key ^ (key >> 14);
-  key = ((key + (key << 2)) + (key << 4)) & mask;
-  key = key ^ (key >> 28);
-  key = (key + (key << 31)) & mask;
-  return key;
 }
 
 }  // namespace
@@ -175,7 +163,7 @@ BaseBucketIndexResult bucketIndexBase(const piru::index::FlatGraph& graph,
         if (base_pos + 1 >= k) {
           const std::size_t kmer_idx = base_pos + 1 - k;
           if (valid_bases >= static_cast<int>(k)) {
-            hashes[kmer_idx] = hash64(kmer, kmer_mask);
+            hashes[kmer_idx] = piru::core::hash64(kmer, kmer_mask);
           }
         }
         ++base_pos;

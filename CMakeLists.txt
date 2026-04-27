@@ -161,13 +161,17 @@ endif()
 # ----- piru_base: base-mode static library -----
 add_library(piru_base STATIC
     src/base/index/base_indexer.cpp
+    src/base/io/reads/fastq_provider.cpp
+    src/base/seeder/base_seeder.cpp
+    src/base/mapping/base_mapper.cpp
     src/base/commands/index.cpp
     src/base/commands/inspect.cpp
+    src/base/commands/map.cpp
 )
 target_include_directories(piru_base
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
-target_link_libraries(piru_base PUBLIC piru_core)
+target_link_libraries(piru_base PUBLIC piru_core ZLIB::ZLIB)
 if(PIRU_ENABLE_WARNINGS)
     if(MSVC)
         target_compile_options(piru_base PRIVATE /W4 /permissive-)

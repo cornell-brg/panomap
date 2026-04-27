@@ -14,6 +14,7 @@
 
 #include "base/commands/index.hpp"
 #include "base/commands/inspect.hpp"
+#include "base/commands/map.hpp"
 #include "cli/parse.hpp"
 #include "core/util/metrics.hpp"
 #include "core/util/signal_handlers.hpp"
@@ -26,11 +27,6 @@ struct Command {
   std::string description;
   int (*handler)(const std::vector<std::string>& args);
 };
-
-int handle_map_stub(const std::vector<std::string>&) {
-  std::cerr << "piru-base: map is not yet implemented (G2/G3 in dev-108).\n";
-  return 1;
-}
 
 void print_top_level_usage(const std::vector<Command>& commands) {
   std::cout << piru_version() << " (base mode)\n\n";
@@ -61,8 +57,7 @@ int main(int argc, char** argv) {
   const std::vector<Command> commands = {
       {"index", "Build a base-mode minimizer index from a pangenome graph.",
        handle_base_index},
-      {"map", "Map basecalled reads against a base-mode index. (not yet implemented)",
-       handle_map_stub},
+      {"map", "Map basecalled reads against a base-mode index.", handle_base_map},
       {"inspect", "Show base-mode index metadata and stats.", handle_base_inspect},
   };
 
