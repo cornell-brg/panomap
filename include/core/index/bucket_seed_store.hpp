@@ -26,6 +26,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <map>
 #include <string>
 #include <vector>
@@ -107,6 +108,36 @@ public:
     auto pos = std::min(static_cast<std::size_t>(freqs.size() * frac), freqs.size() - 1);
     frequency_threshold_ = freqs[pos] + 1;
     filter_fraction_ = percentile;
+  }
+
+  // Minimap2-style mid_occ. top_frac in [0,1]. Default 2e-4 keeps all but
+  // the top 0.02% most frequent seeds. Threshold then clamped to
+  // [min_occ, max_occ]. See related/minimap2/index.c:mm_idx_cal_max_occ.
+  void recompute_threshold_from_top_frac(double top_frac, std::size_t min_occ,
+                                         std::size_t max_occ) override {
+    if (top_frac <= 0.0) {
+      frequency_threshold_ = std::numeric_limits<std::size_t>::max();
+      filter_fraction_ = 0.0;
+      return;
+    }
+    std::vector<std::size_t> freqs;
+    for (const auto& b : buckets_) {
+      for (std::size_t i = 0; i < b.keys.size(); ++i) {
+        freqs.push_back(b.counts[i]);
+      }
+    }
+    if (freqs.empty()) return;
+    std::sort(freqs.begin(), freqs.end());
+    // (1 - top_frac) percentile = the boundary above which the top top_frac
+    // most frequent seeds live. mm_idx_cal_max_occ adds +1 so the threshold
+    // is exclusive.
+    double clamped = std::clamp(1.0 - top_frac, 0.0, 1.0);
+    auto pos = std::min(static_cast<std::size_t>(freqs.size() * clamped), freqs.size() - 1);
+    std::size_t thres = freqs[pos] + 1;
+    if (thres < min_occ) thres = min_occ;
+    if (max_occ > min_occ && thres > max_occ) thres = max_occ;
+    frequency_threshold_ = thres;
+    filter_fraction_ = top_frac;
   }
 
   double filter_fraction() const override { return filter_fraction_; }

@@ -147,19 +147,100 @@ void BaseSeedLookup::lookup(const piru::base::SeedBuffer& seeds,
                             std::vector<NodeAnchor>& out_hits) const {
   if (!store_) return;
   out_hits.clear();
-  out_hits.reserve(seeds.seeds.size());
+
+  // Per-seed lookup cache. We need two passes: first pass collects hit
+  // counts so we can run mm_seed_select in pass 2, second pass emits
+  // anchors only for kept seeds. (See related/minimap2/seed.c:mm_seed_select.)
+  struct Entry {
+    std::size_t q_pos;
+    std::uint32_t length;
+    piru::index::SeedHitSpan hits;
+    bool flt;  // true = filter out
+  };
+  std::vector<Entry> entries;
+  entries.reserve(seeds.seeds.size());
   for (const auto& seed : seeds.seeds) {
     auto hits = store_->lookup(seed.hash);
     if (hits.count == 0) continue;
-    if (hits.count > freq_threshold_) continue;
-    for (std::size_t j = 0; j < hits.count; ++j) {
-      const auto& h = hits.data[j];
+    entries.push_back({seed.position, static_cast<std::uint32_t>(seed.length), hits, false});
+  }
+
+  /* Adaptive in-window selection over high-occ streaks. Mirrors
+   * mm_seed_select: in each maximal run of consecutive seeds with count >
+   * mid_occ, keep up to (window_len / occ_dist) of the LOWEST-frequency
+   * seeds; mark the rest as filtered. */
+  const std::size_t n = entries.size();
+  if (occ_dist_ > 0 && max_max_occ_ > mid_occ_ && n > 1) {
+    auto run_streak = [&](std::size_t st, std::size_t en, std::size_t ps,
+                           std::size_t pe) {
+      if (en <= st) return;
+      std::size_t span = (pe > ps) ? (pe - ps) : 0;
+      std::size_t max_high_occ = (span + occ_dist_ / 2) / occ_dist_;
+      // Pick max_high_occ lowest-frequency entries in [st, en).
+      // First mark all as filtered, then unmark the chosen ones.
+      for (std::size_t j = st; j < en; ++j) entries[j].flt = true;
+      if (max_high_occ == 0) return;
+      // Top-K selection (keep K lowest counts). For modest K this simple
+      // O(K * (en-st)) sweep beats heap setup; matches mm_seed_select's
+      // logic which uses a small fixed heap (max 128).
+      std::vector<std::size_t> picked;
+      picked.reserve(max_high_occ);
+      // Lazy: just sort indices in this streak by count ascending, take top K.
+      std::vector<std::size_t> idx(en - st);
+      for (std::size_t k = 0; k < idx.size(); ++k) idx[k] = st + k;
+      std::partial_sort(idx.begin(),
+                        idx.begin() + std::min(max_high_occ, idx.size()), idx.end(),
+                        [&](std::size_t a, std::size_t b) {
+                          return entries[a].hits.count < entries[b].hits.count;
+                        });
+      for (std::size_t k = 0; k < std::min(max_high_occ, idx.size()); ++k) {
+        entries[idx[k]].flt = false;  // keep this one
+      }
+    };
+
+    std::size_t last0 = static_cast<std::size_t>(-1);  // before first
+    for (std::size_t i = 0; i <= n; ++i) {
+      bool boundary = (i == n) || (entries[i].hits.count <= mid_occ_);
+      if (boundary) {
+        std::size_t st = (last0 == static_cast<std::size_t>(-1)) ? 0 : last0 + 1;
+        std::size_t en = i;
+        if (en > st) {
+          // streak [st, en) is high-occ
+          std::size_t ps =
+              (last0 == static_cast<std::size_t>(-1)) ? 0 : entries[last0].q_pos;
+          std::size_t pe =
+              (i == n) ? (entries[n - 1].q_pos + entries[n - 1].length) : entries[i].q_pos;
+          run_streak(st, en, ps, pe);
+        }
+        last0 = i;
+      }
+    }
+  } else {
+    // Adaptive disabled: simple hard cap at mid_occ.
+    for (auto& e : entries) {
+      if (e.hits.count > mid_occ_) e.flt = true;
+    }
+  }
+
+  /* Hard cap (max_max_occ): drop anything that exceeds it no matter what. */
+  if (max_max_occ_ > 0) {
+    for (auto& e : entries) {
+      if (e.hits.count > max_max_occ_) e.flt = true;
+    }
+  }
+
+  /* Pass 3: emit anchors for surviving entries. */
+  out_hits.reserve(out_hits.size() + entries.size());
+  for (const auto& e : entries) {
+    if (e.flt) continue;
+    for (std::size_t j = 0; j < e.hits.count; ++j) {
+      const auto& h = e.hits.data[j];
       out_hits.push_back(NodeAnchor{
           .node_id = h.node_id,
           .offset = h.offset,
-          .read_pos = static_cast<std::uint32_t>(seed.position),
-          .span = static_cast<std::uint16_t>(std::min(seed.length, std::size_t{0xFFFF})),
-          .length = static_cast<std::uint16_t>(std::min(seed.length, std::size_t{0xFFFF})),
+          .read_pos = static_cast<std::uint32_t>(e.q_pos),
+          .span = static_cast<std::uint16_t>(std::min<std::size_t>(e.length, 0xFFFFu)),
+          .length = static_cast<std::uint16_t>(std::min<std::size_t>(e.length, 0xFFFFu)),
       });
     }
     if (max_total_hits_ > 0 && out_hits.size() >= max_total_hits_) break;
@@ -282,8 +363,13 @@ BasePipelineComponents BaseMapper::create_components() const {
     throw std::runtime_error("Unknown chainer backend: " + config_.chainer_backend);
   }
 
-  const std::size_t freq_threshold = comps.seed_store->frequency_threshold();
-  comps.lookup = BaseSeedLookup(comps.seed_store, freq_threshold, config_.max_total_hits);
+  // Soft cap: prefer explicit override, else use the SeedStore's current
+  // frequency_threshold (which the CLI sets via mid-occ-frac at map time).
+  const std::size_t mid_occ = config_.mid_occ_override >= 0
+      ? static_cast<std::size_t>(config_.mid_occ_override)
+      : comps.seed_store->frequency_threshold();
+  comps.lookup = BaseSeedLookup(comps.seed_store, mid_occ, config_.max_max_occ,
+                                config_.occ_dist, config_.max_total_hits);
 
   LOG_DEBUG("Pipeline: " + comps.chainer->name() + " chaining (base mode)");
   return comps;

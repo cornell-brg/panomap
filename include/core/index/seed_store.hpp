@@ -40,6 +40,14 @@ public:
   virtual std::size_t frequency_threshold() const = 0;
   virtual void set_frequency_threshold(std::size_t threshold) = 0;
   virtual void recompute_threshold_from_percentile(double percentile) = 0;
+
+  // Mirror minimap2's mm_idx_cal_max_occ: threshold = (1 - top_frac)
+  // percentile of frequencies + 1, then clamped to [min_occ, max_occ].
+  // Default minimap2 args: top_frac=2e-4, min=10, max=1e6 -> ~694 on hg38
+  // (vs ~45 from p0.99 percentile, which over-filters at human scale).
+  virtual void recompute_threshold_from_top_frac(double top_frac, std::size_t min_occ,
+                                                 std::size_t max_occ) = 0;
+
   virtual double filter_fraction() const = 0;
   virtual const std::string& extractor_name() const = 0;
   virtual const std::map<std::string, std::string>& params() const = 0;

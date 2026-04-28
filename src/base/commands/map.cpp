@@ -48,9 +48,17 @@ int handle_base_map(const std::vector<std::string>& args) {
        "Max chunks to process per read (default: 10, 0 = unlimited; only used when chunk-bp > 0)"},
       {'\0', "no-early-exit", false, "Disable early exit; process all chunks before deciding"},
       {'\0', "no-adaptive", false, "Disable EMA assist for fallback; use floor only"},
-      {'\0', "", false, "\nSeed Lookup Options:"},
+      {'\0', "", false, "\nSeed Lookup Options (minimap2-style adaptive selection):"},
+      {'\0', "mid-occ-frac", true,
+       "Soft cap percentile: top fraction of seeds treated as 'high-occ' (default: 2e-4)"},
+      {'\0', "min-mid-occ", true, "Lower clamp on auto soft cap (default: 10)"},
+      {'\0', "max-mid-occ", true, "Upper clamp on auto soft cap (default: 1000000)"},
+      {'\0', "mid-occ", true, "Override auto soft cap with absolute value (default: -1 = auto)"},
+      {'\0', "max-occ", true, "Hard cap: drop seeds with hits > N (default: 4095)"},
+      {'\0', "occ-dist", true,
+       "Adaptive window: keep ~1 high-occ seed per N bp (default: 500, 0 = disable)"},
       {'\0', "seed-freq-cap", true,
-       "Skip high-freq seeds: <N> for absolute, p<F> for percentile (default: p0.99)"},
+       "[legacy] Hard cap as <N> or p<F> percentile (overrides --mid-occ if set)"},
       {'\0', "max-hits", true,
        "Max seed hits per read before stopping lookup (default: 100000, 0 = unlimited)"},
       {'\0', "", false, "\nChaining Options:"},
@@ -193,19 +201,42 @@ int handle_base_map(const std::vector<std::string>& args) {
   if (parsed.values.count("no-early-exit")) cfg.no_early_exit = true;
   if (parsed.values.count("no-adaptive")) cfg.map_fallback_adaptive = false;
 
-  /* Seed frequency cap. */
+  /* Soft cap (mid_occ). Three ways to set: --mid-occ <N> absolute,
+   * --seed-freq-cap (legacy) absolute or p<F>, or --mid-occ-frac <F>
+   * (default: 2e-4 minimap2-style auto). */
   {
-    std::string freq_cap_str = parsed.values.count("seed-freq-cap")
-                                   ? parsed.values.at("seed-freq-cap")
-                                   : std::string{"p0.99"};
-    if (freq_cap_str.size() > 1 && freq_cap_str[0] == 'p') {
-      double pct = std::stod(freq_cap_str.substr(1));
-      seed_store->recompute_threshold_from_percentile(pct);
+    if (parsed.values.count("max-occ"))
+      cfg.max_max_occ = std::stoull(parsed.values.at("max-occ"));
+    if (parsed.values.count("occ-dist"))
+      cfg.occ_dist = std::stoull(parsed.values.at("occ-dist"));
+    if (parsed.values.count("min-mid-occ"))
+      cfg.min_mid_occ = std::stoull(parsed.values.at("min-mid-occ"));
+    if (parsed.values.count("max-mid-occ"))
+      cfg.max_mid_occ = std::stoull(parsed.values.at("max-mid-occ"));
+    if (parsed.values.count("mid-occ-frac"))
+      cfg.mid_occ_frac = std::stof(parsed.values.at("mid-occ-frac"));
+
+    if (parsed.values.count("mid-occ")) {
+      cfg.mid_occ_override = std::stoll(parsed.values.at("mid-occ"));
+    } else if (parsed.values.count("seed-freq-cap")) {
+      // Legacy path: parse N or pF, set threshold directly.
+      std::string s = parsed.values.at("seed-freq-cap");
+      if (s.size() > 1 && s[0] == 'p') {
+        seed_store->recompute_threshold_from_percentile(std::stod(s.substr(1)));
+      } else {
+        seed_store->set_frequency_threshold(std::stoull(s));
+      }
+      cfg.mid_occ_override = static_cast<std::int64_t>(seed_store->frequency_threshold());
     } else {
-      seed_store->set_frequency_threshold(std::stoull(freq_cap_str));
+      // Auto: mm2-style mid_occ_frac with min/max bounds.
+      seed_store->recompute_threshold_from_top_frac(cfg.mid_occ_frac, cfg.min_mid_occ,
+                                                    cfg.max_mid_occ);
     }
-    LOG_INFO("seed_freq_cap=" + freq_cap_str +
-             " threshold=" + std::to_string(seed_store->frequency_threshold()));
+
+    LOG_INFO("seed filter: mid_occ=" + std::to_string(seed_store->frequency_threshold()) +
+             " max_occ=" + std::to_string(cfg.max_max_occ) +
+             " occ_dist=" + std::to_string(cfg.occ_dist) +
+             " (frac=" + std::to_string(cfg.mid_occ_frac) + ")");
   }
 
   /* Mapping decision overrides. */

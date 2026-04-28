@@ -45,16 +45,29 @@ namespace piru::base::mapping {
 
 class BaseSeedLookup {
  public:
-  BaseSeedLookup(const piru::index::SeedStore* store, std::size_t freq_threshold,
+  BaseSeedLookup(const piru::index::SeedStore* store, std::size_t mid_occ,
+                 std::size_t max_max_occ, std::size_t occ_dist,
                  std::size_t max_total_hits = 0)
-      : store_(store), freq_threshold_(freq_threshold), max_total_hits_(max_total_hits) {}
+      : store_(store),
+        mid_occ_(mid_occ),
+        max_max_occ_(max_max_occ),
+        occ_dist_(occ_dist),
+        max_total_hits_(max_total_hits) {}
 
+  // Look up seeds, applying minimap2-style adaptive seed selection:
+  //  1. Soft cap: seeds with hits > mid_occ are "high-occ".
+  //  2. In each query window of length `occ_dist`, keep up to (window_len /
+  //     occ_dist) of the lowest-frequency high-occ seeds; drop the rest.
+  //  3. Hard cap: anything with hits > max_max_occ is dropped no matter what.
+  // See related/minimap2/seed.c:mm_seed_select.
   void lookup(const piru::base::SeedBuffer& seeds,
               std::vector<piru::mapping::NodeAnchor>& out_hits) const;
 
  private:
   const piru::index::SeedStore* store_{nullptr};
-  std::size_t freq_threshold_{0};
+  std::size_t mid_occ_{0};       // soft cap (high-occ boundary)
+  std::size_t max_max_occ_{0};   // hard cap (always-drop)
+  std::size_t occ_dist_{0};      // query window for adaptive keep
   std::size_t max_total_hits_{0};
 };
 
@@ -81,6 +94,21 @@ struct BaseMapperConfig {
   /* Output */
   piru::io::ResultWriter* result_writer{nullptr};
   std::unordered_map<std::string, piru::io::ResultWriter*> per_file_writers;
+
+  /* Seed-frequency filtering (minimap2-style mid_occ + adaptive in-window
+   * selection + max_max_occ hard cap). Defaults match minimap2:
+   *  - mid_occ_frac = 2e-4 (top 0.02% of seeds are "high-occ")
+   *  - min_mid_occ = 10, max_mid_occ = 1e6 (clamps for the auto formula)
+   *  - max_max_occ = 4095 (absolute hard cap)
+   *  - occ_dist = 500 (keep ~1 high-occ seed per 500 bp query window)
+   *
+   * mid_occ < 0 means "auto from frac"; >= 0 overrides. */
+  float mid_occ_frac{2e-4f};
+  std::size_t min_mid_occ{10};
+  std::size_t max_mid_occ{1000000};
+  std::int64_t mid_occ_override{-1};
+  std::size_t max_max_occ{4095};
+  std::size_t occ_dist{500};
 
   /* Lookup limits */
   std::size_t max_total_hits{100000};
@@ -131,7 +159,7 @@ struct BaseBatchBuffer {
 struct BasePipelineComponents {
   const piru::index::SeedStore* seed_store{nullptr};
   const piru::index::GraphStore* graph_store{nullptr};
-  BaseSeedLookup lookup{nullptr, 0};
+  BaseSeedLookup lookup{nullptr, 0, 0, 0};
   piru::mapping::ChainerPtr chainer;
 };
 
