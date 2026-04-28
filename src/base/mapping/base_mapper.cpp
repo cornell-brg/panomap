@@ -224,6 +224,12 @@ BasePipelineComponents BaseMapper::create_components() const {
     throw std::runtime_error("BaseMapper requires a SeedStore for lookup");
   }
 
+  // Anchor span on read in base-pairs = seed_k (one minimizer covers k bases).
+  // Mirror signal-mode normalization scale * 0.01 * span so chn_pen_gap
+  // ends up at minimap2's MG_CHAIN_PEN_GAP=0.12 for k=15 default
+  // (0.8 * 0.01 * 15 = 0.12). Without this, raw 0.8 is ~7x too high.
+  const float anchor_span_bp = static_cast<float>(config_.seeder.k);
+
   if (config_.chainer_backend == "path-chain") {
     if (!config_.linearization_coords) {
       throw std::runtime_error("PathChainer requires linearization_coords");
@@ -234,6 +240,10 @@ BasePipelineComponents BaseMapper::create_components() const {
     auto pc = PathChainerConfig::from_parsed(config_.chainer_parsed);
     pc.merge_anchors = config_.enable_anchor_merge;
     pc.pore_k = 0;  // base mode: anchor span = seed_k, not derived from pore model
+    if (anchor_span_bp > 0) {
+      pc.chn_pen_gap = pc.chn_pen_gap * 0.01f * anchor_span_bp;
+      pc.chn_pen_skip = pc.chn_pen_skip * 0.01f * anchor_span_bp;
+    }
     comps.chainer = std::make_unique<PathChainer>(pc, *config_.linearization_coords,
                                                   *config_.path_lengths, config_.node_1d_coords,
                                                   config_.component_ids);
@@ -243,6 +253,10 @@ BasePipelineComponents BaseMapper::create_components() const {
     }
     auto sc = SortChainerConfig::from_parsed(config_.chainer_parsed);
     sc.pore_k = 0;
+    if (anchor_span_bp > 0) {
+      sc.chn_pen_gap = sc.chn_pen_gap * 0.01f * anchor_span_bp;
+      sc.chn_pen_skip = sc.chn_pen_skip * 0.01f * anchor_span_bp;
+    }
     std::vector<std::uint32_t> bp_lens(config_.graph_store->nodeCount());
     for (std::size_t i = 0; i < bp_lens.size(); ++i) {
       bp_lens[i] = static_cast<std::uint32_t>(config_.graph_store->sequenceLen(i));
@@ -257,6 +271,10 @@ BasePipelineComponents BaseMapper::create_components() const {
     }
     auto pc = PanChainerConfig::from_parsed(config_.chainer_parsed);
     pc.pore_k = 0;
+    if (anchor_span_bp > 0) {
+      pc.chn_pen_gap = pc.chn_pen_gap * 0.01f * anchor_span_bp;
+      pc.chn_pen_skip = pc.chn_pen_skip * 0.01f * anchor_span_bp;
+    }
     comps.chainer = std::make_unique<PanChainer>(pc, *config_.node_1d_coords,
                                                  *config_.linearization_coords,
                                                  *config_.path_lengths);
