@@ -88,6 +88,13 @@ int handle_base_map(const std::vector<std::string>& args) {
                             "Single-chain: max query/ref ratio (default: 1.4)"});
   config.options.push_back({'\0', "map-fallback-floor", true,
                             "Fallback absolute score floor (default: 100)"});
+  config.options.push_back({'\0', "", false, "\nPresets:"});
+  config.options.push_back(
+      {'x', "preset", true,
+       "Apply tuning preset (small | medium | large). Per-flag CLI args still override. "
+       "small: covid/DRB1-scale (~tens of kb to few Mb) -- combo. "
+       "medium: yeast/MHC-scale (~10-100 Mb) -- conservative defaults. "
+       "large: hg38 + real pangenomes (~1+ Gb) -- combo. (default: medium)"});
   config.on_error = [](const std::string&) { std::cerr << "map: invalid option\n"; };
 
   if (!piru::cli::parse_args(args, config, parsed)) {
@@ -182,6 +189,24 @@ int handle_base_map(const std::vector<std::string>& args) {
   cfg.path_lengths = &path_lengths;
   cfg.node_1d_coords = node_1d_coords.empty() ? nullptr : &node_1d_coords;
   cfg.component_ids = component_ids.empty() ? nullptr : &component_ids;
+
+  /* Apply preset (if any) BEFORE per-flag overrides, so explicit CLI flags
+   * win. See dev-108 G5 results for the rationale -- combo (sc=2, ratio
+   * loose) wins on small genomes (covid) and large pangenomes (hg38) but
+   * regresses specificity on medium ones (yeast). */
+  std::string preset = parsed.values.count("preset") ? parsed.values.at("preset") : "medium";
+  if (preset == "small" || preset == "large") {
+    cfg.map_sc_min_anchors = 2;
+    cfg.map_sc_ratio_lo = 0.5f;
+    cfg.map_sc_ratio_hi = 1.7f;
+  } else if (preset != "medium") {
+    LOG_ERROR("map: unknown preset '" + preset + "' (valid: small, medium, large)");
+    return 1;
+  }
+  LOG_INFO("preset: " + preset +
+           " (sc-min-anchors=" + std::to_string(cfg.map_sc_min_anchors) +
+           " sc-ratio=[" + std::to_string(cfg.map_sc_ratio_lo) + "," +
+           std::to_string(cfg.map_sc_ratio_hi) + "])");
 
   if (parsed.values.count("chainer")) cfg.chainer_backend = parsed.values.at("chainer");
   cfg.chainer_parsed = parsed;
