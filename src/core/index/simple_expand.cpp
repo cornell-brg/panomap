@@ -53,7 +53,7 @@ FlatGraph simpleExpandFlat(const piru::io::ImportedGraph& imported) {
   std::size_t mask_bytes = (total_bases + 7) / 8;
   std::vector<std::uint8_t> seq_packed(packed_bytes, 0);
   std::vector<std::uint8_t> seq_n_mask(mask_bytes, 0);
-  std::vector<std::uint32_t> seq_base_offset(num_nodes);
+  std::vector<std::uint64_t> seq_base_offset(num_nodes);
   std::size_t base_cursor = 0;
 
   auto pack_base = [&](std::size_t abs_pos, char c) {
@@ -73,7 +73,7 @@ FlatGraph simpleExpandFlat(const piru::io::ImportedGraph& imported) {
     std::uint32_t slen = static_cast<std::uint32_t>(orig.sequence.size());
 
     // Forward node: pack directly from source string
-    seq_base_offset[fwd_id] = static_cast<std::uint32_t>(base_cursor);
+    seq_base_offset[fwd_id] = base_cursor;
     seq_len[fwd_id] = slen;
     for (std::uint32_t j = 0; j < slen; ++j) {
       pack_base(base_cursor + j, orig.sequence[j]);
@@ -86,7 +86,7 @@ FlatGraph simpleExpandFlat(const piru::io::ImportedGraph& imported) {
     is_reverse[fwd_id] = 0;
 
     // Reverse node: pack revcomp directly (no temp string)
-    seq_base_offset[rev_id] = static_cast<std::uint32_t>(base_cursor);
+    seq_base_offset[rev_id] = base_cursor;
     seq_len[rev_id] = slen;
     for (std::uint32_t j = 0; j < slen; ++j) {
       char c = orig.sequence[slen - 1 - j];

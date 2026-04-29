@@ -27,7 +27,7 @@ FlatGraph FlatGraph::fromRawArrays(
   // Compute total bases and base offsets
   fg.total_bases_ = 0;
   for (std::uint32_t i = 0; i < node_count; ++i) {
-    fg.seq_base_offset_[i] = static_cast<std::uint32_t>(fg.total_bases_);
+    fg.seq_base_offset_[i] = fg.total_bases_;
     fg.total_bases_ += fg.seq_len_[i];
   }
 
@@ -40,16 +40,16 @@ FlatGraph FlatGraph::fromRawArrays(
   // Pack each node's sequence
   for (std::uint32_t i = 0; i < node_count; ++i) {
     const char* src = seq_data.data() + seq_offset[i];
-    std::uint32_t base_off = fg.seq_base_offset_[i];
+    std::uint64_t base_off = fg.seq_base_offset_[i];
     std::uint32_t len = fg.seq_len_[i];
 
     for (std::uint32_t j = 0; j < len; ++j) {
       char c = src[j];
-      std::uint32_t abs_pos = base_off + j;
+      std::uint64_t abs_pos = base_off + j;
 
       // Encode base
       std::uint8_t val = encode2bit(c);
-      std::uint32_t byte_idx = abs_pos >> 2;
+      std::uint64_t byte_idx = abs_pos >> 2;
       std::uint32_t bit_shift = (abs_pos & 3) << 1;
       fg.seq_packed_[byte_idx] |= (val << bit_shift);
 
@@ -80,7 +80,7 @@ FlatGraph FlatGraph::fromRawArrays(
 FlatGraph FlatGraph::fromPackedArrays(
     std::uint32_t node_count, std::uint32_t path_count, std::size_t total_bases,
     std::vector<std::uint8_t> seq_packed, std::vector<std::uint8_t> seq_n_mask,
-    std::vector<std::uint32_t> seq_base_offset, std::vector<std::uint32_t> seq_len,
+    std::vector<std::uint64_t> seq_base_offset, std::vector<std::uint32_t> seq_len,
     std::vector<char> name_data, std::vector<std::uint32_t> name_offset,
     std::vector<std::uint16_t> name_len, std::vector<std::uint8_t> is_reverse,
     std::vector<std::uint32_t> edge_target, std::vector<std::uint32_t> out_edge_offset,

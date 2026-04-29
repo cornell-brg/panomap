@@ -46,7 +46,7 @@ public:
   static FlatGraph fromPackedArrays(
       std::uint32_t node_count, std::uint32_t path_count, std::size_t total_bases,
       std::vector<std::uint8_t> seq_packed, std::vector<std::uint8_t> seq_n_mask,
-      std::vector<std::uint32_t> seq_base_offset, std::vector<std::uint32_t> seq_len,
+      std::vector<std::uint64_t> seq_base_offset, std::vector<std::uint32_t> seq_len,
       std::vector<char> name_data, std::vector<std::uint32_t> name_offset,
       std::vector<std::uint16_t> name_len, std::vector<std::uint8_t> is_reverse,
       std::vector<std::uint32_t> edge_target, std::vector<std::uint32_t> out_edge_offset,
@@ -85,17 +85,19 @@ public:
 
   std::size_t seqLen(std::uint32_t node_id) const { return seq_len_[node_id]; }
 
-  // Get 2-bit encoded base at position within node (0-3, check isN for ambiguity)
+  // Get 2-bit encoded base at position within node (0-3, check isN for ambiguity).
+  // abs_pos / byte_idx must be 64-bit: total_bases on hg38 (fwd+rev) is ~6.2 GB,
+  // overflowing uint32. (Bug fixed dev-108 -- silent corruption past 4 GB cumulative.)
   std::uint8_t base2bit(std::uint32_t node_id, std::uint32_t pos) const {
-    std::uint32_t abs_pos = seq_base_offset_[node_id] + pos;
-    std::uint32_t byte_idx = abs_pos >> 2;         // abs_pos / 4
+    std::uint64_t abs_pos = seq_base_offset_[node_id] + pos;
+    std::uint64_t byte_idx = abs_pos >> 2;         // abs_pos / 4
     std::uint32_t bit_shift = (abs_pos & 3) << 1;  // (abs_pos % 4) * 2
     return (seq_packed_[byte_idx] >> bit_shift) & 3;
   }
 
   // Check if position is an N base
   bool isN(std::uint32_t node_id, std::uint32_t pos) const {
-    std::uint32_t abs_pos = seq_base_offset_[node_id] + pos;
+    std::uint64_t abs_pos = seq_base_offset_[node_id] + pos;
     return (seq_n_mask_[abs_pos >> 3] >> (abs_pos & 7)) & 1;
   }
 
@@ -165,7 +167,7 @@ public:
 
   const std::vector<std::uint8_t>& seqPacked() const { return seq_packed_; }
   const std::vector<std::uint8_t>& seqNMask() const { return seq_n_mask_; }
-  const std::vector<std::uint32_t>& seqBaseOffsets() const { return seq_base_offset_; }
+  const std::vector<std::uint64_t>& seqBaseOffsets() const { return seq_base_offset_; }
   const std::vector<std::uint32_t>& seqLens() const { return seq_len_; }
   void setSeqLens(std::vector<std::uint32_t> lens) { seq_len_ = std::move(lens); }
   std::size_t totalBases() const { return total_bases_; }
@@ -189,7 +191,7 @@ private:
   // 2-bit packed sequence arena (4 bases per byte)
   std::vector<std::uint8_t> seq_packed_;        // ceil(total_bases / 4) bytes
   std::vector<std::uint8_t> seq_n_mask_;        // 1 bit per base (ceil(total_bases / 8) bytes)
-  std::vector<std::uint32_t> seq_base_offset_;  // [node_count] offset in bases
+  std::vector<std::uint64_t> seq_base_offset_;  // [node_count] offset in bases
   std::vector<std::uint32_t> seq_len_;          // [node_count] length in bases
 
   // Name arena (shared by nodes and paths)
