@@ -120,10 +120,39 @@ SortChainer::SortChainer(SortChainerConfig config, const std::vector<float>& nod
       component_ids_(component_ids) {}
 
 ChainResult SortChainer::chain(const std::vector<NodeAnchor>& hits) const {
+  ChainResult fwd = chain_pass(hits, /*reverse_dir=*/false);
+  if (!config_.bidirectional) return fwd;
+
+  ChainResult bwd = chain_pass(hits, /*reverse_dir=*/true);
+
+  /* Merge: combine chains from both passes, sort by score desc, take top-K. */
+  ChainResult merged;
+  merged.expanded_anchor_count = std::max(fwd.expanded_anchor_count, bwd.expanded_anchor_count);
+  merged.chains.reserve(fwd.chains.size() + bwd.chains.size());
+  for (auto& c : fwd.chains) merged.chains.push_back(std::move(c));
+  for (auto& c : bwd.chains) merged.chains.push_back(std::move(c));
+  std::sort(merged.chains.begin(), merged.chains.end(),
+            [](const Chain& a, const Chain& b) { return a.score > b.score; });
+  if (merged.chains.size() > config_.max_chains) {
+    merged.chains.resize(config_.max_chains);
+  }
+  /* used_inputs: logical OR of both passes (anchor used by either pass). */
+  merged.used_inputs.assign(hits.size(), false);
+  for (std::size_t i = 0; i < hits.size(); ++i) {
+    bool a = i < fwd.used_inputs.size() && fwd.used_inputs[i];
+    bool b = i < bwd.used_inputs.size() && bwd.used_inputs[i];
+    merged.used_inputs[i] = a || b;
+  }
+  return merged;
+}
+
+ChainResult SortChainer::chain_pass(const std::vector<NodeAnchor>& hits, bool reverse_dir) const {
   ChainResult result;
   if (hits.empty()) return result;
 
-  /* 1. Convert NodeAnchors to SoA arrays */
+  /* 1. Convert NodeAnchors to SoA arrays.
+   * For reverse_dir, negate ref_coord so the same DP sort+scan logic finds
+   * chains where original-1D-coord decreases as query_pos increases. */
 
   DPBuffers dp;
   dp.resize(hits.size());
@@ -144,6 +173,7 @@ ChainResult SortChainer::chain(const std::vector<NodeAnchor>& hits) const {
     } else {
       ref = node_start + static_cast<double>(h.offset);
     }
+    if (reverse_dir) ref = -ref;
     dp.ref_coord[na] = ref;
     dp.query_pos[na] = static_cast<std::uint16_t>(h.read_pos);
     dp.span[na] = h.span;
@@ -396,7 +426,8 @@ ChainResult SortChainer::chain(const std::vector<NodeAnchor>& hits) const {
       ca.offset = src.offset;
       ca.length = dp.span[idx];
       ca.read_pos = dp.query_pos[idx];
-      ca.ref_coord = dp.ref_coord[idx];
+      // Restore original-sign ref_coord (we negated it for reverse_dir DP).
+      ca.ref_coord = reverse_dir ? -dp.ref_coord[idx] : dp.ref_coord[idx];
       chain.anchors.push_back(ca);
     }
 
@@ -435,6 +466,8 @@ SortChainerConfig SortChainerConfig::from_parsed(const cli::Parsed& parsed) {
     cfg.dd_tolerance_frac = std::stof(parsed.values.at("chain-dd-tolerance"));
   if (parsed.values.count("chain-pen-ratio"))
     cfg.chn_pen_ratio = std::stof(parsed.values.at("chain-pen-ratio"));
+  if (parsed.values.count("chain-bidirectional"))
+    cfg.bidirectional = true;
   return cfg;
 }
 

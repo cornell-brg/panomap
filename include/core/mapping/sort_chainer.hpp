@@ -41,6 +41,8 @@ struct SortChainerConfig {
   float dd_tolerance_frac{0.0f};  // dead zone: dd below tolerance_frac * dg is penalty-free
   float chn_pen_ratio{0.5f};      // penalty for ratio inconsistency between consecutive transitions
 
+  bool bidirectional{false};      // run DP in both 1D-coord directions and merge top chains
+
   std::size_t pore_k{0};
 
   static SortChainerConfig from_parsed(const cli::Parsed& parsed);
@@ -62,6 +64,11 @@ public:
   std::string name() const override { return "sort-chain"; }
 
 private:
+  /* Single DP pass. reverse_dir=true negates ref_coord internally so the DP
+   * finds chains where 1D coord decreases while query_pos increases. Used
+   * by bidirectional mode to catch chains in inverted-layout regions. */
+  ChainResult chain_pass(const std::vector<NodeAnchor>& hits, bool reverse_dir) const;
+
   SortChainerConfig config_;
   const std::vector<float>& node_1d_coords_;
   std::vector<std::uint32_t> node_bp_lens_;

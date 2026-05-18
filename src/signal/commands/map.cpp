@@ -106,6 +106,8 @@ int handle_map(const std::vector<std::string>& args) {
        "SortChainer: dead zone fraction for diagonal deviation (default: 0.0)"});
   config.options.push_back({'\0', "chain-pen-ratio", true,
                             "SortChainer: ratio consistency penalty factor (default: 0.5)"});
+  config.options.push_back({'\0', "chain-bidirectional", false,
+                            "SortChainer: run DP in both 1D directions, merge chains"});
   config.options.push_back({'\0', "chain-band-1d", true,
                             "PanChainer: 1D band width for candidate selection (default: 5000)"});
   config.options.push_back({'\0', "chain-pen-switch", true,
