@@ -96,6 +96,10 @@ if(PIRU_TBB_AVAILABLE)
 else()
     message(STATUS "oneTBB not found; using serial concurrency backend.")
 endif()
+
+# pthread for std::async / std::thread used in sort_1d.cpp parallel SGD
+find_package(Threads REQUIRED)
+target_link_libraries(piru_core PUBLIC Threads::Threads)
 if(PIRU_ENABLE_WARNINGS)
     if(MSVC)
         target_compile_options(piru_core PRIVATE /W4 /permissive-)

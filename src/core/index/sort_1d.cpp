@@ -22,6 +22,7 @@
 #include <algorithm>
 #include <cmath>
 #include <fstream>
+#include <future>
 #include <numeric>
 #include <random>
 #include <unordered_map>
@@ -240,8 +241,6 @@ std::vector<float> compute_1d_sort(const FlatGraph& graph,
   std::uint64_t first_cooling_iter = static_cast<std::uint64_t>(
       std::floor(config.cooling_start * static_cast<double>(config.iter_max)));
 
-  std::mt19937_64 rng(config.seed);
-
   // Build cumulative step count for weighted path sampling
   std::vector<std::uint64_t> cum_steps;
   cum_steps.reserve(valid_paths.size());
@@ -253,108 +252,139 @@ std::vector<float> compute_1d_sort(const FlatGraph& graph,
   std::uniform_int_distribution<std::uint64_t> global_step_dist(0, running - 1);
   std::uniform_int_distribution<int> flip(0, 1);  // coin flip for 50/50 sampling
 
+  /* Per-update SGD body. Pulled out so single-thread and multi-thread paths
+   * can reuse it. Each call: pick two path-steps, compute target distance,
+   * pull/push the chosen endpoints toward target. X[] writes race across
+   * threads (Hogwild-style); accepted for SGD. */
+  auto do_one_update = [&](std::mt19937_64& rng_local, double eta_local, double adj_theta_local,
+                           bool cooling_local, double& dmax_local) {
+    /* Sample first step uniformly from all path steps */
+    std::uint64_t global_idx = global_step_dist(rng_local);
+    auto it = std::lower_bound(cum_steps.begin(), cum_steps.end(), global_idx + 1);
+    std::size_t path_rank = static_cast<std::size_t>(it - cum_steps.begin());
+    std::size_t p = valid_paths[path_rank];
+    const auto& steps = path_index[p];
+    std::size_t step_count = steps.size();
+    std::size_t offset_in_path = (path_rank > 0) ? cum_steps[path_rank - 1] : 0;
+    std::size_t s_rank = static_cast<std::size_t>(global_idx - offset_in_path);
+
+    /* Sample second step: 50% Zipfian + 50% uniform; cooling forces Zipfian
+     * with near-uniform theta. */
+    std::size_t s_rank_b;
+    if (cooling_local || flip(rng_local)) {
+      std::uint64_t jump_space;
+      bool go_backward = (s_rank > 0 && flip(rng_local)) || s_rank == step_count - 1;
+      if (go_backward) {
+        jump_space = std::min(space, static_cast<std::uint64_t>(s_rank));
+      } else {
+        jump_space = std::min(space, static_cast<std::uint64_t>(step_count - s_rank - 1));
+      }
+      if (jump_space == 0) return;
+
+      std::uint64_t zeta_idx = jump_space;
+      if (jump_space > space_max) {
+        zeta_idx = space_max + 1 + (jump_space - space_max) / space_max;
+      }
+      if (zeta_idx >= zetas.size()) zeta_idx = zetas.size() - 1;
+
+      dirtyzipf::dirty_zipfian_int_distribution<std::uint64_t>::param_type z_p(
+          1, jump_space, adj_theta_local, zetas[zeta_idx]);
+      dirtyzipf::dirty_zipfian_int_distribution<std::uint64_t> z(z_p);
+      std::uint64_t z_i = z(rng_local);
+
+      if (go_backward) {
+        s_rank_b = s_rank - static_cast<std::size_t>(z_i);
+      } else {
+        s_rank_b = s_rank + static_cast<std::size_t>(z_i);
+      }
+    } else {
+      std::uniform_int_distribution<std::size_t> uni_dist(0, step_count - 1);
+      s_rank_b = uni_dist(rng_local);
+    }
+
+    if (s_rank_b >= step_count || s_rank_b == s_rank) return;
+
+    std::uint32_t node_i = steps[s_rank].node_id;
+    std::uint32_t node_j = steps[s_rank_b].node_id;
+    if (node_i == node_j) return;
+
+    std::uint32_t offset_i = flip(rng_local);
+    std::uint32_t offset_j = flip(rng_local);
+    double pos_a = static_cast<double>(steps[s_rank].ref_pos);
+    double pos_b = static_cast<double>(steps[s_rank_b].ref_pos);
+    if (offset_i) pos_a += static_cast<double>(steps[s_rank].node_length);
+    if (offset_j) pos_b += static_cast<double>(steps[s_rank_b].node_length);
+
+    double target_dist = std::abs(pos_a - pos_b);
+    if (target_dist == 0) return;
+
+    double dx = X[2 * node_i + offset_i] - X[2 * node_j + offset_j];
+    if (dx == 0) dx = 1e-9;
+    double mag = std::abs(dx);
+
+    double w_ij = 1.0 / target_dist;
+    double mu = eta_local * w_ij;
+    if (mu > 1.0) mu = 1.0;
+
+    double delta = mu * (mag - target_dist) / 2.0;
+    double r = delta / mag;
+    double r_x = r * dx;
+
+    X[2 * node_i + offset_i] -= r_x;  // Hogwild race in multi-threaded mode
+    X[2 * node_j + offset_j] += r_x;  // Hogwild race in multi-threaded mode
+
+    double delta_abs = std::abs(delta);
+    if (delta_abs > dmax_local) dmax_local = delta_abs;
+  };
+
+  std::size_t num_threads = std::max<std::size_t>(1, config.num_threads);
+  if (num_threads > min_term_updates && min_term_updates > 0) num_threads = 1;
+  LOG_INFO("1D SGD: " + std::to_string(num_threads) + " thread(s), iter_max=" +
+           std::to_string(config.iter_max));
+
+  std::mt19937_64 single_rng(config.seed);  // serial-path RNG
   double delta_max = 0.0;
 
   for (std::uint64_t iteration = 0; iteration < config.iter_max; ++iteration) {
     double eta = etas[iteration];
     delta_max = 0.0;
 
-    // Adjust theta for cooling phase
     bool cooling = iteration > first_cooling_iter;
     double adj_theta = cooling ? 0.001 : config.theta;
 
-    for (std::uint64_t update = 0; update < min_term_updates; ++update) {
-      /* Sample first step uniformly from all path steps */
-      std::uint64_t global_idx = global_step_dist(rng);
-      auto it = std::lower_bound(cum_steps.begin(), cum_steps.end(), global_idx + 1);
-      std::size_t path_rank = static_cast<std::size_t>(it - cum_steps.begin());
-      std::size_t p = valid_paths[path_rank];
-      const auto& steps = path_index[p];
-      std::size_t step_count = steps.size();
-      std::size_t offset_in_path = (path_rank > 0) ? cum_steps[path_rank - 1] : 0;
-      std::size_t s_rank = static_cast<std::size_t>(global_idx - offset_in_path);
-
-      /* Sample second step: 50% Zipfian (nearby) + 50% uniform (long-range).
-       * Matches odgi: if (cooling || flip(gen)) -> Zipfian, else -> uniform.
-       * During cooling, always Zipfian with theta=0.001 (near-uniform). */
-      std::size_t s_rank_b;
-      if (cooling || flip(rng)) {
-        // Zipfian sampling: bias toward nearby steps
-        std::uint64_t jump_space;
-        bool go_backward = (s_rank > 0 && flip(rng)) || s_rank == step_count - 1;
-
-        if (go_backward) {
-          jump_space = std::min(space, static_cast<std::uint64_t>(s_rank));
-        } else {
-          jump_space = std::min(space, static_cast<std::uint64_t>(step_count - s_rank - 1));
-        }
-        if (jump_space == 0) continue;
-
-        // Look up precomputed zeta (with quantization for large jump_space)
-        std::uint64_t zeta_idx = jump_space;
-        if (jump_space > space_max) {
-          zeta_idx = space_max + 1 + (jump_space - space_max) / space_max;
-        }
-        if (zeta_idx >= zetas.size()) zeta_idx = zetas.size() - 1;
-
-        dirtyzipf::dirty_zipfian_int_distribution<std::uint64_t>::param_type z_p(
-            1, jump_space, adj_theta, zetas[zeta_idx]);
-        dirtyzipf::dirty_zipfian_int_distribution<std::uint64_t> z(z_p);
-        std::uint64_t z_i = z(rng);
-
-        if (go_backward) {
-          s_rank_b = s_rank - static_cast<std::size_t>(z_i);
-        } else {
-          s_rank_b = s_rank + static_cast<std::size_t>(z_i);
-        }
-      } else {
-        // Uniform sampling: random step anywhere on this path (long-range correction)
-        std::uniform_int_distribution<std::size_t> uni_dist(0, step_count - 1);
-        s_rank_b = uni_dist(rng);
+    if (num_threads <= 1) {
+      for (std::uint64_t update = 0; update < min_term_updates; ++update) {
+        do_one_update(single_rng, eta, adj_theta, cooling, delta_max);
       }
+    } else {
+      /* Multi-threaded: split inner update range across threads. Each thread
+       * has its own RNG (seeded by iteration + thread_id) so sampling is
+       * independent. X[] writes race Hogwild-style; delta_max via reduction. */
+      auto worker = [&, eta, adj_theta, cooling, iteration](std::size_t tid, std::uint64_t start,
+                                                            std::uint64_t end) -> double {
+        std::mt19937_64 trng(config.seed + iteration * 0x100000001ULL +
+                             tid * 0x9E3779B97F4A7C15ULL);
+        double local_dmax = 0.0;
+        for (std::uint64_t u = start; u < end; ++u) {
+          do_one_update(trng, eta, adj_theta, cooling, local_dmax);
+        }
+        return local_dmax;
+      };
 
-      if (s_rank_b >= step_count || s_rank_b == s_rank) continue;
-
-      // Get nodes and target distance
-      std::uint32_t node_i = steps[s_rank].node_id;
-      std::uint32_t node_j = steps[s_rank_b].node_id;
-      if (node_i == node_j) continue;
-
-      // Coin flip: use start (0) or end (1) of each node.
-      // Adjust target distance to match which end is chosen.
-      std::uint32_t offset_i = flip(rng);  // 0 = start, 1 = end
-      std::uint32_t offset_j = flip(rng);
-      double pos_a = static_cast<double>(steps[s_rank].ref_pos);
-      double pos_b = static_cast<double>(steps[s_rank_b].ref_pos);
-      if (offset_i) pos_a += static_cast<double>(steps[s_rank].node_length);
-      if (offset_j) pos_b += static_cast<double>(steps[s_rank_b].node_length);
-
-      double target_dist = std::abs(pos_a - pos_b);
-      if (target_dist == 0) continue;
-
-      // Current distance in layout (between chosen ends)
-      double dx = X[2 * node_i + offset_i] - X[2 * node_j + offset_j];
-      if (dx == 0) dx = 1e-9;
-      double mag = std::abs(dx);
-
-      // Weight inversely proportional to distance (matches odgi)
-      double w_ij = 1.0 / target_dist;
-      double mu = eta * w_ij;
-      if (mu > 1.0) mu = 1.0;
-
-      // SGD update: only update the chosen end of each node
-      double delta = mu * (mag - target_dist) / 2.0;
-      double r = delta / mag;
-      double r_x = r * dx;
-
-      X[2 * node_i + offset_i] -= r_x;
-      X[2 * node_j + offset_j] += r_x;
-
-      double delta_abs = std::abs(delta);
-      if (delta_abs > delta_max) delta_max = delta_abs;
+      std::vector<std::future<double>> futures;
+      futures.reserve(num_threads);
+      std::uint64_t per = (min_term_updates + num_threads - 1) / num_threads;
+      for (std::size_t t = 0; t < num_threads; ++t) {
+        std::uint64_t s = t * per;
+        std::uint64_t e = std::min(s + per, min_term_updates);
+        if (s >= e) break;
+        futures.push_back(std::async(std::launch::async, worker, t, s, e));
+      }
+      for (auto& f : futures) {
+        delta_max = std::max(delta_max, f.get());
+      }
     }
 
-    // Convergence check
     if (config.delta > 0.0 && delta_max <= config.delta) {
       LOG_INFO("1D SGD converged at iteration " + std::to_string(iteration) +
                " (delta_max=" + std::to_string(delta_max) + ")");

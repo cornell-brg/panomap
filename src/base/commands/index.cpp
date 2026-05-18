@@ -161,6 +161,7 @@ int handle_base_index(const std::vector<std::string>& args) {
   if (compute_1d_sort) {
     auto sort_start = std::chrono::high_resolution_clock::now();
     piru::index::Sort1DConfig sort_cfg;
+    sort_cfg.num_threads = static_cast<std::size_t>(num_threads > 0 ? num_threads : 1);
     node_1d_coords = piru::index::compute_1d_sort(graph_store->flat(), bi_result.linearization_coords,
                                                   bi_result.path_lengths, sort_cfg, component_ids);
     auto sort_elapsed =

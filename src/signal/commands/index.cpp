@@ -75,6 +75,7 @@ int handle_index(const std::vector<std::string>& args) {
       {'\0', "no-1d-sort", false, "Skip 1D canonical coordinate computation"},
       {'\0', "1d-coords-file", true,
        "Import pre-computed 1D coords from TSV (overrides built-in PG-SGD)"},
+      {'\0', "sgd-iter", true, "PG-SGD max iterations (default: 100)"},
       {'\0', "", false, "\nDebug Options:"},
       {'\0', "dump-1d-coords", true, "Dump 1D sort coordinates to TSV file"},
   };
@@ -190,6 +191,12 @@ int handle_index(const std::vector<std::string>& args) {
   }
   if (parsed.values.count("no-1d-sort")) {
     index_config.compute_1d_sort = false;
+  }
+  // Forward --threads to PG-SGD layout step (Hogwild-parallel SGD updates).
+  index_config.sort_1d_config.num_threads =
+      static_cast<std::size_t>(num_threads > 0 ? num_threads : 1);
+  if (parsed.values.count("sgd-iter")) {
+    index_config.sort_1d_config.iter_max = std::stoull(parsed.values.at("sgd-iter"));
   }
 
   index_config.executor = executor.get();

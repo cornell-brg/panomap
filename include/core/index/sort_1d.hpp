@@ -31,6 +31,7 @@ namespace piru::index {
 
 struct Sort1DConfig {
   std::uint64_t iter_max{100};        // max SGD iterations
+  std::size_t num_threads{1};         // SGD parallelism: 1 = serial (deterministic); >1 = Hogwild-style updates across threads
   std::uint64_t iter_with_max_lr{0};  // iteration with max learning rate
   double eps{0.01};                   // min learning rate factor
   double delta{0.0};                  // convergence threshold (0 = run all iters)
