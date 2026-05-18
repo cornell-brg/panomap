@@ -232,6 +232,10 @@ LoadedIndex load_index(const std::string& path) {
     throw std::runtime_error("Failed to open file for reading: " + path);
   }
 
+  // Track byte positions at each section boundary (matches save_index layout).
+  std::int64_t pos_start = 0, pos_graph = 0, pos_linear = 0, pos_seeds = 0,
+               pos_1d = 0, pos_components = 0, pos_end = 0;
+
   /* 1. Header */
 
   char magic[4];
@@ -267,6 +271,8 @@ LoadedIndex load_index(const std::string& path) {
   metadata.model_name = read_string(in);
   read_pod(in, metadata.pore_k);
   metadata.tokenizer = read_string(in);
+
+  pos_graph = static_cast<std::int64_t>(in.tellg());
 
   /* 3-5. Graph - build FlatGraph directly from pirx */
 
@@ -361,6 +367,8 @@ LoadedIndex load_index(const std::string& path) {
       std::move(path_length));
   fg.setSeqLens(std::move(saved_seq_len));
 
+  pos_linear = static_cast<std::int64_t>(in.tellg());
+
   /* 6. Linearization */
 
   uint64_t lin_node_count;
@@ -379,6 +387,8 @@ LoadedIndex load_index(const std::string& path) {
       linearization_coords[i].emplace_back(path_id, ref_coord);
     }
   }
+
+  pos_seeds = static_cast<std::int64_t>(in.tellg());
 
   /* 7. Seeds (bucket-native format) */
 
@@ -440,6 +450,8 @@ LoadedIndex load_index(const std::string& path) {
       std::move(buckets), bucket_bits, std::move(seed_extractor_name), std::move(seed_params),
       max_freq, freq_threshold, filter_fraction);
 
+  pos_1d = static_cast<std::int64_t>(in.tellg());
+
   /* 8. 1D canonical coordinates (optional, backwards-compatible) */
 
   std::vector<float> node_1d_coords;
@@ -453,6 +465,8 @@ LoadedIndex load_index(const std::string& path) {
       LOG_INFO("Loaded 1D coords: " + std::to_string(n_1d) + " nodes");
     }
   }
+
+  pos_components = static_cast<std::int64_t>(in.tellg());
 
   /* 9. Connected component IDs (optional, backwards-compatible) */
 
@@ -472,9 +486,23 @@ LoadedIndex load_index(const std::string& path) {
            std::to_string(seeds->size()) + " seeds (" + std::to_string(total_hits) + " hits) ← " +
            path);
 
+  // tellg() returns -1 at EOF; resolve to actual file size for the final section.
+  in.clear();
+  in.seekg(0, std::ios::end);
+  pos_end = static_cast<std::int64_t>(in.tellg());
+
+  SectionSizes sz;
+  sz.header_meta = static_cast<uint64_t>(pos_graph - pos_start);
+  sz.graph = static_cast<uint64_t>(pos_linear - pos_graph);
+  sz.linearization = static_cast<uint64_t>(pos_seeds - pos_linear);
+  sz.seeds = static_cast<uint64_t>(pos_1d - pos_seeds);
+  sz.coords_1d = static_cast<uint64_t>(pos_components - pos_1d);
+  sz.components = static_cast<uint64_t>(pos_end - pos_components);
+  sz.total = static_cast<uint64_t>(pos_end - pos_start);
+
   return {std::move(metadata), std::make_unique<piru::index::FlatGraphStore>(std::move(fg)),
           std::move(seeds), std::move(linearization_coords), std::move(node_1d_coords),
-          std::move(component_ids)};
+          std::move(component_ids), sz};
 }
 
 bool is_pirx_index(const std::string& path) {

@@ -105,6 +105,22 @@ int handle_inspect(const std::vector<std::string>& args) {
   std::cout << "1d_coordinates: " << (loaded.node_1d_coords.empty() ? "no" : "yes") << "\n";
   std::cout << "component_ids: " << (loaded.component_ids.empty() ? "no" : "yes") << "\n";
 
+  /* On-disk section breakdown (bytes + % of total). */
+  const auto& sz = loaded.section_sizes;
+  auto pct = [&](uint64_t v) {
+    return sz.total > 0 ? (100.0 * static_cast<double>(v) / static_cast<double>(sz.total)) : 0.0;
+  };
+  std::cout << "\n";
+  std::cout << "sections (bytes, % of total):\n";
+  std::cout << "  total:         " << sz.total << "\n";
+  std::cout << "  header_meta:   " << sz.header_meta << "  (" << std::fixed << std::setprecision(1)
+            << pct(sz.header_meta) << "%)\n";
+  std::cout << "  graph:         " << sz.graph << "  (" << pct(sz.graph) << "%)\n";
+  std::cout << "  linearization: " << sz.linearization << "  (" << pct(sz.linearization) << "%)\n";
+  std::cout << "  seeds:         " << sz.seeds << "  (" << pct(sz.seeds) << "%)\n";
+  std::cout << "  coords_1d:     " << sz.coords_1d << "  (" << pct(sz.coords_1d) << "%)\n";
+  std::cout << "  components:    " << sz.components << "  (" << pct(sz.components) << "%)\n";
+
   /* Dump per-node canonical coordinates.
    * One row per node: node_id, canon_start (fwd), canon_end (rev), component_id.
    * Eval scripts use this + GFA paths to map base-space positions to canonical space. */

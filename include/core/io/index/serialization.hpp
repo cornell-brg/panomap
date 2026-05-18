@@ -43,6 +43,18 @@ struct IndexMetadata {
   std::string tokenizer;
 };
 
+// Byte sizes of each section in the .pirx file. Populated by load_index;
+// used by `piru inspect` to show on-disk breakdown.
+struct SectionSizes {
+  uint64_t header_meta{0};   // magic + version + flags + mode + metadata strings
+  uint64_t graph{0};         // nodes + edges + paths
+  uint64_t linearization{0}; // per-node (path_id, ref_coord) array
+  uint64_t seeds{0};         // bucket-native seed store (keys + counts + offsets + entries)
+  uint64_t coords_1d{0};     // float32 per node (optional)
+  uint64_t components{0};    // uint32 per node (optional)
+  uint64_t total{0};
+};
+
 struct LoadedIndex {
   IndexMetadata metadata;
   std::unique_ptr<piru::index::FlatGraphStore> graph;
@@ -50,6 +62,7 @@ struct LoadedIndex {
   std::vector<std::vector<piru::index::LinearCoordinate>> linearization_coords;
   std::vector<float> node_1d_coords;          // empty if not computed at index time
   std::vector<std::uint32_t> component_ids;  // connected component per node
+  SectionSizes section_sizes;
 };
 
 /** Save an index to a single .pirx file. */
