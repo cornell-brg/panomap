@@ -28,12 +28,16 @@ constexpr char kMagic[4] = {'P', 'I', 'R', 'X'};
 // v2.2 (dev-112 Phase 2): drop edges section. Chainer never iterates edges
 // at map time; sort_1d / gfa_exporter only see edges in the build-time
 // in-memory graph. Loaded indexes get an empty CSR (out_edge_offset[N+1]=0).
+// v2.3 (dev-112 Phase 3): drop path steps array. Map-time consumers
+// (gaf_writer) only walk steps as a fallback when pathLength is 0 -- which
+// can't happen for indexes built through the standard pipeline. Loaded
+// indexes get empty step_data + zeroed path_step_offset.
 // Minor-bump convention: any incremental serialization change inside the v2.x
 // series increments kVersionMinor. The load-time check requires strict full
 // version equality, so older v2.x indexes are refused (force re-index).
 // Reserve major bumps for bigger semantic breaks.
 constexpr uint32_t kVersionMajor = 2;
-constexpr uint32_t kVersionMinor = 2;
+constexpr uint32_t kVersionMinor = 3;
 constexpr uint32_t kVersion = (kVersionMajor << 16) | kVersionMinor;
 
 template <typename T>
@@ -126,19 +130,17 @@ void save_index(const std::string& path, const piru::index::GraphStore& graph_st
    * only need them at index build (in-memory). Dropping them saves
    * ~24 bytes per edge (yeast N=8: ~42 MB, zymo N=8: ~183 MB). */
 
-  /* 5. Graph - paths (from FlatGraph CSR) */
+  /* 5. Graph - paths: name + length only (v2.3, dev-112 Phase 3).
+   * Path steps array dropped from disk -- only gfa_exporter (build-time
+   * only) and the gaf_writer length fallback (never fires when pathLength
+   * is populated by the indexer pipeline, which is the only path that
+   * writes pirx files) consume them. */
 
   write_pod<uint64_t>(out, fg.pathCount());
   for (std::uint32_t i = 0; i < fg.pathCount(); ++i) {
     auto pname = fg.pathName(i);
     write_string(out, std::string(pname));
     write_pod<uint64_t>(out, fg.pathLength(i));
-    std::size_t step_count = fg.pathStepCount(i);
-    write_pod<uint64_t>(out, step_count);
-    const auto* steps = fg.pathStepsBegin(i);
-    for (std::size_t j = 0; j < step_count; ++j) {
-      write_pod<uint64_t>(out, static_cast<uint64_t>(steps[j]));
-    }
   }
 
   auto pos_linear = out.tellp();
@@ -315,12 +317,16 @@ LoadedIndex load_index(const std::string& path) {
   std::vector<std::uint32_t> edge_target;
   std::vector<std::uint32_t> out_edge_offset(node_count + 1, 0);
 
-  /* 5. Paths */
+  /* 5. Paths: name + length only in v2.3+ (dev-112 Phase 3). Steps array
+   * dropped from disk; we synthesize empty offsets so the accessors keep
+   * working (pathStepsBegin/End return zero-length ranges). The gaf_writer
+   * length fallback uses these only when pathLength is 0 -- which can't
+   * happen for indexes built through the standard pipeline. */
   uint64_t path_count;
   read_pod(in, path_count);
 
-  std::vector<std::uint32_t> step_data;
-  std::vector<std::uint32_t> path_step_offset(path_count + 1);
+  std::vector<std::uint32_t> step_data;  // empty
+  std::vector<std::uint32_t> path_step_offset(path_count + 1, 0);
   std::vector<std::uint32_t> path_name_offset(path_count);
   std::vector<std::uint16_t> path_name_len(path_count);
   std::vector<std::uint64_t> path_length(path_count);
@@ -332,17 +338,7 @@ LoadedIndex load_index(const std::string& path) {
     name_data.insert(name_data.end(), pname.begin(), pname.end());
 
     read_pod(in, path_length[i]);
-
-    uint64_t step_count;
-    read_pod(in, step_count);
-    path_step_offset[i] = static_cast<std::uint32_t>(step_data.size());
-    for (uint64_t j = 0; j < step_count; ++j) {
-      uint64_t nid;
-      read_pod(in, nid);
-      step_data.push_back(static_cast<std::uint32_t>(nid));
-    }
   }
-  path_step_offset[path_count] = static_cast<std::uint32_t>(step_data.size());
 
   // Assemble FlatGraph (seq_len passed as zeros; real lengths set below)
   fg = piru::index::FlatGraph::fromRawArrays(
