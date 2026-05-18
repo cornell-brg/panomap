@@ -28,3 +28,6 @@ data/yeast/
 
 # panolayout iteration artifacts (not committed)
 tools/panolayout/sample_out/
+
+# Oracle baselines (regenerate locally with tests/integration/test_index_oracle.sh --gen)
+tests/fixtures/oracle_v2/
