@@ -25,3 +25,6 @@
 # Python cache
 __pycache__/
 data/yeast/
+
+# panolayout iteration artifacts (not committed)
+tools/panolayout/sample_out/
