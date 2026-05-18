@@ -23,8 +23,14 @@ namespace {
 constexpr char kMagic[4] = {'P', 'I', 'R', 'X'};
 // Version: (major << 16) | minor. Major = breaking format change, minor = compatible.
 // v2: added mode byte after flags (signal vs. base).
+// v2.1 (dev-112 Phase 1): drop isReverse byte from per-node record. Derived
+// from canonical pair convention (fwd=2i, rev=2i+1) instead.
+// Minor-bump convention: any incremental serialization change inside the v2.x
+// series increments kVersionMinor. The load-time check requires strict full
+// version equality, so v2.0 indexes are refused by v2.1 binaries and vice
+// versa (force re-index). Reserve major bumps for bigger semantic breaks.
 constexpr uint32_t kVersionMajor = 2;
-constexpr uint32_t kVersionMinor = 0;
+constexpr uint32_t kVersionMinor = 1;
 constexpr uint32_t kVersion = (kVersionMajor << 16) | kVersionMinor;
 
 template <typename T>
@@ -103,11 +109,12 @@ void save_index(const std::string& path, const piru::index::GraphStore& graph_st
 
   /* 3. Graph - nodes (from FlatGraph) */
 
+  // dev-112: isReverse not serialized; derived from (node_id & 1) at load time.
+  // Canonical pair convention enforced by simple_expand (fwd=2i, rev=2i+1).
   write_pod<uint64_t>(out, fg.nodeCount());
   for (std::uint32_t i = 0; i < fg.nodeCount(); ++i) {
     auto name = fg.name(i);
     write_string(out, std::string(name));
-    write_pod<uint8_t>(out, fg.isReverse(i) ? 1 : 0);
     write_pod<uint32_t>(out, static_cast<uint32_t>(fg.seqLen(i)));
   }
 
@@ -246,11 +253,13 @@ LoadedIndex load_index(const std::string& path) {
 
   uint32_t version;
   read_pod(in, version);
-  uint32_t major = version >> 16;
-  if (major != kVersionMajor) {
+  if (version != kVersion) {
+    uint32_t major = version >> 16;
+    uint32_t minor = version & 0xFFFF;
     throw std::runtime_error("Incompatible index version " + std::to_string(major) + "." +
-                             std::to_string(version & 0xFFFF) + " (expected " +
-                             std::to_string(kVersionMajor) + ".x)");
+                             std::to_string(minor) + " (expected " +
+                             std::to_string(kVersionMajor) + "." +
+                             std::to_string(kVersionMinor) + ", re-index required)");
   }
 
   uint32_t flags;
@@ -286,14 +295,12 @@ LoadedIndex load_index(const std::string& path) {
   std::vector<std::uint32_t> seq_offset(node_count), seq_len(node_count);
   std::vector<std::uint32_t> name_offset_nodes(node_count);
   std::vector<std::uint16_t> name_len_nodes(node_count);
-  std::vector<std::uint8_t> is_reverse(node_count);
 
+  // Phase 1 (dev-112): isReverse is derived from (node_id & 1) instead of a
+  // stored byte. Canonical pair convention from simple_expand: fwd=2i, rev=2i+1.
   std::vector<std::uint32_t> saved_seq_len(node_count);
   for (uint64_t i = 0; i < node_count; ++i) {
     std::string orig_id = read_string(in);
-    uint8_t rev;
-    read_pod(in, rev);
-    is_reverse[i] = rev;
     uint32_t slen;
     read_pod(in, slen);
     saved_seq_len[i] = slen;
@@ -361,7 +368,7 @@ LoadedIndex load_index(const std::string& path) {
   fg = piru::index::FlatGraph::fromRawArrays(
       static_cast<std::uint32_t>(node_count), static_cast<std::uint32_t>(path_count),
       std::move(seq_data), std::move(seq_offset), std::move(seq_len), std::move(name_data),
-      std::move(name_offset_nodes), std::move(name_len_nodes), std::move(is_reverse),
+      std::move(name_offset_nodes), std::move(name_len_nodes),
       std::move(edge_target), std::move(out_edge_offset), std::move(step_data),
       std::move(path_step_offset), std::move(path_name_offset), std::move(path_name_len),
       std::move(path_length));

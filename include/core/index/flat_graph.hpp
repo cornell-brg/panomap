@@ -36,7 +36,7 @@ public:
       std::uint32_t node_count, std::uint32_t path_count, std::vector<char> seq_data,
       std::vector<std::uint32_t> seq_offset, std::vector<std::uint32_t> seq_len,
       std::vector<char> name_data, std::vector<std::uint32_t> name_offset,
-      std::vector<std::uint16_t> name_len, std::vector<std::uint8_t> is_reverse,
+      std::vector<std::uint16_t> name_len,
       std::vector<std::uint32_t> edge_target, std::vector<std::uint32_t> out_edge_offset,
       std::vector<std::uint32_t> step_data, std::vector<std::uint32_t> path_step_offset,
       std::vector<std::uint32_t> path_name_offset, std::vector<std::uint16_t> path_name_len,
@@ -48,7 +48,7 @@ public:
       std::vector<std::uint8_t> seq_packed, std::vector<std::uint8_t> seq_n_mask,
       std::vector<std::uint64_t> seq_base_offset, std::vector<std::uint32_t> seq_len,
       std::vector<char> name_data, std::vector<std::uint32_t> name_offset,
-      std::vector<std::uint16_t> name_len, std::vector<std::uint8_t> is_reverse,
+      std::vector<std::uint16_t> name_len,
       std::vector<std::uint32_t> edge_target, std::vector<std::uint32_t> out_edge_offset,
       std::vector<std::uint32_t> step_data, std::vector<std::uint32_t> path_step_offset,
       std::vector<std::uint32_t> path_name_offset, std::vector<std::uint16_t> path_name_len,
@@ -119,7 +119,10 @@ public:
     return {name_data_.data() + name_offset_[node_id], name_len_[node_id]};
   }
 
-  bool isReverse(std::uint32_t node_id) const { return is_reverse_[node_id] != 0; }
+  // Forward node = even ID (i*2), reverse node = odd ID (i*2+1). Convention
+  // enforced by forwardNodeId/reverseNodeId in simple_expand.hpp. No byte
+  // stored on disk; derivable from the node id.
+  bool isReverse(std::uint32_t node_id) const { return (node_id & 1u) != 0; }
 
   // Label = original_id + direction suffix (e.g., "42+", "42-")
   std::string label(std::uint32_t node_id) const {
@@ -174,7 +177,6 @@ public:
   const std::vector<char>& nameData() const { return name_data_; }
   const std::vector<std::uint32_t>& nameOffsets() const { return name_offset_; }
   const std::vector<std::uint16_t>& nameLens() const { return name_len_; }
-  const std::vector<std::uint8_t>& isReverseVec() const { return is_reverse_; }
   const std::vector<std::uint32_t>& edgeTargets() const { return edge_target_; }
   const std::vector<std::uint32_t>& outEdgeOffsets() const { return out_edge_offset_; }
   const std::vector<std::uint32_t>& stepData() const { return step_data_; }
@@ -198,9 +200,6 @@ private:
   std::vector<char> name_data_;
   std::vector<std::uint32_t> name_offset_;  // [node_count] for nodes
   std::vector<std::uint16_t> name_len_;     // [node_count] for nodes
-
-  // Node metadata
-  std::vector<std::uint8_t> is_reverse_;  // [node_count]
 
   // Edges (CSR: out_edge_offset[node_count+1], edge_target[edge_count])
   std::vector<std::uint32_t> edge_target_;

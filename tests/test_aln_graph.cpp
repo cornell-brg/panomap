@@ -12,7 +12,6 @@ TEST_CASE("FlatGraph 2-bit encoding round-trip") {
   std::vector<char> name_data = {'n', '1', 'n', '2'};
   std::vector<std::uint32_t> name_offset = {0, 2};
   std::vector<std::uint16_t> name_len = {2, 2};
-  std::vector<std::uint8_t> is_reverse = {0, 1};
   std::vector<std::uint32_t> edge_target;
   std::vector<std::uint32_t> out_edge_offset = {0, 0, 0};
   std::vector<std::uint32_t> step_data;
@@ -23,7 +22,7 @@ TEST_CASE("FlatGraph 2-bit encoding round-trip") {
 
   auto fg = FlatGraph::fromRawArrays(
       2, 0, std::move(seq_data), std::move(seq_offset), std::move(seq_len), std::move(name_data),
-      std::move(name_offset), std::move(name_len), std::move(is_reverse), std::move(edge_target),
+      std::move(name_offset), std::move(name_len), std::move(edge_target),
       std::move(out_edge_offset), std::move(step_data), std::move(path_step_offset),
       std::move(path_name_offset), std::move(path_name_len), std::move(path_length));
 
@@ -57,7 +56,6 @@ TEST_CASE("FlatGraph path accessors") {
   std::vector<char> name_data = {'a', 'b', 'p', '1'};
   std::vector<std::uint32_t> name_offset = {0, 1};
   std::vector<std::uint16_t> name_len = {1, 1};
-  std::vector<std::uint8_t> is_reverse = {0, 0};
   std::vector<std::uint32_t> edge_target = {1};
   std::vector<std::uint32_t> out_edge_offset = {0, 1, 1};
   std::vector<std::uint32_t> step_data = {0, 1};
@@ -68,7 +66,7 @@ TEST_CASE("FlatGraph path accessors") {
 
   auto fg = FlatGraph::fromRawArrays(
       2, 1, std::move(seq_data), std::move(seq_offset), std::move(seq_len), std::move(name_data),
-      std::move(name_offset), std::move(name_len), std::move(is_reverse), std::move(edge_target),
+      std::move(name_offset), std::move(name_len), std::move(edge_target),
       std::move(out_edge_offset), std::move(step_data), std::move(path_step_offset),
       std::move(path_name_offset), std::move(path_name_len), std::move(path_length));
 

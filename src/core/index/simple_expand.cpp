@@ -44,7 +44,6 @@ FlatGraph simpleExpandFlat(const piru::io::ImportedGraph& imported) {
   std::vector<std::uint32_t> seq_len(num_nodes);
   std::vector<std::uint32_t> name_offset(num_nodes);
   std::vector<std::uint16_t> name_len(num_nodes);
-  std::vector<std::uint8_t> is_reverse(num_nodes);
 
   std::size_t total_bases = 0;
   for (const auto& orig : imported.nodes) total_bases += orig.sequence.size() * 2;
@@ -83,7 +82,6 @@ FlatGraph simpleExpandFlat(const piru::io::ImportedGraph& imported) {
     name_offset[fwd_id] = static_cast<std::uint32_t>(name_data.size());
     name_len[fwd_id] = static_cast<std::uint16_t>(orig.id.size());
     name_data.insert(name_data.end(), orig.id.begin(), orig.id.end());
-    is_reverse[fwd_id] = 0;
 
     // Reverse node: pack revcomp directly (no temp string)
     seq_base_offset[rev_id] = base_cursor;
@@ -119,7 +117,6 @@ FlatGraph simpleExpandFlat(const piru::io::ImportedGraph& imported) {
     name_offset[rev_id] = static_cast<std::uint32_t>(name_data.size());
     name_len[rev_id] = static_cast<std::uint16_t>(orig.id.size());
     name_data.insert(name_data.end(), orig.id.begin(), orig.id.end());
-    is_reverse[rev_id] = 1;
   }
 
   // --- Step 2: Build edges (CSR) ---
@@ -210,7 +207,7 @@ FlatGraph simpleExpandFlat(const piru::io::ImportedGraph& imported) {
   return FlatGraph::fromPackedArrays(
       num_nodes, num_paths, total_bases, std::move(seq_packed), std::move(seq_n_mask),
       std::move(seq_base_offset), std::move(seq_len), std::move(name_data), std::move(name_offset),
-      std::move(name_len), std::move(is_reverse), std::move(edge_target),
+      std::move(name_len), std::move(edge_target),
       std::move(out_edge_offset), std::move(step_data), std::move(path_step_offset),
       std::move(path_name_offset), std::move(path_name_len), std::move(path_length));
 }

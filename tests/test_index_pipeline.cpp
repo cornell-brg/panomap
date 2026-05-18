@@ -14,7 +14,6 @@ TEST_CASE("FlatGraph basic construction via fromRawArrays") {
   std::vector<char> names = {'a', 'b'};
   std::vector<std::uint32_t> name_off = {0, 1};
   std::vector<std::uint16_t> name_len = {1, 1};
-  std::vector<std::uint8_t> rev = {0, 0};
   std::vector<std::uint32_t> et = {1};
   std::vector<std::uint32_t> eo = {0, 1, 1};
   std::vector<std::uint32_t> sd;
@@ -25,7 +24,7 @@ TEST_CASE("FlatGraph basic construction via fromRawArrays") {
 
   auto fg = index::FlatGraph::fromRawArrays(
       2, 0, std::move(seq), std::move(seq_off), std::move(seq_len), std::move(names),
-      std::move(name_off), std::move(name_len), std::move(rev), std::move(et), std::move(eo),
+      std::move(name_off), std::move(name_len), std::move(et), std::move(eo),
       std::move(sd), std::move(pso), std::move(pno), std::move(pnl), std::move(pl));
 
   CHECK(fg.nodeCount() == 2);
