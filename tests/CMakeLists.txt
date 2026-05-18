@@ -180,6 +180,20 @@ if(DOCTEST_AVAILABLE)
         LABELS "integration"
     )
 
+    # Index-format oracle (dev-112). Diff current chain output against
+    # v2 baseline GAFs in tests/fixtures/oracle_v2/. Catches any
+    # serialization change that perturbs chain results.
+    add_test(
+        NAME integration.index_oracle
+        COMMAND bash ${CMAKE_SOURCE_DIR}/tests/integration/test_index_oracle.sh
+                $<TARGET_FILE:piru-signal> ${WORKSPACE_ROOT}
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    )
+    set_tests_properties(integration.index_oracle PROPERTIES
+        TIMEOUT 300
+        LABELS "integration;oracle"
+    )
+
     add_custom_target(check
         COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
         DEPENDS piru_tests
