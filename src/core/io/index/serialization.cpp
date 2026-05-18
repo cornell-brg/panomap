@@ -25,12 +25,15 @@ constexpr char kMagic[4] = {'P', 'I', 'R', 'X'};
 // v2: added mode byte after flags (signal vs. base).
 // v2.1 (dev-112 Phase 1): drop isReverse byte from per-node record. Derived
 // from canonical pair convention (fwd=2i, rev=2i+1) instead.
+// v2.2 (dev-112 Phase 2): drop edges section. Chainer never iterates edges
+// at map time; sort_1d / gfa_exporter only see edges in the build-time
+// in-memory graph. Loaded indexes get an empty CSR (out_edge_offset[N+1]=0).
 // Minor-bump convention: any incremental serialization change inside the v2.x
 // series increments kVersionMinor. The load-time check requires strict full
-// version equality, so v2.0 indexes are refused by v2.1 binaries and vice
-// versa (force re-index). Reserve major bumps for bigger semantic breaks.
+// version equality, so older v2.x indexes are refused (force re-index).
+// Reserve major bumps for bigger semantic breaks.
 constexpr uint32_t kVersionMajor = 2;
-constexpr uint32_t kVersionMinor = 1;
+constexpr uint32_t kVersionMinor = 2;
 constexpr uint32_t kVersion = (kVersionMajor << 16) | kVersionMinor;
 
 template <typename T>
@@ -118,16 +121,10 @@ void save_index(const std::string& path, const piru::index::GraphStore& graph_st
     write_pod<uint32_t>(out, static_cast<uint32_t>(fg.seqLen(i)));
   }
 
-  /* 4. Graph - edges (from FlatGraph CSR) */
-
-  write_pod<uint64_t>(out, fg.edgeCount());
-  for (std::uint32_t i = 0; i < fg.nodeCount(); ++i) {
-    for (auto it = fg.outBegin(i); it != fg.outEnd(i); ++it) {
-      write_pod<uint64_t>(out, i);
-      write_pod<uint64_t>(out, *it);
-      write_pod<uint64_t>(out, uint64_t{0});  // overlap_bases (not stored in FlatGraph)
-    }
-  }
+  /* 4. Graph - edges: not serialized as of v2.2 (dev-112 Phase 2).
+   * The chainer never iterates edges at map time; sort_1d / gfa_exporter
+   * only need them at index build (in-memory). Dropping them saves
+   * ~24 bytes per edge (yeast N=8: ~42 MB, zymo N=8: ~183 MB). */
 
   /* 5. Graph - paths (from FlatGraph CSR) */
 
@@ -310,30 +307,13 @@ LoadedIndex load_index(const std::string& path) {
     name_data.insert(name_data.end(), orig_id.begin(), orig_id.end());
   }
 
-  /* 4. Edges */
-  uint64_t edge_count;
-  read_pod(in, edge_count);
-
-  // Build CSR from edge list
-  std::vector<std::vector<std::uint32_t>> adj(node_count);
-  for (uint64_t i = 0; i < edge_count; ++i) {
-    uint64_t from, to, overlap;
-    read_pod(in, from);
-    read_pod(in, to);
-    read_pod(in, overlap);
-    if (from < node_count) {
-      adj[from].push_back(static_cast<std::uint32_t>(to));
-    }
-  }
-
+  /* 4. Edges: not serialized in v2.2+ (dev-112 Phase 2). The chainer doesn't
+   * traverse edges at map time, so we create an empty CSR. outBegin/outEnd
+   * return zero-length ranges; outDegree returns 0. Build-time consumers
+   * (sort_1d / gfa_exporter) only see edges when constructing the in-memory
+   * graph -- they never come from a loaded index. */
   std::vector<std::uint32_t> edge_target;
-  std::vector<std::uint32_t> out_edge_offset(node_count + 1);
-  for (uint64_t i = 0; i < node_count; ++i) {
-    out_edge_offset[i] = static_cast<std::uint32_t>(edge_target.size());
-    edge_target.insert(edge_target.end(), adj[i].begin(), adj[i].end());
-  }
-  out_edge_offset[node_count] = static_cast<std::uint32_t>(edge_target.size());
-  adj.clear();
+  std::vector<std::uint32_t> out_edge_offset(node_count + 1, 0);
 
   /* 5. Paths */
   uint64_t path_count;
