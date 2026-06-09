@@ -3,8 +3,8 @@
 #include <cstdint>
 #include <string>
 
-#define PIRU_VERSION "@PROJECT_VERSION@"
-#define PIRU_VERSION_STRING "@PIRU_VERSION_STRING@"
+#define PANOMAP_VERSION "@PROJECT_VERSION@"
+#define PANOMAP_VERSION_STRING "@PANOMAP_VERSION_STRING@"
 
 namespace panomap {
 struct Version {
@@ -14,6 +14,6 @@ struct Version {
 };
 } // namespace panomap
 
-inline std::string piru_version() {
-    return PIRU_VERSION_STRING;
+inline std::string panomap_version() {
+    return PANOMAP_VERSION_STRING;
 }

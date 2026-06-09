@@ -72,7 +72,7 @@ int handle_base_inspect(const std::vector<std::string>& args) {
 
   std::cout << "index: " << index_path << "\n";
   std::cout << "mode: " << panomap::io::index::mode_name(meta.mode) << "\n";
-  std::cout << "piru_version: " << (meta.version.empty() ? "unknown" : meta.version) << "\n";
+  std::cout << "panomap_version: " << (meta.version.empty() ? "unknown" : meta.version) << "\n";
   if (meta.build_timestamp > 0) {
     auto t = static_cast<std::time_t>(meta.build_timestamp);
     char buf[64];

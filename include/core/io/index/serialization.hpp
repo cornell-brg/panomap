@@ -35,7 +35,7 @@ enum class IndexMode : std::uint8_t {
 const char* mode_name(IndexMode mode);
 
 struct IndexMetadata {
-  std::string version;            // piru version that built this index
+  std::string version;            // panomap version that built this index
   uint64_t build_timestamp{0};    // unix seconds
   IndexMode mode{IndexMode::kSignal};
   std::string model_name;

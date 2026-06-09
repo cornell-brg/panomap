@@ -66,11 +66,11 @@ def main():
     ap.add_argument("gfa")
     ap.add_argument("coords_tsv")
     ap.add_argument("-o", "--out", required=True)
-    ap.add_argument("--piru", action="store_true",
-                    help="Piru style: node_id is 2*ordinal (even). Else assume dense (panolayout).")
+    ap.add_argument("--panomap", action="store_true",
+                    help="Panomap style: node_id is 2*ordinal (even). Else assume dense (panolayout).")
     args = ap.parse_args()
 
-    div = 2 if args.piru else 1
+    div = 2 if args.panomap else 1
     coords = load_coords(args.coords_tsv, divide_node_id_by=div)
     paths, n2o, n2l = gfa_iter_paths_with_lens(args.gfa)
 

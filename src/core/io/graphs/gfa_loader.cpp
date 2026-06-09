@@ -145,7 +145,7 @@ bool GfaLoader::load(ImportedGraph& graph) {
     // GFA 1.1 W (walk) lines. Format:
     //   W  SampleId  HapIndex  SeqId  SeqStart  SeqEnd  Walk
     // Walk uses '>' (forward) / '<' (reverse) prefix per segment, no commas.
-    // Emit as a path named "Sample#Hap#Seq" (PanSN-spec) for piru's path index.
+    // Emit as a path named "Sample#Hap#Seq" (PanSN-spec) for panomap's path index.
     if (line.rfind("W\t", 0) == 0) {
       auto fields = split_tab(line);
       if (fields.size() < 7) {

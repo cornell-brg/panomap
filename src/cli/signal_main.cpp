@@ -18,7 +18,7 @@ struct Command {
 };
 
 void print_top_level_usage(const std::vector<Command>& commands) {
-  const std::string version = piru_version();
+  const std::string version = panomap_version();
   std::cout << version << "\n\n";
   std::cout << "Usage: piru [--help] [--version] <command> [options]\n";
   std::cout << "Subcommands:\n";
@@ -59,7 +59,7 @@ int main(int argc, char** argv) {
   } else if (args[0] == "--help" || args[0] == "-h") {
     print_top_level_usage(commands);
   } else if (args[0] == "--version") {
-    std::cout << piru_version() << "\n";
+    std::cout << panomap_version() << "\n";
   } else {
     const std::string& command_name = args[0];
     std::vector<std::string> command_args(args.begin() + 1, args.end());
@@ -80,7 +80,7 @@ int main(int argc, char** argv) {
   }
 
   std::cerr << "\n--------------------------------\n";
-  std::cerr << "[main] Version: " << PIRU_VERSION << "\n";
+  std::cerr << "[main] Version: " << PANOMAP_VERSION << "\n";
   std::cerr << "[main] CMD: ";
   std::cerr << argv[0];
   for (const auto& arg : args) {

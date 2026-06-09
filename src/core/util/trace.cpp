@@ -12,19 +12,19 @@ namespace panomap::trace {
 namespace {
 
 bool is_tracing_active() {
-  // Master switch: tracing only activates when PIRU_TRACE_DIR is set
-  return std::getenv("PIRU_TRACE_DIR") != nullptr;
+  // Master switch: tracing only activates when PANOMAP_TRACE_DIR is set
+  return std::getenv("PANOMAP_TRACE_DIR") != nullptr;
 }
 
 std::uint32_t parse_stages() {
   if (!is_tracing_active()) return 0;
-  const char* env = std::getenv("PIRU_TRACE_STAGES");
+  const char* env = std::getenv("PANOMAP_TRACE_STAGES");
   if (!env) return kAll;
   return static_cast<std::uint32_t>(std::strtoul(env, nullptr, 0));
 }
 
 std::vector<std::string> parse_read_filters() {
-  const char* env = std::getenv("PIRU_TRACE_READS");
+  const char* env = std::getenv("PANOMAP_TRACE_READS");
   std::vector<std::string> filters;
   if (!env || env[0] == '\0') return filters;
   std::istringstream ss(env);
@@ -36,7 +36,7 @@ std::vector<std::string> parse_read_filters() {
 }
 
 std::string get_trace_dir() {
-  const char* env = std::getenv("PIRU_TRACE_DIR");
+  const char* env = std::getenv("PANOMAP_TRACE_DIR");
   if (!env) return {};
   std::string dir = env;
   std::filesystem::create_directories(dir);
@@ -45,7 +45,7 @@ std::string get_trace_dir() {
 
 }  // namespace
 
-#ifdef PIRU_TRACE_ENABLED
+#ifdef PANOMAP_TRACE_ENABLED
 
 std::uint32_t enabled_stages() {
   static std::uint32_t stages = parse_stages();

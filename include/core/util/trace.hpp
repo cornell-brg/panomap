@@ -5,10 +5,10 @@
  * Build with -DPIRU_TRACE_ENABLED to enable. Zero overhead when compiled out.
  *
  * At runtime, tracing is OFF by default even when compiled in.
- * Set PIRU_TRACE_DIR to activate:
- *   PIRU_TRACE_DIR=/tmp/trace          Output directory (required to enable)
- *   PIRU_TRACE_STAGES=0x3f             Bitmask of stages to dump (default: all)
- *   PIRU_TRACE_READS=MSH2,NF2          Comma-separated read ID substrings (default: all)
+ * Set PANOMAP_TRACE_DIR to activate:
+ *   PANOMAP_TRACE_DIR=/tmp/trace          Output directory (required to enable)
+ *   PANOMAP_TRACE_STAGES=0x3f             Bitmask of stages to dump (default: all)
+ *   PANOMAP_TRACE_READS=MSH2,NF2          Comma-separated read ID substrings (default: all)
  *
  * Usage in code:
  *   PANOMAP_TRACE_DUMP(kTokens, read_id, {
@@ -43,7 +43,7 @@ bool match_read(const std::string& read_id);
 std::string trace_path(const std::string& tag, const std::string& read_id,
                        std::size_t chunk_idx = 0);
 
-#ifdef PIRU_TRACE_ENABLED
+#ifdef PANOMAP_TRACE_ENABLED
 
 #define PANOMAP_TRACE_DUMP(stage, read_id, block)                                               \
   do {                                                                                       \

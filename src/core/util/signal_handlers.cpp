@@ -19,7 +19,7 @@ void segv_handler(int signum) {
   const char version_prefix[] = "[panic] Version: ";
   [[maybe_unused]] ssize_t _2 = write(STDERR_FILENO, version_prefix, sizeof(version_prefix) - 1);
   [[maybe_unused]] ssize_t _3 =
-      write(STDERR_FILENO, PIRU_VERSION_STRING, sizeof(PIRU_VERSION_STRING) - 1);
+      write(STDERR_FILENO, PANOMAP_VERSION_STRING, sizeof(PANOMAP_VERSION_STRING) - 1);
   const char nl[] = "\n";
   [[maybe_unused]] ssize_t _4 = write(STDERR_FILENO, nl, sizeof(nl) - 1);
 

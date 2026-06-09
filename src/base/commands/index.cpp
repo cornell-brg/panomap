@@ -176,7 +176,7 @@ int handle_base_index(const std::vector<std::string>& args) {
   PANOMAP_PROFILE_START(profile, "serialize");
 
   panomap::io::index::IndexMetadata metadata;
-  metadata.version = PIRU_VERSION;
+  metadata.version = PANOMAP_VERSION;
   metadata.build_timestamp = static_cast<uint64_t>(
       std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()));
   metadata.mode = panomap::io::index::IndexMode::kBase;

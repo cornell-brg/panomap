@@ -28,7 +28,7 @@ find_package(ZLIB REQUIRED)
 set(PIRU_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
 file(MAKE_DIRECTORY ${PIRU_GENERATED_DIR})
 
-set(PIRU_VERSION_STRING "${PROJECT_NAME} ${PROJECT_VERSION} (experimental scaffold)")
+set(PANOMAP_VERSION_STRING "${PROJECT_NAME} ${PROJECT_VERSION} (experimental scaffold)")
 configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/include/version.hpp.in
     ${PIRU_GENERATED_DIR}/version.hpp

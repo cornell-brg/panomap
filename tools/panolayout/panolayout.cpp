@@ -6,7 +6,7 @@
  *   - <prefix>.coords.tsv      one row per node: id, canon_start, canon_end, cc, length
  *   - <prefix>.path_steps.tsv  one row per step: path, idx, node, orient, cum_bp, c_start, c_end
  *
- * Algorithm ports piru's src/core/index/sort_1d.cpp without the piru
+ * Algorithm ports panomap's src/core/index/sort_1d.cpp without the panomap
  * graph dependency, so it can be hacked on in isolation: cost function,
  * sampling distribution, initialization, post-processing, etc.
  *
