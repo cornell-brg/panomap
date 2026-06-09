@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Generate evaluation read sets for piru testing.
+# Generate evaluation read sets for panomap testing.
 # Requires: module load squigulator
 #
 # Usage: ./scripts/generate_eval_reads.sh [core|all]
@@ -10,9 +10,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PIRU_ROOT="$(dirname "$SCRIPT_DIR")"
-REF="${PIRU_ROOT}/tests/data/HLA/DRB1-3123.fa"
-OUTDIR="${PIRU_ROOT}/tests/data/HLA/eval_reads"
+PANOMAP_ROOT="$(dirname "$SCRIPT_DIR")"
+REF="${PANOMAP_ROOT}/tests/data/HLA/DRB1-3123.fa"
+OUTDIR="${PANOMAP_ROOT}/tests/data/HLA/eval_reads"
 
 # Check squigulator is available
 if ! command -v squigulator &> /dev/null; then

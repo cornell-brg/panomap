@@ -4,8 +4,8 @@
 
 set -euo pipefail
 
-PIRU="${1:?Usage: $0 <piru_binary> <workspace_root>}"
-WORKSPACE="${2:?Usage: $0 <piru_binary> <workspace_root>}"
+PANOMAP="${1:?Usage: $0 <panomap_binary> <workspace_root>}"
+WORKSPACE="${2:?Usage: $0 <panomap_binary> <workspace_root>}"
 
 DATA="$WORKSPACE/data/benchmark/covid-r94"
 GFA="$DATA/covid.gfa"
@@ -23,10 +23,10 @@ TMPDIR=$(mktemp -d)
 trap "rm -rf $TMPDIR" EXIT
 
 # Index with r9.4, seed-k 6 (viral preset)
-"$PIRU" index "$GFA" --model r9.4 --seed-k 6 -o "$TMPDIR/covid.pirx" 2>/dev/null
+"$PANOMAP" index "$GFA" --model r9.4 --seed-k 6 -o "$TMPDIR/covid.pirx" 2>/dev/null
 
 # Map with viral chaining params
-"$PIRU" map --index "$TMPDIR/covid.pirx" "$READS" \
+"$PANOMAP" map --index "$TMPDIR/covid.pirx" "$READS" \
   --chain-bw 100 --chain-max-dist 500 --chain-min-score 10 \
   --chain-pen-gap 1.2 --chain-pen-skip 0.3 --max-chunks 5 \
   -o "$TMPDIR/out.gaf" 2>/dev/null

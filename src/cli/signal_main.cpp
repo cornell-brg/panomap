@@ -20,7 +20,7 @@ struct Command {
 void print_top_level_usage(const std::vector<Command>& commands) {
   const std::string version = panomap_version();
   std::cout << version << "\n\n";
-  std::cout << "Usage: piru [--help] [--version] <command> [options]\n";
+  std::cout << "Usage: panomap [--help] [--version] <command> [options]\n";
   std::cout << "Subcommands:\n";
   size_t max_name = 0;
   for (const auto& cmd : commands) {
@@ -35,7 +35,7 @@ void print_top_level_usage(const std::vector<Command>& commands) {
     }
     std::cout << "  " << cmd.description << "\n";
   }
-  std::cout << "\nRun 'piru <command> --help' for command-specific options.\n";
+  std::cout << "\nRun 'panomap <command> --help' for command-specific options.\n";
 }
 
 int main(int argc, char** argv) {

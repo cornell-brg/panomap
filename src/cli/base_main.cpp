@@ -1,8 +1,8 @@
 /**
  * base_main.cpp
  *
- * Entry point for piru-base. Wires the base-mode CLI commands and shares
- * the timing/version trailer with piru-signal.
+ * Entry point for panomap-base. Wires the base-mode CLI commands and shares
+ * the timing/version trailer with panomap.
  *
  * SPDX-License-Identifier: MIT
  */
@@ -30,7 +30,7 @@ struct Command {
 
 void print_top_level_usage(const std::vector<Command>& commands) {
   std::cout << panomap_version() << " (base mode)\n\n";
-  std::cout << "Usage: piru-base [--help] [--version] <command> [options]\n";
+  std::cout << "Usage: panomap-base [--help] [--version] <command> [options]\n";
   std::cout << "Subcommands:\n";
   std::size_t max_name = 0;
   for (const auto& cmd : commands) {
@@ -43,7 +43,7 @@ void print_top_level_usage(const std::vector<Command>& commands) {
     }
     std::cout << "  " << cmd.description << "\n";
   }
-  std::cout << "\nRun 'piru-base <command> --help' for command-specific options.\n";
+  std::cout << "\nRun 'panomap-base <command> --help' for command-specific options.\n";
 }
 
 }  // namespace

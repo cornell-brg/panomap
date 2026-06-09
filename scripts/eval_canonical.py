@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Evaluate piru mapping accuracy using canonical 1D coordinates.
+"""Evaluate panomap mapping accuracy using canonical 1D coordinates.
 
 Reads GFA for path structure + node base lengths.
-Reads node coord TSV (from piru inspect --dump-path-coords) for canonical coords.
-Reads GAF for piru mapping results (ci:f:, ce:f:, cc:i: tags).
-Compares truth canonical interval against piru canonical interval.
+Reads node coord TSV (from panomap inspect --dump-path-coords) for canonical coords.
+Reads GAF for panomap mapping results (ci:f:, ce:f:, cc:i: tags).
+Compares truth canonical interval against panomap canonical interval.
 
 Usage:
   python3 eval_canonical.py <graph.gfa> <node_coords.tsv> <output.gaf>
@@ -191,9 +191,9 @@ def main():
                 no_truth += 1
                 continue
 
-            piru_ci = float(tags["ci"].split(":")[2])
-            piru_ce = float(tags["ce"].split(":")[2])
-            piru_cc = int(tags["cc"].split(":")[2])
+            panomap_ci = float(tags["ci"].split(":")[2])
+            panomap_ce = float(tags["ce"].split(":")[2])
+            panomap_cc = int(tags["cc"].split(":")[2])
 
             # Get path steps for truth contig (always forward path)
             path_steps = gfa_paths.get(truth_contig)
@@ -215,7 +215,7 @@ def main():
             mapq = int(fields[11])
 
             # Compare canonical intervals (ignore component for now, check overlap)
-            ov = overlap_frac(truth_ci, truth_ce, piru_ci, piru_ce)
+            ov = overlap_frac(truth_ci, truth_ce, panomap_ci, panomap_ce)
 
             # Truth node walk: nodes covering [truth_start, truth_end] on the path
             truth_nodes = []
@@ -232,27 +232,27 @@ def main():
                 truth_walk += f"...({len(truth_nodes)} nodes)"
 
             # Piru node walk from GAF col 6
-            piru_walk = fields[5][:80]
+            panomap_walk = fields[5][:80]
             if len(fields[5]) > 80:
-                piru_walk += "..."
+                panomap_walk += "..."
 
             if ov > 0:
                 correct += 1
                 details.append(
                     f"OK        {read_id}  "
                     f"truth=[{min(truth_ci,truth_ce):.0f},{max(truth_ci,truth_ce):.0f}]  "
-                    f"piru=[{min(piru_ci,piru_ce):.0f},{max(piru_ci,piru_ce):.0f}]  "
-                    f"ov={ov:.1%}  cc_t={truth_cc_s}  cc_p={piru_cc}  mq={mapq}"
+                    f"panomap=[{min(panomap_ci,panomap_ce):.0f},{max(panomap_ci,panomap_ce):.0f}]  "
+                    f"ov={ov:.1%}  cc_t={truth_cc_s}  cc_p={panomap_cc}  mq={mapq}"
                 )
             else:
                 wrong += 1
                 details.append(
                     f"WRONG     {read_id}  "
                     f"truth=[{min(truth_ci,truth_ce):.0f},{max(truth_ci,truth_ce):.0f}]  "
-                    f"piru=[{min(piru_ci,piru_ce):.0f},{max(piru_ci,piru_ce):.0f}]  "
-                    f"ov=0  cc_t={truth_cc_s}  cc_p={piru_cc}  mq={mapq}\n"
+                    f"panomap=[{min(panomap_ci,panomap_ce):.0f},{max(panomap_ci,panomap_ce):.0f}]  "
+                    f"ov=0  cc_t={truth_cc_s}  cc_p={panomap_cc}  mq={mapq}\n"
                     f"          truth_nodes: {truth_walk}\n"
-                    f"          piru_walk:   {piru_walk}"
+                    f"          panomap_walk:   {panomap_walk}"
                 )
 
     mapped = correct + wrong

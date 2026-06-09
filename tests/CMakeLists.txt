@@ -16,7 +16,7 @@ else()
     endif()
 endif()
 
-if(NOT DOCTEST_AVAILABLE AND PIRU_FETCH_DOCTEST)
+if(NOT DOCTEST_AVAILABLE AND PANOMAP_FETCH_DOCTEST)
     FetchContent_Declare(
         doctest
         GIT_REPOSITORY https://github.com/doctest/doctest.git
@@ -36,7 +36,7 @@ if(DOCTEST_AVAILABLE)
         include(${DOCTEST_DISCOVERY_CMAKE})
     endif()
 
-    add_executable(piru_tests
+    add_executable(panomap_tests
         test_main.cpp
         test_metrics.cpp
         test_models.cpp
@@ -56,19 +56,19 @@ if(DOCTEST_AVAILABLE)
         test_bucket_indexer.cpp
     )
 
-    target_include_directories(piru_tests PRIVATE
+    target_include_directories(panomap_tests PRIVATE
         ${CMAKE_SOURCE_DIR}/src
     )
 
-    target_link_libraries(piru_tests PRIVATE piru_signal doctest::doctest)
+    target_link_libraries(panomap_tests PRIVATE panomap_signal doctest::doctest)
 
     if(DOCTEST_DISCOVERY_CMAKE)
-        doctest_discover_tests(piru_tests
+        doctest_discover_tests(panomap_tests
             TEST_PREFIX unit.
             WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
         )
     else()
-        add_test(NAME piru_tests COMMAND piru_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+        add_test(NAME panomap_tests COMMAND panomap_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
     endif()
 
     # Integration test: DRB1 pangenome mapping accuracy
@@ -76,7 +76,7 @@ if(DOCTEST_AVAILABLE)
     add_test(
         NAME integration.drb1_accuracy
         COMMAND bash ${CMAKE_SOURCE_DIR}/tests/integration/test_drb1_accuracy.sh
-                $<TARGET_FILE:piru-signal> ${WORKSPACE_ROOT}
+                $<TARGET_FILE:panomap> ${WORKSPACE_ROOT}
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     )
     set_tests_properties(integration.drb1_accuracy PROPERTIES
@@ -88,7 +88,7 @@ if(DOCTEST_AVAILABLE)
     add_test(
         NAME integration.drb1_sort_chain
         COMMAND bash ${CMAKE_SOURCE_DIR}/tests/integration/test_drb1_sort_chain.sh
-                $<TARGET_FILE:piru-signal> ${WORKSPACE_ROOT}
+                $<TARGET_FILE:panomap> ${WORKSPACE_ROOT}
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     )
     set_tests_properties(integration.drb1_sort_chain PROPERTIES
@@ -100,7 +100,7 @@ if(DOCTEST_AVAILABLE)
     add_test(
         NAME integration.drb1_pan_chain
         COMMAND bash ${CMAKE_SOURCE_DIR}/tests/integration/test_drb1_pan_chain.sh
-                $<TARGET_FILE:piru-signal> ${WORKSPACE_ROOT}
+                $<TARGET_FILE:panomap> ${WORKSPACE_ROOT}
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     )
     set_tests_properties(integration.drb1_pan_chain PROPERTIES
@@ -112,7 +112,7 @@ if(DOCTEST_AVAILABLE)
     add_test(
         NAME integration.drb1_landmark
         COMMAND bash ${CMAKE_SOURCE_DIR}/tests/integration/test_drb1_landmark.sh
-                $<TARGET_FILE:piru-signal> ${WORKSPACE_ROOT}
+                $<TARGET_FILE:panomap> ${WORKSPACE_ROOT}
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     )
     set_tests_properties(integration.drb1_landmark PROPERTIES
@@ -124,7 +124,7 @@ if(DOCTEST_AVAILABLE)
     add_test(
         NAME integration.drb1_landmark_sort_chain
         COMMAND bash ${CMAKE_SOURCE_DIR}/tests/integration/test_drb1_landmark_sort_chain.sh
-                $<TARGET_FILE:piru-signal> ${WORKSPACE_ROOT}
+                $<TARGET_FILE:panomap> ${WORKSPACE_ROOT}
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     )
     set_tests_properties(integration.drb1_landmark_sort_chain PROPERTIES
@@ -136,7 +136,7 @@ if(DOCTEST_AVAILABLE)
     add_test(
         NAME integration.drb1_landmark_pan_chain
         COMMAND bash ${CMAKE_SOURCE_DIR}/tests/integration/test_drb1_landmark_pan_chain.sh
-                $<TARGET_FILE:piru-signal> ${WORKSPACE_ROOT}
+                $<TARGET_FILE:panomap> ${WORKSPACE_ROOT}
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     )
     set_tests_properties(integration.drb1_landmark_pan_chain PROPERTIES
@@ -148,7 +148,7 @@ if(DOCTEST_AVAILABLE)
     add_test(
         NAME integration.covid_accuracy
         COMMAND bash ${CMAKE_SOURCE_DIR}/tests/integration/test_covid_accuracy.sh
-                $<TARGET_FILE:piru-signal> ${WORKSPACE_ROOT}
+                $<TARGET_FILE:panomap> ${WORKSPACE_ROOT}
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     )
     set_tests_properties(integration.covid_accuracy PROPERTIES
@@ -160,7 +160,7 @@ if(DOCTEST_AVAILABLE)
     add_test(
         NAME integration.covid_viral
         COMMAND bash ${CMAKE_SOURCE_DIR}/tests/integration/test_covid_viral.sh
-                $<TARGET_FILE:piru-signal> ${WORKSPACE_ROOT}
+                $<TARGET_FILE:panomap> ${WORKSPACE_ROOT}
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     )
     set_tests_properties(integration.covid_viral PROPERTIES
@@ -172,7 +172,7 @@ if(DOCTEST_AVAILABLE)
     add_test(
         NAME integration.covid_landmark_viral
         COMMAND bash ${CMAKE_SOURCE_DIR}/tests/integration/test_covid_landmark_viral.sh
-                $<TARGET_FILE:piru-signal> ${WORKSPACE_ROOT}
+                $<TARGET_FILE:panomap> ${WORKSPACE_ROOT}
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     )
     set_tests_properties(integration.covid_landmark_viral PROPERTIES
@@ -186,7 +186,7 @@ if(DOCTEST_AVAILABLE)
     add_test(
         NAME integration.index_oracle
         COMMAND bash ${CMAKE_SOURCE_DIR}/tests/integration/test_index_oracle.sh
-                $<TARGET_FILE:piru-signal> ${WORKSPACE_ROOT}
+                $<TARGET_FILE:panomap> ${WORKSPACE_ROOT}
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     )
     set_tests_properties(integration.index_oracle PROPERTIES
@@ -196,9 +196,9 @@ if(DOCTEST_AVAILABLE)
 
     add_custom_target(check
         COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-        DEPENDS piru_tests
+        DEPENDS panomap_tests
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     )
 else()
-    message(STATUS "doctest not found (set PIRU_FETCH_DOCTEST=ON to fetch); skipping tests.")
+    message(STATUS "doctest not found (set PANOMAP_FETCH_DOCTEST=ON to fetch); skipping tests.")
 endif()

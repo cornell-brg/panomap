@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Read piru-style coords.tsv (node_id, canon_start, canon_end, component_id, ...)
+"""Read panomap-style coords.tsv (node_id, canon_start, canon_end, component_id, ...)
 plus a GFA, walk the GFA paths, and emit a path_steps.tsv in panolayout format.
-This lets us render piru-generated coords with our shared plotter.
+This lets us render panomap-generated coords with our shared plotter.
 """
 import argparse
 import csv

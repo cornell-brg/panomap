@@ -5,7 +5,7 @@
 #include <thread>
 #include <vector>
 
-#ifdef PIRU_USE_TBB
+#ifdef PANOMAP_USE_TBB
 #include <tbb/parallel_for.h>
 #include <tbb/task_arena.h>
 #include <tbb/task_group.h>
@@ -37,7 +37,7 @@ public:
   std::string backend_name() const override { return "serial"; }
 };
 
-#ifdef PIRU_USE_TBB
+#ifdef PANOMAP_USE_TBB
 class TbbTaskGroup : public TaskGroup {
 public:
   void run(const std::function<void()>& fn) override { group_.run(fn); }
@@ -75,7 +75,7 @@ private:
 }  // namespace
 
 std::unique_ptr<Executor> make_executor(int threads) {
-#ifdef PIRU_USE_TBB
+#ifdef PANOMAP_USE_TBB
   return std::make_unique<TbbExecutor>(threads);
 #else
   return std::make_unique<SerialExecutor>();
@@ -83,7 +83,7 @@ std::unique_ptr<Executor> make_executor(int threads) {
 }
 
 std::unique_ptr<TaskGroup> make_task_group() {
-#ifdef PIRU_USE_TBB
+#ifdef PANOMAP_USE_TBB
   return std::make_unique<TbbTaskGroup>();
 #else
   return std::make_unique<SerialTaskGroup>();

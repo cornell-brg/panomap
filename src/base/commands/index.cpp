@@ -1,7 +1,7 @@
 /**
  * index.cpp (base mode)
  *
- * CLI handler for `piru-base index`. Parses arguments, loads a graph,
+ * CLI handler for `panomap-base index`. Parses arguments, loads a graph,
  * runs the base-mode minimizer indexer, and serializes the result to a
  * .pirx file with mode=base stamped in the header.
  *
@@ -35,7 +35,7 @@
 int handle_base_index(const std::vector<std::string>& args) {
   panomap::cli::Parsed parsed;
   panomap::cli::ParseConfig config;
-  config.usage = "Usage: piru-base index [options] <graph-file>";
+  config.usage = "Usage: panomap-base index [options] <graph-file>";
   config.positional_help = {"<graph-file>      Graph file to index"};
   config.options = {
       {'h', "help", false, "Show help"},

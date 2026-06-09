@@ -5,8 +5,8 @@
 
 set -euo pipefail
 
-PIRU="${1:?Usage: $0 <piru_binary> <workspace_root>}"
-WORKSPACE="${2:?Usage: $0 <piru_binary> <workspace_root>}"
+PANOMAP="${1:?Usage: $0 <panomap_binary> <workspace_root>}"
+WORKSPACE="${2:?Usage: $0 <panomap_binary> <workspace_root>}"
 
 DATA="$WORKSPACE/data/benchmark/covid-r94"
 GFA="$DATA/covid.gfa"
@@ -24,12 +24,12 @@ TMPDIR=$(mktemp -d)
 trap "rm -rf $TMPDIR" EXIT
 
 # Index with r9.4 model
-"$PIRU" index "$GFA" --model r9.4 -o "$TMPDIR/covid.pirx" 2>/dev/null
+"$PANOMAP" index "$GFA" --model r9.4 -o "$TMPDIR/covid.pirx" 2>/dev/null
 
 # Map
-"$PIRU" map --index "$TMPDIR/covid.pirx" "$READS" -o "$TMPDIR/out.gaf" 2>/dev/null
+"$PANOMAP" map --index "$TMPDIR/covid.pirx" "$READS" -o "$TMPDIR/out.gaf" 2>/dev/null
 
-# Compare piru GAF vs mm2 PAF: check position overlap
+# Compare panomap GAF vs mm2 PAF: check position overlap
 python3 -c "
 import sys
 

@@ -1,7 +1,7 @@
 /**
  * inspect.cpp
  *
- * CLI handler for `piru inspect`. Loads a .pirx index and prints
+ * CLI handler for `panomap inspect`. Loads a .pirx index and prints
  * metadata, graph stats, and seed store stats.
  *
  * SPDX-License-Identifier: MIT
@@ -25,7 +25,7 @@
 int handle_inspect(const std::vector<std::string>& args) {
   panomap::cli::Parsed parsed;
   panomap::cli::ParseConfig config;
-  config.usage = "Usage: piru inspect <index.pirx>";
+  config.usage = "Usage: panomap inspect <index.pirx>";
   config.positional_help = {"<index.pirx>    Index file to inspect"};
   config.options = {
       {'h', "help", false, "Show help"},
@@ -59,7 +59,7 @@ int handle_inspect(const std::vector<std::string>& args) {
   if (loaded.metadata.mode != panomap::io::index::IndexMode::kSignal) {
     LOG_ERROR(std::string("inspect: index was built in mode '") +
               panomap::io::index::mode_name(loaded.metadata.mode) +
-              "', but piru-signal only loads 'signal' indexes. Use piru-base instead.");
+              "', but panomap only loads 'signal' indexes. Use panomap-base instead.");
     return 1;
   }
 

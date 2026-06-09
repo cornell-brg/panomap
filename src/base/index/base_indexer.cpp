@@ -38,7 +38,7 @@
 #include <string>
 #include <vector>
 
-#ifdef PIRU_USE_TBB
+#ifdef PANOMAP_USE_TBB
 #include <tbb/enumerable_thread_specific.h>
 #endif
 
@@ -194,7 +194,7 @@ BaseBucketIndexResult bucketIndexBase(const panomap::index::FlatGraph& graph,
     }
   };
 
-#ifdef PIRU_USE_TBB
+#ifdef PANOMAP_USE_TBB
   if (config.executor) {
     using ThreadBuckets = std::vector<BucketVec>;
     tbb::enumerable_thread_specific<LinearCoordVec> thread_coords(
@@ -266,7 +266,7 @@ BaseBucketIndexResult bucketIndexBase(const panomap::index::FlatGraph& graph,
     per_bucket_max_freq[bi] = local_max_freq;
   };
 
-#ifdef PIRU_USE_TBB
+#ifdef PANOMAP_USE_TBB
   if (config.executor) {
     config.executor->parallel_for(std::size_t{0}, num_buckets, std::size_t{1}, finalize_one);
   } else

@@ -41,7 +41,7 @@
 #include <string>
 #include <vector>
 
-#ifdef PIRU_USE_TBB
+#ifdef PANOMAP_USE_TBB
 #include <tbb/enumerable_thread_specific.h>
 #endif
 
@@ -199,7 +199,7 @@ BucketIndexResult bucketIndex(const FlatGraph& graph, const io::KmerModel& model
     }
   };
 
-#ifdef PIRU_USE_TBB
+#ifdef PANOMAP_USE_TBB
   if (config.executor) {
     using ThreadBuckets = std::vector<BucketVec>;
     tbb::enumerable_thread_specific<LinearCoordVec> thread_coords(
@@ -283,7 +283,7 @@ BucketIndexResult bucketIndex(const FlatGraph& graph, const io::KmerModel& model
     per_bucket_max_freq[bi] = local_max_freq;
   };
 
-#ifdef PIRU_USE_TBB
+#ifdef PANOMAP_USE_TBB
   if (config.executor) {
     config.executor->parallel_for(std::size_t{0}, num_buckets, std::size_t{1}, finalize_one);
   } else

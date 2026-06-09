@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Systematic evaluation pipeline for piru.
+# Systematic evaluation pipeline for panomap.
 # Runs mapping, plotting, and evaluation for each read set.
 #
 # Usage: ./scripts/run_eval_pipeline.sh [options] [slug...]
@@ -17,14 +17,14 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PIRU_ROOT="$(dirname "$SCRIPT_DIR")"
-PIRU_BIN="${PIRU_ROOT}/build/piru"
+PANOMAP_ROOT="$(dirname "$SCRIPT_DIR")"
+PANOMAP_BIN="${PANOMAP_ROOT}/build/panomap"
 PYTHON="${PYTHON:-python3}"
 
 # Default paths
-GRAPH="${PIRU_ROOT}/tests/data/graphs/drb1.gfa"
-READS_DIR="${PIRU_ROOT}/tests/data/HLA/eval_reads"
-RESULTS_DIR="${PIRU_ROOT}/tests/data/HLA/eval_results"
+GRAPH="${PANOMAP_ROOT}/tests/data/graphs/drb1.gfa"
+READS_DIR="${PANOMAP_ROOT}/tests/data/HLA/eval_reads"
+RESULTS_DIR="${PANOMAP_ROOT}/tests/data/HLA/eval_results"
 
 # Default options
 FORCE=0
@@ -69,10 +69,10 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Check piru binary exists
-if [[ ! -x "$PIRU_BIN" ]]; then
-    echo "Error: piru binary not found at $PIRU_BIN"
-    echo "Run: cmake --build piru/build"
+# Check panomap binary exists
+if [[ ! -x "$PANOMAP_BIN" ]]; then
+    echo "Error: panomap binary not found at $PANOMAP_BIN"
+    echo "Run: cmake --build panomap/build"
     exit 1
 fi
 
@@ -154,7 +154,7 @@ process_slug() {
 
     # Run mapping with anchor dump
     echo "  Mapping (model=$model, event=$EVENT_PIPELINE)..."
-    "$PIRU_BIN" map \
+    "$PANOMAP_BIN" map \
         --graph "$GRAPH" \
         --model "$model" \
         --event-pipeline "$EVENT_PIPELINE" \
@@ -184,7 +184,7 @@ process_slug() {
         eval_opts="-l $MIN_LENGTH"
     fi
 
-    "$PIRU_BIN" eval \
+    "$PANOMAP_BIN" eval \
         -t "$truth" \
         -c "$outdir/output.paf" \
         -f summary \
@@ -192,7 +192,7 @@ process_slug() {
         -o "$outdir/eval_summary.txt" \
         2>&1 | grep -E "^\[main\]" || true
 
-    "$PIRU_BIN" eval \
+    "$PANOMAP_BIN" eval \
         -t "$truth" \
         -c "$outdir/output.paf" \
         -f json \

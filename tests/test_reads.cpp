@@ -5,7 +5,7 @@
 #include "signal/io/reads/read_provider_factory.hpp"
 
 TEST_CASE("slow5 provider reads bundled blow5") {
-#ifdef PIRU_HAS_SLOW5
+#ifdef PANOMAP_HAS_SLOW5
   const std::string path = "tests/data/HLA/test_reads/quick_r9_2k.blow5";
   auto provider = panomap::io::make_read_provider(path);
   REQUIRE(provider != nullptr);
@@ -20,7 +20,7 @@ TEST_CASE("slow5 provider reads bundled blow5") {
   }
   CHECK(count == 5);
 #else
-  MESSAGE("PIRU_HAS_SLOW5 not set; skipping slow5 read test");
+  MESSAGE("PANOMAP_HAS_SLOW5 not set; skipping slow5 read test");
   CHECK(true);
 #endif
 }

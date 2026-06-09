@@ -21,7 +21,7 @@
 namespace panomap::base {
 
 // Same shape as signal::Seed; kept as a base-namespace type to honour the
-// "no signal:: dependency in piru_base" architectural rule.
+// "no signal:: dependency in panomap_base" architectural rule.
 struct Seed {
   std::uint64_t hash{0};
   std::size_t position{0};

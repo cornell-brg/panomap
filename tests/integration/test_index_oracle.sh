@@ -1,7 +1,7 @@
 #!/bin/bash
 # Index-format oracle test (dev-112).
 #
-# Builds known graphs at the current piru version, maps a fixed read set
+# Builds known graphs at the current panomap version, maps a fixed read set
 # with -t 1, sorts the GAF by read_id, and diffs against pre-committed
 # fixtures in tests/fixtures/oracle_v2/. Any byte-level divergence fails.
 #
@@ -10,8 +10,8 @@
 # regression gate for dev-112-index-slim-v3.
 #
 # Usage:
-#   test_index_oracle.sh <piru_binary> <workspace_root>           # diff mode
-#   test_index_oracle.sh <piru_binary> <workspace_root> --gen     # regenerate fixtures
+#   test_index_oracle.sh <panomap_binary> <workspace_root>           # diff mode
+#   test_index_oracle.sh <panomap_binary> <workspace_root> --gen     # regenerate fixtures
 #
 # Fixtures: tests/fixtures/oracle_v2/<dataset>-N<N>.gaf
 # Inputs reside in workspace (data/eval/...). Test skips a tier if inputs
@@ -19,8 +19,8 @@
 
 set -euo pipefail
 
-PIRU="${1:?Usage: $0 <piru_binary> <workspace_root> [--gen]}"
-WORKSPACE="${2:?Usage: $0 <piru_binary> <workspace_root> [--gen]}"
+PANOMAP="${1:?Usage: $0 <panomap_binary> <workspace_root> [--gen]}"
+WORKSPACE="${2:?Usage: $0 <panomap_binary> <workspace_root> [--gen]}"
 MODE="${3:-test}"  # 'test' (default) or '--gen'
 
 FIXTURE_DIR="$(cd "$(dirname "$0")/.." && pwd)/fixtures/oracle_v2"
@@ -32,7 +32,7 @@ trap "rm -rf $TMPDIR" EXIT
 COVID_GFA_DIR="$WORKSPACE/data/eval/sars-cov-2/chronological/pggb"
 COVID_READS="$WORKSPACE/experiments/eval/build-rawhash2-smoke/reads/covid-interartic-r9-40k_split/covid-interartic-r9-40k_0.blow5"
 YEAST_GFA_DIR="$WORKSPACE/data/eval/yeast"
-YEAST_READS="$WORKSPACE/experiments/eval/build-yeast-piru-signal-landmark/smoke_reads/yeast-r9-40k_split/yeast-r9-40k_0.blow5"
+YEAST_READS="$WORKSPACE/experiments/eval/build-yeast-panomap-landmark/smoke_reads/yeast-r9-40k_split/yeast-r9-40k_0.blow5"
 
 EXIT=0
 
@@ -48,10 +48,10 @@ run_one() {
   fi
 
   echo "  ${ds}-N${N}: build index"
-  "$PIRU" index "$gfa" --model r9.4 -o "$idx" 2>/dev/null
+  "$PANOMAP" index "$gfa" --model r9.4 -o "$idx" 2>/dev/null
 
   echo "  ${ds}-N${N}: map -t 1"
-  "$PIRU" map --index "$idx" --chainer path-chain -t 1 "$reads" -o "$gaf.raw" 2>/dev/null
+  "$PANOMAP" map --index "$idx" --chainer path-chain -t 1 "$reads" -o "$gaf.raw" 2>/dev/null
 
   # Sort GAF (excluding header) by read_id for stable comparison.
   # Strip the dt:f: tag -- per-read processing time is non-deterministic
@@ -94,7 +94,7 @@ done
 if [ $EXIT -ne 0 ]; then
   echo
   echo "ORACLE FAILED -- chain output diverges from v2 baseline."
-  echo "If this is intentional, regenerate with: $0 $PIRU $WORKSPACE --gen"
+  echo "If this is intentional, regenerate with: $0 $PANOMAP $WORKSPACE --gen"
   exit $EXIT
 fi
 echo

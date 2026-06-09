@@ -5,8 +5,8 @@
 
 set -euo pipefail
 
-PIRU="${1:?Usage: $0 <piru_binary> <workspace_root>}"
-WORKSPACE="${2:?Usage: $0 <piru_binary> <workspace_root>}"
+PANOMAP="${1:?Usage: $0 <panomap_binary> <workspace_root>}"
+WORKSPACE="${2:?Usage: $0 <panomap_binary> <workspace_root>}"
 
 DATA="$WORKSPACE/data/benchmark/covid-r94"
 GFA="$DATA/covid.gfa"
@@ -23,8 +23,8 @@ done
 TMPDIR=$(mktemp -d)
 trap "rm -rf $TMPDIR" EXIT
 
-"$PIRU" index "$GFA" --model r9.4 --tokenizer landmark --seed-k 4 -o "$TMPDIR/covid.pirx" 2>/dev/null
-"$PIRU" map --index "$TMPDIR/covid.pirx" "$READS" \
+"$PANOMAP" index "$GFA" --model r9.4 --tokenizer landmark --seed-k 4 -o "$TMPDIR/covid.pirx" 2>/dev/null
+"$PANOMAP" map --index "$TMPDIR/covid.pirx" "$READS" \
   --no-adaptive --no-anchor-merge --diff 0.2 \
   --chain-bw 100 --chain-max-dist 500 --chain-min-score 10 \
   --chain-pen-gap 1.6 --chain-pen-skip 0.3 --max-chunks 5 \

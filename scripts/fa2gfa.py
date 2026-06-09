@@ -2,7 +2,7 @@
 """Convert a FASTA file to a trivial GFA1 graph.
 
 Each sequence becomes a single node (S line) with a path (P line) containing
-just that node. This is the minimal GFA that piru can index for linear
+just that node. This is the minimal GFA that panomap can index for linear
 reference benchmarking.
 
 Usage:

@@ -1,7 +1,7 @@
 /**
  * map.cpp (base mode)
  *
- * CLI handler for `piru-base map`. Loads a base-mode index (.pirx with
+ * CLI handler for `panomap-base map`. Loads a base-mode index (.pirx with
  * mode=base), reads basecalled FASTQ, runs BaseMapper, writes GAF.
  *
  * Single-file input (no directory walking yet). Run twice for on/off-
@@ -31,7 +31,7 @@
 int handle_base_map(const std::vector<std::string>& args) {
   panomap::cli::Parsed parsed;
   panomap::cli::ParseConfig config;
-  config.usage = "Usage: piru-base map [options] --index <index.pirx> <reads.fastq[.gz]>";
+  config.usage = "Usage: panomap-base map [options] --index <index.pirx> <reads.fastq[.gz]>";
   config.positional_help = {"<reads.fastq[.gz]>  Basecalled FASTQ input (plain or gzip)"};
   config.options = {
       {'h', "help", false, "Show help"},
@@ -144,7 +144,7 @@ int handle_base_map(const std::vector<std::string>& args) {
   if (loaded.metadata.mode != panomap::io::index::IndexMode::kBase) {
     LOG_ERROR(std::string("map: index was built in mode '") +
               panomap::io::index::mode_name(loaded.metadata.mode) +
-              "', but piru-base only loads 'base' indexes. Use piru-signal instead.");
+              "', but panomap-base only loads 'base' indexes. Use panomap instead.");
     return 1;
   }
   LOG_INFO("index loaded: " + std::to_string(loaded.graph->nodeCount()) + " nodes, " +

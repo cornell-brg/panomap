@@ -239,7 +239,7 @@ struct Config {
   std::size_t num_threads{1};
   double eps{0.01};              // min learning rate
   bool signed_loss{false};       // experimental: use signed bp distance
-  std::string init{"node-order"}; // "node-order" (piru-style flat concat) or "path-progress"
+  std::string init{"node-order"}; // "node-order" (panomap-style flat concat) or "path-progress"
 };
 
 // Per-iteration learning rate schedule (matches odgi's path_sgd_schedule).
@@ -482,7 +482,7 @@ static void usage() {
     "  --first-cooling F     Fraction of iters before cooling kicks in (default 0.5)\n"
     "  --seed S              RNG seed (default 42)\n"
     "  --signed-loss         EXPERIMENTAL: use signed bp distance in loss (orientation-aware)\n"
-    "  --init MODE           Init: 'node-order' (piru-style flat concat; default) or 'path-progress'\n"
+    "  --init MODE           Init: 'node-order' (panomap-style flat concat; default) or 'path-progress'\n"
   );
 }
 

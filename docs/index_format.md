@@ -1,16 +1,16 @@
-# PIRU Index Format (.pirx)
+# PANOMAP Index Format (.pirx)
 
 **Version**: 1.0 (pre-release)
 
 ## Overview
 
-PIRU indexes are stored as a single binary `.pirx` file containing graph
+PANOMAP indexes are stored as a single binary `.pirx` file containing graph
 topology, linearization coordinates, seed hash table, and optional 1D
 canonical coordinates.
 
 ```
-piru index reference.gfa -o ref.pirx
-piru inspect ref.pirx
+panomap index reference.gfa -o ref.pirx
+panomap inspect ref.pirx
 ```
 
 ## Binary Layout
@@ -151,9 +151,9 @@ Present if the stream has more data after section 7.
 ## Inspect
 
 ```
-$ piru inspect ref.pirx
+$ panomap inspect ref.pirx
 index: ref.pirx
-piru_version: 0.0.1
+panomap_version: 0.0.1
 built: 2026-04-06 20:33:29
 model: r9.4_450bps
 pore_k: 6

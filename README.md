@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/logo.png" alt="PIRU" width="200">
+  <img src="docs/assets/logo.png" alt="PANOMAP" width="200">
 </p>
 
 ---
@@ -12,9 +12,9 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
 </p>
 
-## What is PIRU?
+## What is PANOMAP?
 
-PIRU maps raw Nanopore signal directly to pangenome graphs without basecalling.
+PANOMAP maps raw Nanopore signal directly to pangenome graphs without basecalling.
 By working at the squiggle level, it enables real-time keep/reject decisions
 during adaptive sampling experiments. Supports GFA graphs, SLOW5/BLOW5 signals,
 and R9.4/R10.4 pore chemistries.
@@ -25,35 +25,35 @@ and R9.4/R10.4 pore chemistries.
 
 ```bash
 # Clone and build
-git clone --recursive https://github.com/xxx/piru.git
-cd piru && mkdir build && cd build && cmake .. && make -j8
+git clone --recursive https://github.com/xxx/panomap.git
+cd panomap && mkdir build && cd build && cmake .. && make -j8
 
 # Index a graph (RH2 tokenizer, default)
-./piru index -m r10.4 reference.gfa -o ref.pirx
+./panomap index -m r10.4 reference.gfa -o ref.pirx
 
 # Index with landmark tokenizer (amplitude-based peak seeding)
-./piru index -m r9.4 --tokenizer landmark --seed-k 4 reference.gfa -o ref.pirx
+./panomap index -m r9.4 --tokenizer landmark --seed-k 4 reference.gfa -o ref.pirx
 
 # Map reads (GAF to stdout by default)
-./piru map --index ref.pirx reads.blow5 -o out.gaf
+./panomap map --index ref.pirx reads.blow5 -o out.gaf
 
 # Map with viral preset params (good for small genomes)
-./piru map --index ref.pirx reads.blow5 \
+./panomap map --index ref.pirx reads.blow5 \
   --chain-bw 100 --chain-max-dist 500 --chain-pen-gap 1.2 \
   --chain-pen-skip 0.3 --max-chunks 5 -o out.gaf
 
 # Tune sensitivity (higher = more events, more seeds)
-./piru map --index ref.pirx reads.blow5 --sensitivity 1.5 -o out.gaf
+./panomap map --index ref.pirx reads.blow5 --sensitivity 1.5 -o out.gaf
 ```
 
 ## Subcommands
 
 | Command | Description |
 |---------|-------------|
-| `piru index` | Build .pirx index from GFA graph + pore model |
-| `piru map` | Map BLOW5/SLOW5 reads against index, output GAF/PAF |
+| `panomap index` | Build .pirx index from GFA graph + pore model |
+| `panomap map` | Map BLOW5/SLOW5 reads against index, output GAF/PAF |
 
-Run `piru <command> --help` for full options.
+Run `panomap <command> --help` for full options.
 
 ## GAF Output Tags
 
@@ -75,7 +75,7 @@ Run `piru <command> --help` for full options.
 
 ## Tokenizers
 
-PIRU supports two tokenization strategies for converting signal to seeds:
+PANOMAP supports two tokenization strategies for converting signal to seeds:
 
 | Tokenizer | Description | Seed bits | Typical use |
 |-----------|-------------|-----------|-------------|
@@ -97,8 +97,8 @@ squigulator reference.fa -x dna-r10-min \
   -q reads.fasta -c reads.paf \
   --ideal --seed 123
 
-./piru index -m r10.4 reference.gfa -o ref.pirx
-./piru map --index ref.pirx reads.blow5 -o out.gaf
+./panomap index -m r10.4 reference.gfa -o ref.pirx
+./panomap map --index ref.pirx reads.blow5 -o out.gaf
 ```
 
 ## Documentation

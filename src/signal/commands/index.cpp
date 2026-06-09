@@ -1,7 +1,7 @@
 /**
  * index.cpp
  *
- * CLI handler for `piru index`. Parses arguments, loads a graph and
+ * CLI handler for `panomap index`. Parses arguments, loads a graph and
  * pore model, runs the indexing pipeline, and serializes the result
  * to a .pirx file.
  *
@@ -49,7 +49,7 @@ panomap::io::ModelPtr load_model_or_file(const std::string& model_arg) {
 int handle_index(const std::vector<std::string>& args) {
   panomap::cli::Parsed parsed;
   panomap::cli::ParseConfig config;
-  config.usage = "Usage: piru index [options] <graph-file>";
+  config.usage = "Usage: panomap index [options] <graph-file>";
   config.positional_help = {"<graph-file>      Graph file to index"};
   config.options = {
       {'h', "help", false, "Show help"},

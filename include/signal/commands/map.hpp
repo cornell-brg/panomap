@@ -1,7 +1,7 @@
 /**
  * map.hpp
  *
- * CLI entry point for `piru map`.
+ * CLI entry point for `panomap map`.
  *
  * SPDX-License-Identifier: MIT
  */
@@ -11,5 +11,5 @@
 #include <string>
 #include <vector>
 
-/** Handle the `piru map` subcommand. */
+/** Handle the `panomap map` subcommand. */
 int handle_map(const std::vector<std::string>& args);

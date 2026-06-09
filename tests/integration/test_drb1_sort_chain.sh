@@ -2,19 +2,19 @@
 # Integration test: DRB1 pangenome mapping accuracy with sort-chain backend
 # Same setup as test_drb1_accuracy.sh but uses --chainer sort-chain
 #
-# Requires: piru binary, squigulator, eval_canonical.py, benchmark data
+# Requires: panomap binary, squigulator, eval_canonical.py, benchmark data
 
 set -euo pipefail
 
-PIRU="${1:?Usage: $0 <piru_binary> <workspace_root>}"
-WORKSPACE="${2:?Usage: $0 <piru_binary> <workspace_root>}"
+PANOMAP="${1:?Usage: $0 <panomap_binary> <workspace_root>}"
+WORKSPACE="${2:?Usage: $0 <panomap_binary> <workspace_root>}"
 
 SCRIPTS="$WORKSPACE/repo/scripts"
 DATA="$WORKSPACE/data/benchmark/hla-drb1"
 GFA="$DATA/drb1-pggb.gfa"
 FASTA="$DATA/DRB1-3123.fa"
 SQUIGULATOR="$WORKSPACE/infra/tools/squigulator"
-PYTHON="${WORKSPACE}/infra/env/piru-py/bin/python3"
+PYTHON="${WORKSPACE}/infra/env/panomap-py/bin/python3"
 
 NUM_READS=1000
 READ_LEN=12000
@@ -47,13 +47,13 @@ trap "rm -rf $TMPDIR" EXIT
   "$FASTA" -o "$TMPDIR/reads.blow5" --paf "$TMPDIR/truth.paf" 2>/dev/null
 
 # 2. Index
-"$PIRU" index "$GFA" -o "$TMPDIR/drb1.pirx" 2>/dev/null
+"$PANOMAP" index "$GFA" -o "$TMPDIR/drb1.pirx" 2>/dev/null
 
 # 3. Dump node coords
-"$PIRU" inspect "$TMPDIR/drb1.pirx" --dump-path-coords "$TMPDIR/nodes.tsv" 2>/dev/null
+"$PANOMAP" inspect "$TMPDIR/drb1.pirx" --dump-path-coords "$TMPDIR/nodes.tsv" 2>/dev/null
 
 # 4. Map with sort-chain
-"$PIRU" map --index "$TMPDIR/drb1.pirx" "$TMPDIR/reads.blow5" --chainer sort-chain -o "$TMPDIR/out.gaf" 2>/dev/null
+"$PANOMAP" map --index "$TMPDIR/drb1.pirx" "$TMPDIR/reads.blow5" --chainer sort-chain -o "$TMPDIR/out.gaf" 2>/dev/null
 
 # 5. Eval accuracy
 OUTPUT=$("$PYTHON" "$SCRIPTS/eval_canonical.py" "$GFA" "$TMPDIR/nodes.tsv" "$TMPDIR/out.gaf" 2>&1)

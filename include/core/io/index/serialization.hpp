@@ -24,7 +24,7 @@
 namespace panomap::io::index {
 
 // Index modality. Stamped in the .pirx header by the binary that built it,
-// checked at load time so a piru-signal binary refuses a piru-base index
+// checked at load time so a panomap binary refuses a panomap-base index
 // (and vice versa). Format break: v1 indexes have no mode byte and are
 // rejected by v2+ loaders.
 enum class IndexMode : std::uint8_t {
@@ -44,7 +44,7 @@ struct IndexMetadata {
 };
 
 // Byte sizes of each section in the .pirx file. Populated by load_index;
-// used by `piru inspect` to show on-disk breakdown.
+// used by `panomap inspect` to show on-disk breakdown.
 struct SectionSizes {
   uint64_t header_meta{0};   // magic + version + flags + mode + metadata strings
   uint64_t graph{0};         // nodes + edges + paths

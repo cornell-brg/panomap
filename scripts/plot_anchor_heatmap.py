@@ -179,7 +179,7 @@ def list_anchor_files(directory: str) -> List[Tuple[str, str]]:
 
 
 def parse_anchor_dump(filepath: str) -> Tuple[List[Path], List[Anchor]]:
-    """Parse anchor dump TSV file from piru.
+    """Parse anchor dump TSV file from panomap.
 
     Format:
         #PATH	path_id	path_name	length
@@ -992,7 +992,7 @@ Examples:
 
     parser.add_argument(
         "--input", "-i",
-        help="Input anchor dump file or directory from piru. If not provided, uses test data."
+        help="Input anchor dump file or directory from panomap. If not provided, uses test data."
     )
 
     parser.add_argument(

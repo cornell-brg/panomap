@@ -14,8 +14,8 @@ Usage:
   # Step 1: Generate BED from read IDs
   python3 eval_1d_precision.py extract-bed --gaf on_target.gaf -o reads.bed
 
-  # Step 2: Annotate with piru
-  piru annotate --bed reads.bed --1d-coords-file coords.tsv --mode strict graph.gfa -o reads.pira
+  # Step 2: Annotate with panomap
+  panomap annotate --bed reads.bed --1d-coords-file coords.tsv --mode strict graph.gfa -o reads.pira
 
   # Step 3: Evaluate
   python3 eval_1d_precision.py eval --gaf on_target.gaf --pira reads.pira

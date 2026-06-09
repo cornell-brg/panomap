@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Signal alignment visualization tool for debugging PIRU mapping.
+Signal alignment visualization tool for debugging PANOMAP mapping.
 
 Plots node signals from GFA dumps vs read signals from signal_dump_*.txt files.
 
@@ -136,7 +136,7 @@ class SignalPlotter:
         self.graph_dir = graph_dir
         self.signal_dump = signal_dump
 
-        # GFA dump paths (from PIRU_DUMP_GRAPHS=ON)
+        # GFA dump paths (from PANOMAP_DUMP_GRAPHS=ON)
         if graph_dir:
             self.imported_gfa = graph_dir / "imported_graph.gfa"
             self.raw_signals_gfa = graph_dir / "raw_signals.gfa"
@@ -293,7 +293,7 @@ class SignalPlotter:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Visualize PIRU signal processing for debugging",
+        description="Visualize PANOMAP signal processing for debugging",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:

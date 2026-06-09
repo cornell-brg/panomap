@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Plot anchor clouds from piru trace dumps.
+"""Plot anchor clouds from panomap trace dumps.
 
 Visualize the anchor cloud (query_pos vs ref_coord) for one or more reads,
 highlighting the best chain. Useful for diagnosing why reads map or don't
@@ -14,8 +14,8 @@ Enable tracing:
     cmake --build repo/build -j8
 
 Generate trace dumps:
-    PIRU_TRACE_STAGES=0x40 PIRU_TRACE_DIR=/tmp/trace \
-        piru map --index ref.pirx reads.blow5 --no-map-filter -o out.gaf
+    PANOMAP_TRACE_STAGES=0x40 PANOMAP_TRACE_DIR=/tmp/trace \
+        panomap map --index ref.pirx reads.blow5 --no-map-filter -o out.gaf
 
     Stage 0x40 = kChains. Produces per-read files:
         /tmp/trace/6_anchors_<read_id>_chunk<N>
@@ -346,7 +346,7 @@ def plot_comparison(trace_dir, reads_a, reads_b, label_a="Group A",
 
 def main():
     p = argparse.ArgumentParser(
-        description="Plot anchor clouds from piru trace dumps",
+        description="Plot anchor clouds from panomap trace dumps",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )

@@ -4,7 +4,7 @@ GFA path length calculator.
 
 Parses a GFA file, walks each path, and computes path length by summing
 node sequence lengths. Supports both standard GFA (DNA sequences) and
-PIRU's signal dump GFAs (comma-separated numeric values).
+PANOMAP's signal dump GFAs (comma-separated numeric values).
 
 Usage:
     python gfa_path_lengths.py input.gfa
@@ -55,8 +55,8 @@ def parse_path_step(step: str) -> Tuple[str, str]:
 
     Handles multiple formats:
         '1+' -> ('1', '+')           # standard GFA
-        '1_F+' -> ('1', '+')         # PIRU transformed format (_F = forward)
-        '1_R+' -> ('1', '+')         # PIRU reverse format (_R = reverse)
+        '1_F+' -> ('1', '+')         # PANOMAP transformed format (_F = forward)
+        '1_R+' -> ('1', '+')         # PANOMAP reverse format (_R = reverse)
     """
     step = step.strip()
     if not step:
@@ -66,7 +66,7 @@ def parse_path_step(step: str) -> Tuple[str, str]:
     orientation = step[-1] if step[-1] in '+-' else '+'
     base = step.rstrip('+-')
 
-    # Handle PIRU format: X_F or X_R suffix
+    # Handle PANOMAP format: X_F or X_R suffix
     if '_F' in base or '_R' in base:
         # '1_F' -> '1', '123_R' -> '123'
         base = re.sub(r'_[FR]$', '', base)
@@ -83,7 +83,7 @@ def parse_gfa(gfa_path: Path) -> Tuple[Dict[str, Tuple[str, int]], List[Tuple[st
     - gfa_type: detected type ('dna', 'raw_signal', 'fuzzy_quant', 'aln_quant', 'unknown')
     """
     segments = {}
-    original_id_map = {}  # oi -> seg_id mapping for PIRU dumps
+    original_id_map = {}  # oi -> seg_id mapping for PANOMAP dumps
     paths = []
     gfa_type = 'unknown'
 

@@ -1,7 +1,7 @@
 /**
  * map.cpp
  *
- * CLI handler for `piru map`. Loads a pre-built index, processes reads
+ * CLI handler for `panomap map`. Loads a pre-built index, processes reads
  * through the mapping pipeline (seeds -> anchors -> chains -> results),
  * and writes output in PAF/GAF/GAM/JSON format.
  *
@@ -63,7 +63,7 @@ int handle_map(const std::vector<std::string>& args) {
 
   panomap::cli::Parsed parsed;
   panomap::cli::ParseConfig config;
-  config.usage = "Usage: piru map [options] --index <file> <reads-path>";
+  config.usage = "Usage: panomap map [options] --index <file> <reads-path>";
   config.positional_help = {
       "<reads-path>       Input slow5/blow5 file or directory containing reads"};
   config.options = {
@@ -198,7 +198,7 @@ int handle_map(const std::vector<std::string>& args) {
   if (loaded.metadata.mode != panomap::io::index::IndexMode::kSignal) {
     LOG_ERROR(std::string("map: index was built in mode '") +
               panomap::io::index::mode_name(loaded.metadata.mode) +
-              "', but piru-signal only loads 'signal' indexes. Use piru-base instead.");
+              "', but panomap only loads 'signal' indexes. Use panomap-base instead.");
     return 1;
   }
 

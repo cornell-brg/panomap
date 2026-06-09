@@ -10,7 +10,7 @@
 using namespace panomap;
 
 TEST_CASE("Batch mapper processes blow5 reads and emits seeds") {
-#ifdef PIRU_HAS_SLOW5
+#ifdef PANOMAP_HAS_SLOW5
   const std::string path = "tests/data/HLA/test_reads/quick_r9_1k.blow5";
   auto provider = io::make_read_provider(path);
   REQUIRE(provider != nullptr);
@@ -29,7 +29,7 @@ TEST_CASE("Batch mapper processes blow5 reads and emits seeds") {
   CHECK_FALSE(output.empty());
   CHECK(output.find("seeds=") != std::string::npos);
 #else
-  MESSAGE("PIRU_HAS_SLOW5 not set; skipping batch mapper integration test");
+  MESSAGE("PANOMAP_HAS_SLOW5 not set; skipping batch mapper integration test");
   CHECK(true);
 #endif
 }

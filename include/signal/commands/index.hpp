@@ -1,7 +1,7 @@
 /**
  * index.hpp
  *
- * CLI entry point for `piru index`.
+ * CLI entry point for `panomap index`.
  *
  * SPDX-License-Identifier: MIT
  */
@@ -11,5 +11,5 @@
 #include <string>
 #include <vector>
 
-/** Handle the `piru index` subcommand. */
+/** Handle the `panomap index` subcommand. */
 int handle_index(const std::vector<std::string>& args);

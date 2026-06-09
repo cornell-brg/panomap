@@ -1,4 +1,4 @@
-# PIRU Architecture
+# PANOMAP Architecture
 
 Piru maps raw nanopore signal directly to pangenome graphs without basecalling.
 
@@ -6,8 +6,8 @@ Piru maps raw nanopore signal directly to pangenome graphs without basecalling.
 
 | Command | Purpose |
 |---------|---------|
-| `piru index` | Build index from GFA graph + pore model -> .pirx |
-| `piru map` | Map reads against index -> GAF/PAF |
+| `panomap index` | Build index from GFA graph + pore model -> .pirx |
+| `panomap map` | Map reads against index -> GAF/PAF |
 
 ## Pipeline Overview
 

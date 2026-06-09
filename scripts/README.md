@@ -1,4 +1,4 @@
-# PIRU Scripts
+# PANOMAP Scripts
 
 Utility scripts for debugging and analysis.
 
@@ -23,8 +23,8 @@ Build with trace support and run with chain stage enabled:
 cmake -S repo -B repo/build -DCMAKE_CXX_FLAGS="-DPIRU_TRACE_ENABLED"
 cmake --build repo/build -j8
 
-PIRU_TRACE_STAGES=0x40 PIRU_TRACE_DIR=/tmp/trace \
-    piru map --index ref.pirx reads.blow5 --no-map-filter -o out.gaf
+PANOMAP_TRACE_STAGES=0x40 PANOMAP_TRACE_DIR=/tmp/trace \
+    panomap map --index ref.pirx reads.blow5 --no-map-filter -o out.gaf
 ```
 
 ### Usage
@@ -82,7 +82,7 @@ pip install matplotlib numpy pyslow5
 
 ### Enable Graph Dumping
 
-PIRU must be built with `PIRU_DUMP_GRAPHS=ON` to generate GFA annotations:
+PANOMAP must be built with `PANOMAP_DUMP_GRAPHS=ON` to generate GFA annotations:
 
 ```bash
 cd build
@@ -202,24 +202,24 @@ pip install pyslow5
 ## eval_canonical.py
 
 Evaluate mapping accuracy using canonical 1D coordinates. Compares ground truth
-(from squigulator read names) against piru's canonical interval GAF tags.
+(from squigulator read names) against panomap's canonical interval GAF tags.
 
 ### Prerequisites
 
-Requires piru built with component-aware dedup (dev-94). GAF output must have
+Requires panomap built with component-aware dedup (dev-94). GAF output must have
 `ci:f:`, `ce:f:`, `cc:i:` tags (automatic when index has 1D coords + component IDs).
 
 ### Setup
 
 ```bash
 # 1. Index
-piru index graph.gfa -o graph.pirx
+panomap index graph.gfa -o graph.pirx
 
 # 2. Dump node canonical coords
-piru inspect graph.pirx --dump-path-coords node_coords.tsv
+panomap inspect graph.pirx --dump-path-coords node_coords.tsv
 
 # 3. Map (squigulator-simulated reads)
-piru map --index graph.pirx reads.blow5 -o out.gaf
+panomap map --index graph.pirx reads.blow5 -o out.gaf
 ```
 
 ### Usage
@@ -235,7 +235,7 @@ python3 scripts/eval_canonical.py graph.gfa node_coords.tsv out.gaf
    truth interval covers
 3. Looks up each node's canonical start/end from the coords TSV, interpolates
    to get the truth canonical interval
-4. Compares against piru's `ci:f:`/`ce:f:` tags from GAF
+4. Compares against panomap's `ci:f:`/`ce:f:` tags from GAF
 5. Reports overlap (correct) or no overlap (wrong)
 
 ### Output
@@ -250,7 +250,7 @@ No truth: 0
 UNMAPPED   S1_224!gi|568815567:3779003-3792415!9413!13413!-
 ```
 
-Wrong entries include truth/piru canonical intervals and node walks for
+Wrong entries include truth/panomap canonical intervals and node walks for
 manual inspection.
 
 ### Limitations

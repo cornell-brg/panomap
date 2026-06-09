@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(piru VERSION 0.0.2 LANGUAGES CXX)
+project(panomap VERSION 0.0.2 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -19,26 +19,27 @@ else()
     set(CMAKE_CXX_FLAGS_RELEASE "-O3" CACHE STRING "Release flags" FORCE)
 endif()
 
-option(PIRU_ENABLE_WARNINGS "Enable compiler warnings" ON)
-option(PIRU_USE_TBB "Enable oneTBB backend for concurrency" ON)
-option(PIRU_FETCH_TBB "Fetch oneTBB via FetchContent if not found" ON)
-option(PIRU_FETCH_DOCTEST "Fetch doctest during configure (for tests)" ON)
+option(PANOMAP_ENABLE_WARNINGS "Enable compiler warnings" ON)
+option(PANOMAP_USE_TBB "Enable oneTBB backend for concurrency" ON)
+option(PANOMAP_FETCH_TBB "Fetch oneTBB via FetchContent if not found" ON)
+option(PANOMAP_FETCH_DOCTEST "Fetch doctest during configure (for tests)" ON)
+option(PANOMAP_ENABLE_BASE_MODE "Build experimental base-mode binary (panomap-base)" OFF)
 find_package(ZLIB REQUIRED)
 
-set(PIRU_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
-file(MAKE_DIRECTORY ${PIRU_GENERATED_DIR})
+set(PANOMAP_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
+file(MAKE_DIRECTORY ${PANOMAP_GENERATED_DIR})
 
 set(PANOMAP_VERSION_STRING "${PROJECT_NAME} ${PROJECT_VERSION} (experimental scaffold)")
 configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/include/version.hpp.in
-    ${PIRU_GENERATED_DIR}/version.hpp
+    ${PANOMAP_GENERATED_DIR}/version.hpp
     @ONLY
 )
 
-set(PIRU_TBB_AVAILABLE OFF)
-if(PIRU_USE_TBB)
+set(PANOMAP_TBB_AVAILABLE OFF)
+if(PANOMAP_USE_TBB)
     find_package(TBB QUIET)
-    if(NOT TBB_FOUND AND PIRU_FETCH_TBB)
+    if(NOT TBB_FOUND AND PANOMAP_FETCH_TBB)
         include(FetchContent)
         FetchContent_Declare(
             TBB
@@ -49,21 +50,21 @@ if(PIRU_USE_TBB)
         FetchContent_MakeAvailable(TBB)
     endif()
     if(TBB_FOUND OR TARGET TBB::tbb)
-        set(PIRU_TBB_AVAILABLE ON)
+        set(PANOMAP_TBB_AVAILABLE ON)
     else()
-        message(FATAL_ERROR "oneTBB requested but not found. Set PIRU_FETCH_TBB=ON to fetch automatically.")
+        message(FATAL_ERROR "oneTBB requested but not found. Set PANOMAP_FETCH_TBB=ON to fetch automatically.")
     endif()
 endif()
 
-# slow5lib (signal-mode read I/O). Pulled in early so piru_signal can link against it.
+# slow5lib (signal-mode read I/O). Pulled in early so panomap_signal can link against it.
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/third_party/slow5lib/CMakeLists.txt)
     add_subdirectory(third_party/slow5lib)
 else()
     message(FATAL_ERROR "slow5lib submodule not present; required for signal-mode read I/O.")
 endif()
 
-# ----- piru_core: modality-agnostic static library -----
-add_library(piru_core STATIC
+# ----- panomap_core: modality-agnostic static library -----
+add_library(panomap_core STATIC
     src/core/mapping/path_chainer.cpp
     src/core/mapping/sort_chainer.cpp
     src/core/mapping/pan_chainer.cpp
@@ -84,32 +85,32 @@ add_library(piru_core STATIC
     src/core/io/results/paf_writer.cpp
     src/core/io/results/result_writer_factory.cpp
 )
-target_include_directories(piru_core PUBLIC
+target_include_directories(panomap_core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${PIRU_GENERATED_DIR}
+    ${PANOMAP_GENERATED_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/dirtyzipf
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/concurrentqueue
 )
-if(PIRU_TBB_AVAILABLE)
-    target_link_libraries(piru_core PUBLIC TBB::tbb)
-    target_compile_definitions(piru_core PUBLIC PIRU_USE_TBB)
+if(PANOMAP_TBB_AVAILABLE)
+    target_link_libraries(panomap_core PUBLIC TBB::tbb)
+    target_compile_definitions(panomap_core PUBLIC PANOMAP_USE_TBB)
 else()
     message(STATUS "oneTBB not found; using serial concurrency backend.")
 endif()
 
 # pthread for std::async / std::thread used in sort_1d.cpp parallel SGD
 find_package(Threads REQUIRED)
-target_link_libraries(piru_core PUBLIC Threads::Threads)
-if(PIRU_ENABLE_WARNINGS)
+target_link_libraries(panomap_core PUBLIC Threads::Threads)
+if(PANOMAP_ENABLE_WARNINGS)
     if(MSVC)
-        target_compile_options(piru_core PRIVATE /W4 /permissive-)
+        target_compile_options(panomap_core PRIVATE /W4 /permissive-)
     else()
-        target_compile_options(piru_core PRIVATE -Wall -Wextra -Wpedantic)
+        target_compile_options(panomap_core PRIVATE -Wall -Wextra -Wpedantic)
     endif()
 endif()
 
-# ----- piru_signal: signal-mode static library -----
-add_library(piru_signal STATIC
+# ----- panomap_signal: signal-mode static library -----
+add_library(panomap_signal STATIC
     src/signal/mapping/batch_mapper.cpp
     src/signal/index/bucket_indexer.cpp
     src/signal/index/index_pipeline.cpp
@@ -131,70 +132,74 @@ add_library(piru_signal STATIC
     src/signal/commands/inspect.cpp
     src/signal/commands/map.cpp
 )
-target_include_directories(piru_signal
+target_include_directories(panomap_signal
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
            ${CMAKE_CURRENT_SOURCE_DIR}/third_party/slow5lib/include
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
-target_link_libraries(piru_signal
-    PUBLIC piru_core slow5 ZLIB::ZLIB
+target_link_libraries(panomap_signal
+    PUBLIC panomap_core slow5 ZLIB::ZLIB
 )
-target_compile_definitions(piru_signal PUBLIC PIRU_HAS_SLOW5)
-if(PIRU_ENABLE_WARNINGS)
+target_compile_definitions(panomap_signal PUBLIC PANOMAP_HAS_SLOW5)
+if(PANOMAP_ENABLE_WARNINGS)
     if(MSVC)
-        target_compile_options(piru_signal PRIVATE /W4 /permissive-)
+        target_compile_options(panomap_signal PRIVATE /W4 /permissive-)
     else()
-        target_compile_options(piru_signal PRIVATE -Wall -Wextra -Wpedantic)
+        target_compile_options(panomap_signal PRIVATE -Wall -Wextra -Wpedantic)
     endif()
 endif()
 
-# ----- piru-signal executable -----
-add_executable(piru-signal
+# ----- panomap executable -----
+add_executable(panomap
     src/cli/signal_main.cpp
     src/cli/parse.cpp
 )
-target_link_libraries(piru-signal PRIVATE piru_signal)
-if(PIRU_ENABLE_WARNINGS)
+target_link_libraries(panomap PRIVATE panomap_signal)
+if(PANOMAP_ENABLE_WARNINGS)
     if(MSVC)
-        target_compile_options(piru-signal PRIVATE /W4 /permissive-)
+        target_compile_options(panomap PRIVATE /W4 /permissive-)
     else()
-        target_compile_options(piru-signal PRIVATE -Wall -Wextra -Wpedantic)
+        target_compile_options(panomap PRIVATE -Wall -Wextra -Wpedantic)
     endif()
 endif()
 
-# ----- piru_base: base-mode static library -----
-add_library(piru_base STATIC
-    src/base/index/base_indexer.cpp
-    src/base/io/reads/fastq_provider.cpp
-    src/base/seeder/base_seeder.cpp
-    src/base/mapping/base_mapper.cpp
-    src/base/commands/index.cpp
-    src/base/commands/inspect.cpp
-    src/base/commands/map.cpp
-)
-target_include_directories(piru_base
-    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
-target_link_libraries(piru_base PUBLIC piru_core ZLIB::ZLIB)
-if(PIRU_ENABLE_WARNINGS)
-    if(MSVC)
-        target_compile_options(piru_base PRIVATE /W4 /permissive-)
-    else()
-        target_compile_options(piru_base PRIVATE -Wall -Wextra -Wpedantic)
+# ----- panomap-base: experimental base-mode binary (opt-in) -----
+# Off by default. Enable with -DPANOMAP_ENABLE_BASE_MODE=ON. Paper 1
+# uses signal mode only; base mode is kept as future/dev material
+# (see tickets/archive/dev-108-base-mode.md).
+if(PANOMAP_ENABLE_BASE_MODE)
+    add_library(panomap_base STATIC
+        src/base/index/base_indexer.cpp
+        src/base/io/reads/fastq_provider.cpp
+        src/base/seeder/base_seeder.cpp
+        src/base/mapping/base_mapper.cpp
+        src/base/commands/index.cpp
+        src/base/commands/inspect.cpp
+        src/base/commands/map.cpp
+    )
+    target_include_directories(panomap_base
+        PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
+    target_link_libraries(panomap_base PUBLIC panomap_core ZLIB::ZLIB)
+    if(PANOMAP_ENABLE_WARNINGS)
+        if(MSVC)
+            target_compile_options(panomap_base PRIVATE /W4 /permissive-)
+        else()
+            target_compile_options(panomap_base PRIVATE -Wall -Wextra -Wpedantic)
+        endif()
     endif()
-endif()
 
-# ----- piru-base executable -----
-add_executable(piru-base
-    src/cli/base_main.cpp
-    src/cli/parse.cpp
-)
-target_link_libraries(piru-base PRIVATE piru_base)
-if(PIRU_ENABLE_WARNINGS)
-    if(MSVC)
-        target_compile_options(piru-base PRIVATE /W4 /permissive-)
-    else()
-        target_compile_options(piru-base PRIVATE -Wall -Wextra -Wpedantic)
+    add_executable(panomap-base
+        src/cli/base_main.cpp
+        src/cli/parse.cpp
+    )
+    target_link_libraries(panomap-base PRIVATE panomap_base)
+    if(PANOMAP_ENABLE_WARNINGS)
+        if(MSVC)
+            target_compile_options(panomap-base PRIVATE /W4 /permissive-)
+        else()
+            target_compile_options(panomap-base PRIVATE -Wall -Wextra -Wpedantic)
+        endif()
     endif()
 endif()
 

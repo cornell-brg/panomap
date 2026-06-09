@@ -4,15 +4,15 @@
 
 set -euo pipefail
 
-PIRU="${1:?Usage: $0 <piru_binary> <workspace_root>}"
-WORKSPACE="${2:?Usage: $0 <piru_binary> <workspace_root>}"
+PANOMAP="${1:?Usage: $0 <panomap_binary> <workspace_root>}"
+WORKSPACE="${2:?Usage: $0 <panomap_binary> <workspace_root>}"
 
 SCRIPTS="$WORKSPACE/repo/scripts"
 DATA="$WORKSPACE/data/benchmark/hla-drb1"
 GFA="$DATA/drb1-pggb.gfa"
 FASTA="$DATA/DRB1-3123.fa"
 SQUIGULATOR="$WORKSPACE/infra/tools/squigulator"
-PYTHON="${WORKSPACE}/infra/env/piru-py/bin/python3"
+PYTHON="${WORKSPACE}/infra/env/panomap-py/bin/python3"
 
 NUM_READS=1000
 READ_LEN=12000
@@ -31,9 +31,9 @@ trap "rm -rf $TMPDIR" EXIT
 "$SQUIGULATOR" -x dna-r10-prom --seed $SIM_SEED -n $NUM_READS -r $READ_LEN \
   "$FASTA" -o "$TMPDIR/reads.blow5" --paf "$TMPDIR/truth.paf" 2>/dev/null
 
-"$PIRU" index "$GFA" --tokenizer landmark --seed-k 4 -o "$TMPDIR/drb1.pirx" 2>/dev/null
-"$PIRU" inspect "$TMPDIR/drb1.pirx" --dump-path-coords "$TMPDIR/nodes.tsv" 2>/dev/null
-"$PIRU" map --index "$TMPDIR/drb1.pirx" "$TMPDIR/reads.blow5" -o "$TMPDIR/out.gaf" 2>/dev/null
+"$PANOMAP" index "$GFA" --tokenizer landmark --seed-k 4 -o "$TMPDIR/drb1.pirx" 2>/dev/null
+"$PANOMAP" inspect "$TMPDIR/drb1.pirx" --dump-path-coords "$TMPDIR/nodes.tsv" 2>/dev/null
+"$PANOMAP" map --index "$TMPDIR/drb1.pirx" "$TMPDIR/reads.blow5" -o "$TMPDIR/out.gaf" 2>/dev/null
 
 OUTPUT=$("$PYTHON" "$SCRIPTS/eval_canonical.py" "$GFA" "$TMPDIR/nodes.tsv" "$TMPDIR/out.gaf" 2>&1)
 echo "$OUTPUT"
