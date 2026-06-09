@@ -13,7 +13,7 @@
 
 #include "signal/tokenizers/tokenizer.hpp"
 
-namespace piru::signal {
+namespace panomap::signal {
 
 struct LandmarkTokenizerConfig {
   std::uint32_t rise_bits{2};      // bits for rise amplitude (4 levels)
@@ -35,4 +35,4 @@ private:
   LandmarkTokenizerConfig landmark_config_;
 };
 
-}  // namespace piru::signal
+}  // namespace panomap::signal

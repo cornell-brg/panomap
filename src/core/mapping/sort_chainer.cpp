@@ -21,7 +21,7 @@
 
 #include "core/util/logging.hpp"
 
-namespace piru::mapping {
+namespace panomap::mapping {
 
 namespace {
 
@@ -471,4 +471,4 @@ SortChainerConfig SortChainerConfig::from_parsed(const cli::Parsed& parsed) {
   return cfg;
 }
 
-}  // namespace piru::mapping
+}  // namespace panomap::mapping

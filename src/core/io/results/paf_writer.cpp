@@ -7,7 +7,7 @@
 
 #include "core/util/logging.hpp"
 
-namespace piru::io {
+namespace panomap::io {
 
 PafWriter::PafWriter(const std::string& path) : out_(path, std::ios::out | std::ios::trunc) {
   if (!out_) {
@@ -104,4 +104,4 @@ void PafWriter::write(const mapping::ReadMapResult& result, const std::string& r
   out_ << ss.str() << '\n';
 }
 
-}  // namespace piru::io
+}  // namespace panomap::io

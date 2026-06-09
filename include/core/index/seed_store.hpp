@@ -8,7 +8,7 @@
 #include <map>
 #include <string>
 
-namespace piru::index {
+namespace panomap::index {
 
 struct SeedEntry {
   std::uint32_t node_id{0};
@@ -53,4 +53,4 @@ public:
   virtual const std::map<std::string, std::string>& params() const = 0;
 };
 
-}  // namespace piru::index
+}  // namespace panomap::index

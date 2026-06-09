@@ -14,7 +14,7 @@
 #include <algorithm>
 #include <vector>
 
-namespace piru::mapping {
+namespace panomap::mapping {
 
 namespace {
 
@@ -97,4 +97,4 @@ std::vector<NodeAnchor> SeedMerger::merge(const std::vector<NodeAnchor>& hits,
   return merged;
 }
 
-}  // namespace piru::mapping
+}  // namespace panomap::mapping

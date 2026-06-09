@@ -33,8 +33,8 @@
 #include "version.hpp"
 
 int handle_base_index(const std::vector<std::string>& args) {
-  piru::cli::Parsed parsed;
-  piru::cli::ParseConfig config;
+  panomap::cli::Parsed parsed;
+  panomap::cli::ParseConfig config;
   config.usage = "Usage: piru-base index [options] <graph-file>";
   config.positional_help = {"<graph-file>      Graph file to index"};
   config.options = {
@@ -49,19 +49,19 @@ int handle_base_index(const std::vector<std::string>& args) {
   };
   config.on_error = [](const std::string&) { std::cerr << "index: invalid option\n"; };
 
-  if (!piru::cli::parse_args(args, config, parsed)) {
-    piru::cli::print_help(config, std::cerr);
+  if (!panomap::cli::parse_args(args, config, parsed)) {
+    panomap::cli::print_help(config, std::cerr);
     return 1;
   }
   if (parsed.values.count("help")) {
-    piru::cli::print_help(config, std::cout);
+    panomap::cli::print_help(config, std::cout);
     return 0;
   }
 
   const bool profile = parsed.values.count("profile") > 0;
   const bool verbose = parsed.values.count("verbose") > 0;
   if (verbose) {
-    piru::logger.set_level(piru::LogLevel::DEBUG);
+    panomap::logger.set_level(panomap::LogLevel::DEBUG);
   }
 
   const int num_threads = [&]() {
@@ -74,13 +74,13 @@ int handle_base_index(const std::vector<std::string>& args) {
       return -1;
     }
   }();
-  auto executor = piru::concurrency::make_executor(num_threads);
+  auto executor = panomap::concurrency::make_executor(num_threads);
   LOG_DEBUG("Using " + std::to_string(executor->max_concurrency()) + " threads (" +
             executor->backend_name() + ")");
 
   if (parsed.positionals.empty()) {
     LOG_ERROR("index: missing required <graph-file>");
-    piru::cli::print_help(config, std::cerr);
+    panomap::cli::print_help(config, std::cerr);
     return 1;
   }
   const std::string graph_path = parsed.positionals.front();
@@ -104,16 +104,16 @@ int handle_base_index(const std::vector<std::string>& args) {
   LOG_INFO("seeds: base_minimizer, k=" + std::to_string(k) + ", w=" + std::to_string(w));
   LOG_INFO("output: " + output_path);
 
-  PIRU_PROFILE_START(profile, "index");
+  PANOMAP_PROFILE_START(profile, "index");
 
   /* 1. Load graph. */
 
-  auto loader = piru::io::make_graph_loader(graph_path);
+  auto loader = panomap::io::make_graph_loader(graph_path);
   if (!loader) {
     LOG_ERROR("index: unsupported graph format for '" + graph_path + "'");
     return 1;
   }
-  piru::io::ImportedGraph imported;
+  panomap::io::ImportedGraph imported;
   if (!loader->load(imported)) {
     LOG_ERROR("index: failed to read graph file '" + graph_path + "'");
     return 1;
@@ -125,8 +125,8 @@ int handle_base_index(const std::vector<std::string>& args) {
   /* 2. Expand to directional FlatGraph. */
 
   auto stage_start = std::chrono::high_resolution_clock::now();
-  auto flat_graph = piru::index::simpleExpandFlat(imported);
-  imported = piru::io::ImportedGraph{};
+  auto flat_graph = panomap::index::simpleExpandFlat(imported);
+  imported = panomap::io::ImportedGraph{};
   auto stage_elapsed =
       std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - stage_start)
           .count();
@@ -139,11 +139,11 @@ int handle_base_index(const std::vector<std::string>& args) {
   /* 3. Base-mode minimizer indexing. */
 
   stage_start = std::chrono::high_resolution_clock::now();
-  piru::base::BaseBucketIndexConfig bi_config;
+  panomap::base::BaseBucketIndexConfig bi_config;
   bi_config.k = k;
   bi_config.w = w;
   bi_config.executor = executor.get();
-  auto bi_result = piru::base::bucketIndexBase(flat_graph, bi_config);
+  auto bi_result = panomap::base::bucketIndexBase(flat_graph, bi_config);
   stage_elapsed =
       std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - stage_start)
           .count();
@@ -154,15 +154,15 @@ int handle_base_index(const std::vector<std::string>& args) {
     flat_graph.setPathLength(static_cast<std::uint32_t>(i), bi_result.path_lengths[i]);
   }
 
-  auto graph_store = std::make_unique<piru::index::FlatGraphStore>(std::move(flat_graph));
-  auto component_ids = piru::index::compute_components(graph_store->flat());
+  auto graph_store = std::make_unique<panomap::index::FlatGraphStore>(std::move(flat_graph));
+  auto component_ids = panomap::index::compute_components(graph_store->flat());
 
   std::vector<float> node_1d_coords;
   if (compute_1d_sort) {
     auto sort_start = std::chrono::high_resolution_clock::now();
-    piru::index::Sort1DConfig sort_cfg;
+    panomap::index::Sort1DConfig sort_cfg;
     sort_cfg.num_threads = static_cast<std::size_t>(num_threads > 0 ? num_threads : 1);
-    node_1d_coords = piru::index::compute_1d_sort(graph_store->flat(), bi_result.linearization_coords,
+    node_1d_coords = panomap::index::compute_1d_sort(graph_store->flat(), bi_result.linearization_coords,
                                                   bi_result.path_lengths, sort_cfg, component_ids);
     auto sort_elapsed =
         std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - sort_start)
@@ -173,26 +173,26 @@ int handle_base_index(const std::vector<std::string>& args) {
 
   /* 4. Serialize. */
 
-  PIRU_PROFILE_START(profile, "serialize");
+  PANOMAP_PROFILE_START(profile, "serialize");
 
-  piru::io::index::IndexMetadata metadata;
+  panomap::io::index::IndexMetadata metadata;
   metadata.version = PIRU_VERSION;
   metadata.build_timestamp = static_cast<uint64_t>(
       std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()));
-  metadata.mode = piru::io::index::IndexMode::kBase;
+  metadata.mode = panomap::io::index::IndexMode::kBase;
   metadata.model_name = "";        // signal-only field
   metadata.pore_k = 0;             // signal-only field
   metadata.tokenizer = "";         // signal-only field
 
-  piru::io::index::save_index(output_path, *graph_store, *bi_result.seed_store,
+  panomap::io::index::save_index(output_path, *graph_store, *bi_result.seed_store,
                               bi_result.linearization_coords, metadata, node_1d_coords,
                               component_ids);
 
   LOG_INFO("Index written to " + output_path);
 
-  PIRU_PROFILE_STOP(profile, "serialize");
-  PIRU_PROFILE_STOP(profile, "index");
-  if (profile) piru::timing::report(std::cerr);
+  PANOMAP_PROFILE_STOP(profile, "serialize");
+  PANOMAP_PROFILE_STOP(profile, "index");
+  if (profile) panomap::timing::report(std::cerr);
 
   return 0;
 }

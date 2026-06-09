@@ -27,7 +27,7 @@
 #include "core/index/linearizer.hpp"
 #include "core/mapping/chainer.hpp"
 
-namespace piru::mapping {
+namespace panomap::mapping {
 
 struct PanChainerConfig {
   std::size_t band_1d{5000};         // 1D band width for candidate selection
@@ -72,4 +72,4 @@ private:
   const std::vector<std::size_t>& path_lengths_;
 };
 
-}  // namespace piru::mapping
+}  // namespace panomap::mapping

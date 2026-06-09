@@ -24,7 +24,7 @@
 #include "cli/parse.hpp"
 #include "core/mapping/chainer.hpp"
 
-namespace piru::mapping {
+namespace panomap::mapping {
 
 struct SortChainerConfig {
   std::size_t max_dist_ref{5000};  // wider than PathChainer (2500) for 1D distortion
@@ -75,4 +75,4 @@ private:
   const std::vector<std::uint32_t>& component_ids_;
 };
 
-}  // namespace piru::mapping
+}  // namespace panomap::mapping

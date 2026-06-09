@@ -9,7 +9,7 @@
 
 #include "signal/seed_extractors/seed_hash_util.hpp"
 
-namespace piru::signal {
+namespace panomap::signal {
 
 MinimizerSeedExtractor::MinimizerSeedExtractor(SeedExtractorConfig config)
     : config_(std::move(config)) {}
@@ -78,4 +78,4 @@ const SeedExtractorConfig& MinimizerSeedExtractor::config() const { return confi
 
 std::string MinimizerSeedExtractor::name() const { return "minimizer"; }
 
-}  // namespace piru::signal
+}  // namespace panomap::signal

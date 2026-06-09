@@ -8,7 +8,7 @@
 
 #include "core/util/logging.hpp"
 
-namespace piru::index {
+namespace panomap::index {
 
 namespace {
 
@@ -29,7 +29,7 @@ std::string revcomp(const std::string& seq) {
 
 }  // namespace
 
-FlatGraph simpleExpandFlat(const piru::io::ImportedGraph& imported) {
+FlatGraph simpleExpandFlat(const panomap::io::ImportedGraph& imported) {
   // Build mapping: original string ID -> index
   std::unordered_map<std::string, std::size_t> id_to_index;
   for (std::size_t i = 0; i < imported.nodes.size(); ++i) {
@@ -212,4 +212,4 @@ FlatGraph simpleExpandFlat(const piru::io::ImportedGraph& imported) {
       std::move(path_name_offset), std::move(path_name_len), std::move(path_length));
 }
 
-}  // namespace piru::index
+}  // namespace panomap::index

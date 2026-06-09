@@ -5,7 +5,7 @@
 #include "signal/event_pipelines/standard_event_pipeline.hpp"
 #include "core/util/logging.hpp"
 
-namespace piru::signal {
+namespace panomap::signal {
 
 namespace {
 
@@ -88,4 +88,4 @@ EventPipelinePtr make_event_pipeline(const EventPipelineConfig& config) {
   return std::make_unique<StandardEventPipeline>(resolved);
 }
 
-}  // namespace piru::signal
+}  // namespace panomap::signal

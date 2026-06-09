@@ -6,7 +6,7 @@
 
 #include "core/util/logging.hpp"
 
-namespace piru::io {
+namespace panomap::io {
 
 namespace {
 
@@ -192,4 +192,4 @@ bool GfaLoader::load(ImportedGraph& graph) {
 
 std::string GfaLoader::get_format_name() const { return "gfa"; }
 
-}  // namespace piru::io
+}  // namespace panomap::io

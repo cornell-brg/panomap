@@ -4,7 +4,7 @@
 
 #include "core/mapping/seed_merger.hpp"
 
-using namespace piru::mapping;
+using namespace panomap::mapping;
 
 namespace {
 

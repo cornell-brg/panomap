@@ -7,7 +7,7 @@
 #include <sstream>
 #include <vector>
 
-namespace piru::trace {
+namespace panomap::trace {
 
 namespace {
 
@@ -87,4 +87,4 @@ std::string trace_path(const std::string&, const std::string&, std::size_t) { re
 
 #endif
 
-}  // namespace piru::trace
+}  // namespace panomap::trace

@@ -8,7 +8,7 @@
 
 #include "signal/io/reads/read_provider.hpp"
 
-namespace piru::io {
+namespace panomap::io {
 
 class Pod5Provider : public ReadProvider {
 public:
@@ -26,4 +26,4 @@ private:
 
 using Pod5ProviderPtr = std::unique_ptr<Pod5Provider>;
 
-}  // namespace piru::io
+}  // namespace panomap::io

@@ -5,7 +5,7 @@
 #include <memory>
 #include <string>
 
-namespace piru::concurrency {
+namespace panomap::concurrency {
 
 // Lightweight abstraction over the concurrency backend (oneTBB-backed by default).
 class TaskGroup {
@@ -28,4 +28,4 @@ public:
 std::unique_ptr<Executor> make_executor(int threads = -1);
 std::unique_ptr<TaskGroup> make_task_group();
 
-}  // namespace piru::concurrency
+}  // namespace panomap::concurrency

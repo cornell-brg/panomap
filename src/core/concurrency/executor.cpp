@@ -11,7 +11,7 @@
 #include <tbb/task_group.h>
 #endif
 
-namespace piru::concurrency {
+namespace panomap::concurrency {
 namespace {
 
 class SerialTaskGroup : public TaskGroup {
@@ -90,4 +90,4 @@ std::unique_ptr<TaskGroup> make_task_group() {
 #endif
 }
 
-}  // namespace piru::concurrency
+}  // namespace panomap::concurrency

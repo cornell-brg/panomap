@@ -6,7 +6,7 @@
 #include "core/io/graphs/gfa_loader.hpp"
 #include "core/util/logging.hpp"
 
-namespace piru::io {
+namespace panomap::io {
 
 namespace {
 
@@ -32,4 +32,4 @@ GraphLoaderPtr make_graph_loader(const std::string& path) {
   return nullptr;
 }
 
-}  // namespace piru::io
+}  // namespace panomap::io

@@ -33,7 +33,7 @@
 
 #include "core/index/seed_store.hpp"
 
-namespace piru::index {
+namespace panomap::index {
 
 /* Per-bucket finalized data. After build, each bucket is read-only.
  *
@@ -198,4 +198,4 @@ private:
   double filter_fraction_{0.0};
 };
 
-}  // namespace piru::index
+}  // namespace panomap::index

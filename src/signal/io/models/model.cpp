@@ -2,7 +2,7 @@
 
 #include "signal/io/models/model.hpp"
 
-namespace piru::io {
+namespace panomap::io {
 
 std::vector<float> KmerModel::buildFlatLookup() const {
   const int kk = k();
@@ -30,4 +30,4 @@ std::vector<float> KmerModel::buildFlatLookup() const {
   return flat;
 }
 
-}  // namespace piru::io
+}  // namespace panomap::io

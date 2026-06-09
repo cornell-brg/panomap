@@ -5,8 +5,8 @@
 
 #include "signal/tokenizers/tokenizer.hpp"
 
-namespace piru::signal {
+namespace panomap::signal {
 
 TokenizerPtr make_tokenizer(const TokenizerConfig& config);
 
-}  // namespace piru::signal
+}  // namespace panomap::signal

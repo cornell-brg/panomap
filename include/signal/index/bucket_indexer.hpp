@@ -27,7 +27,7 @@
 #include "signal/tokenizers/tokenizer.hpp"
 #include "signal/seed_extractors/seed_extractor.hpp"
 
-namespace piru::index {
+namespace panomap::index {
 
 struct BucketIndexConfig {
   /* Seed extraction params (must match extractor config) */
@@ -76,4 +76,4 @@ BucketIndexResult bucketIndex(const FlatGraph& graph, const io::KmerModel& model
                               const signal::SeedExtractor& extractor,
                               const BucketIndexConfig& config = {});
 
-}  // namespace piru::index
+}  // namespace panomap::index

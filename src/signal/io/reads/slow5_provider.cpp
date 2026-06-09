@@ -9,7 +9,7 @@
 
 #include "core/util/logging.hpp"
 
-namespace piru::io {
+namespace panomap::io {
 
 namespace {
 
@@ -151,4 +151,4 @@ void Slow5Provider::reset() {
   open();
 }
 
-}  // namespace piru::io
+}  // namespace panomap::io

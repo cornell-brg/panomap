@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace piru::signal {
+namespace panomap::signal {
 
 namespace {
 
@@ -74,4 +74,4 @@ const TokenizerConfig& Rh2Tokenizer::config() const { return config_; }
 
 std::string Rh2Tokenizer::name() const { return config_.backend; }
 
-}  // namespace piru::signal
+}  // namespace panomap::signal

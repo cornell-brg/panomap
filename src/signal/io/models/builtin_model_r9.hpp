@@ -3,7 +3,7 @@
 
 #include "builtin_model_common.hpp"
 
-namespace piru::io::generated {
+namespace panomap::io::generated {
 
 inline constexpr int kR9K = 6;
 inline constexpr std::size_t kR9Count = 4096;
@@ -1034,4 +1034,4 @@ inline constexpr ModelEntry kR9Entries[kR9Count] = {
     {"TTTTTA", 91.079045},  {"TTTTTC", 89.173889},  {"TTTTTG", 90.689915},  {"TTTTTT", 90.67901},
 };
 
-}  // namespace piru::io::generated
+}  // namespace panomap::io::generated

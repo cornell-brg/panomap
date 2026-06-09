@@ -18,7 +18,7 @@
 #include <string_view>
 #include <vector>
 
-namespace piru::base {
+namespace panomap::base {
 
 // Same shape as signal::Seed; kept as a base-namespace type to honour the
 // "no signal:: dependency in piru_base" architectural rule.
@@ -42,4 +42,4 @@ struct BaseSeederConfig {
 // Output positions are k-mer start offsets in the read; length = k.
 SeedBuffer extract_minimizers(std::string_view bases, const BaseSeederConfig& cfg);
 
-}  // namespace piru::base
+}  // namespace panomap::base

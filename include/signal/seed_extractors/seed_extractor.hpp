@@ -9,7 +9,7 @@
 
 #include "signal/signal_types.hpp"
 
-namespace piru::signal {
+namespace panomap::signal {
 
 struct SeedExtractorConfig {
   std::string backend{"kmer"};
@@ -32,4 +32,4 @@ public:
 
 using SeedExtractorPtr = std::unique_ptr<SeedExtractor>;
 
-}  // namespace piru::signal
+}  // namespace panomap::signal

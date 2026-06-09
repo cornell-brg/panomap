@@ -10,7 +10,7 @@
 #include <sys/resource.h>
 #endif
 
-namespace piru {
+namespace panomap {
 
 // Wall-clock time in seconds since an arbitrary steady-clock epoch.
 inline double realtime() {
@@ -47,4 +47,4 @@ inline double peakrss() {
 #endif
 }
 
-}  // namespace piru
+}  // namespace panomap

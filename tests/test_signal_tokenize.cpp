@@ -4,7 +4,7 @@
 
 #include "signal/tokenizers/tokenizer_factory.hpp"
 
-using namespace piru::signal;
+using namespace panomap::signal;
 
 TEST_CASE("RH2 tokenizer bins within fine range") {
   NormalizedSignal norm;

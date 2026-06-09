@@ -22,7 +22,7 @@
 #include "core/util/logging.hpp"
 #include "core/util/timing.hpp"
 
-namespace piru::mapping {
+namespace panomap::mapping {
 
 namespace {
 
@@ -625,4 +625,4 @@ PathChainerConfig PathChainerConfig::from_parsed(const cli::Parsed& parsed) {
   return cfg;
 }
 
-}  // namespace piru::mapping
+}  // namespace panomap::mapping

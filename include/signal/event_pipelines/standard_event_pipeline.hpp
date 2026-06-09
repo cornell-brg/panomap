@@ -7,7 +7,7 @@
 
 #include "signal/event_pipeline.hpp"
 
-namespace piru::signal {
+namespace panomap::signal {
 
 class StandardEventPipeline : public EventPipeline {
 public:
@@ -23,4 +23,4 @@ private:
   EventPipelineConfig config_;
 };
 
-}  // namespace piru::signal
+}  // namespace panomap::signal

@@ -7,11 +7,11 @@
 TEST_CASE("slow5 provider reads bundled blow5") {
 #ifdef PIRU_HAS_SLOW5
   const std::string path = "tests/data/HLA/test_reads/quick_r9_2k.blow5";
-  auto provider = piru::io::make_read_provider(path);
+  auto provider = panomap::io::make_read_provider(path);
   REQUIRE(provider != nullptr);
   CHECK(provider->get_format_name() == "slow5");
 
-  piru::io::RawRead read;
+  panomap::io::RawRead read;
   std::size_t count = 0;
   while (provider->get_next(read)) {
     ++count;
@@ -26,9 +26,9 @@ TEST_CASE("slow5 provider reads bundled blow5") {
 }
 
 // Simple mock provider to test interface usage without slow5.
-class MockProvider : public piru::io::ReadProvider {
+class MockProvider : public panomap::io::ReadProvider {
 public:
-  bool get_next(piru::io::RawRead& read) override {
+  bool get_next(panomap::io::RawRead& read) override {
     if (done_) return false;
     read.read_id = "mock";
     read.raw_signal = {1, 2, 3};
@@ -45,7 +45,7 @@ private:
 
 TEST_CASE("mock read provider") {
   MockProvider p;
-  piru::io::RawRead read;
+  panomap::io::RawRead read;
   CHECK(p.get_next(read));
   CHECK(read.len_raw_signal == 3);
   CHECK_FALSE(p.get_next(read));

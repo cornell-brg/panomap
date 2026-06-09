@@ -29,7 +29,7 @@
 #include "core/io/graphs/graph.hpp"
 #include "signal/io/models/model.hpp"
 
-namespace piru::index {
+namespace panomap::index {
 
 /**
  * Configuration for the indexing pipeline.
@@ -103,4 +103,4 @@ struct IndexPipelineResult {
 IndexPipelineResult run_index_pipeline(io::ImportedGraph imported, const io::KmerModel& model,
                                        const IndexPipelineConfig& config);
 
-}  // namespace piru::index
+}  // namespace panomap::index

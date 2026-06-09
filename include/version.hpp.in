@@ -6,13 +6,13 @@
 #define PIRU_VERSION "@PROJECT_VERSION@"
 #define PIRU_VERSION_STRING "@PIRU_VERSION_STRING@"
 
-namespace piru {
+namespace panomap {
 struct Version {
     static constexpr uint32_t kMajor = @PROJECT_VERSION_MAJOR@;
     static constexpr uint32_t kMinor = @PROJECT_VERSION_MINOR@;
     static constexpr uint32_t kPatch = @PROJECT_VERSION_PATCH@;
 };
-} // namespace piru
+} // namespace panomap
 
 inline std::string piru_version() {
     return PIRU_VERSION_STRING;

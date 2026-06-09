@@ -13,7 +13,7 @@
 
 #include <cstdint>
 
-namespace piru::core {
+namespace panomap::core {
 
 // minimap2's hash64 mixer. Spreads small input bits across all output
 // bits so lex-min in 2-bit-packed space does not bias minimizer
@@ -44,4 +44,4 @@ inline std::uint8_t base2bit(char b) {
   }
 }
 
-}  // namespace piru::core
+}  // namespace panomap::core

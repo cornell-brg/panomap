@@ -8,7 +8,7 @@
 #include <utility>
 #include <vector>
 
-namespace piru::io {
+namespace panomap::io {
 
 class KmerModel {
 public:
@@ -29,4 +29,4 @@ public:
   std::vector<float> buildFlatLookup() const;
 };
 
-}  // namespace piru::io
+}  // namespace panomap::io

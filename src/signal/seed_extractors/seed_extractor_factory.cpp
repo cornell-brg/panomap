@@ -6,7 +6,7 @@
 #include "signal/seed_extractors/minimizer_seed_extractor.hpp"
 #include "core/util/logging.hpp"
 
-namespace piru::signal {
+namespace panomap::signal {
 
 SeedExtractorPtr make_seed_extractor(const SeedExtractorConfig& config) {
   if (config.backend == "minimizer") {
@@ -18,4 +18,4 @@ SeedExtractorPtr make_seed_extractor(const SeedExtractorConfig& config) {
   return std::make_unique<KmerSeedExtractor>(config);
 }
 
-}  // namespace piru::signal
+}  // namespace panomap::signal

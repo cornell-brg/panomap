@@ -33,12 +33,12 @@
 
 namespace {
 
-piru::io::ModelPtr load_model_or_file(const std::string& model_arg) {
-  if (auto built = piru::io::load_builtin_model(model_arg)) {
+panomap::io::ModelPtr load_model_or_file(const std::string& model_arg) {
+  if (auto built = panomap::io::load_builtin_model(model_arg)) {
     return built;
   }
   if (std::filesystem::exists(model_arg)) {
-    return piru::io::load_model_from_file(model_arg);
+    return panomap::io::load_model_from_file(model_arg);
   }
   LOG_ERROR("Unknown pore model: " + model_arg + " (not a built-in name or file)");
   return nullptr;
@@ -47,8 +47,8 @@ piru::io::ModelPtr load_model_or_file(const std::string& model_arg) {
 }  // namespace
 
 int handle_index(const std::vector<std::string>& args) {
-  piru::cli::Parsed parsed;
-  piru::cli::ParseConfig config;
+  panomap::cli::Parsed parsed;
+  panomap::cli::ParseConfig config;
   config.usage = "Usage: piru index [options] <graph-file>";
   config.positional_help = {"<graph-file>      Graph file to index"};
   config.options = {
@@ -81,19 +81,19 @@ int handle_index(const std::vector<std::string>& args) {
   };
   config.on_error = [](const std::string&) { std::cerr << "index: invalid option\n"; };
 
-  if (!piru::cli::parse_args(args, config, parsed)) {
-    piru::cli::print_help(config, std::cerr);
+  if (!panomap::cli::parse_args(args, config, parsed)) {
+    panomap::cli::print_help(config, std::cerr);
     return 1;
   }
   if (parsed.values.count("help")) {
-    piru::cli::print_help(config, std::cout);
+    panomap::cli::print_help(config, std::cout);
     return 0;
   }
 
   const bool profile = parsed.values.count("profile") > 0;
   const bool verbose = parsed.values.count("verbose") > 0;
   if (verbose) {
-    piru::logger.set_level(piru::LogLevel::DEBUG);
+    panomap::logger.set_level(panomap::LogLevel::DEBUG);
   }
 
   /* Thread setup */
@@ -108,7 +108,7 @@ int handle_index(const std::vector<std::string>& args) {
       return -1;
     }
   }();
-  auto executor = piru::concurrency::make_executor(num_threads);
+  auto executor = panomap::concurrency::make_executor(num_threads);
   LOG_DEBUG("Using " + std::to_string(executor->max_concurrency()) + " threads (" +
             executor->backend_name() + ")");
 
@@ -118,27 +118,27 @@ int handle_index(const std::vector<std::string>& args) {
 
   if (parsed.positionals.empty()) {
     LOG_ERROR("index: missing required <graph-file>");
-    piru::cli::print_help(config, std::cerr);
+    panomap::cli::print_help(config, std::cerr);
     return 1;
   }
   const std::string graph_path = parsed.positionals.front();
 
   auto model = load_model_or_file(model_arg);
   if (!model) {
-    piru::cli::print_help(config, std::cerr);
+    panomap::cli::print_help(config, std::cerr);
     return 1;
   }
 
-  PIRU_PROFILE_START(profile, "index");
+  PANOMAP_PROFILE_START(profile, "index");
 
-  auto loader = piru::io::make_graph_loader(graph_path);
+  auto loader = panomap::io::make_graph_loader(graph_path);
   if (!loader) {
     LOG_ERROR("index: unsupported graph format for '" + graph_path + "'");
-    piru::cli::print_help(config, std::cerr);
+    panomap::cli::print_help(config, std::cerr);
     return 1;
   }
 
-  piru::io::ImportedGraph imported;
+  panomap::io::ImportedGraph imported;
 
   if (!loader->load(imported)) {
     LOG_ERROR("index: failed to read graph file '" + graph_path + "'");
@@ -154,7 +154,7 @@ int handle_index(const std::vector<std::string>& args) {
   const std::size_t pore_k = model->k();
 
   // Use defaults from IndexPipelineConfig (single source of truth)
-  piru::index::IndexPipelineConfig defaults;
+  panomap::index::IndexPipelineConfig defaults;
   const std::string seed_type =
       parsed.values.count("seed-type") ? parsed.values.at("seed-type") : defaults.seed_type;
   const std::size_t seed_k =
@@ -178,7 +178,7 @@ int handle_index(const std::vector<std::string>& args) {
 
   /* Run indexing pipeline */
 
-  piru::index::IndexPipelineConfig index_config;
+  panomap::index::IndexPipelineConfig index_config;
   index_config.seed_type = seed_type;
   index_config.seed_k = seed_k;
   index_config.minimizer_window = minimizer_window;
@@ -201,50 +201,50 @@ int handle_index(const std::vector<std::string>& args) {
 
   index_config.executor = executor.get();
 
-  auto result = piru::index::run_index_pipeline(std::move(imported), *model, index_config);
+  auto result = panomap::index::run_index_pipeline(std::move(imported), *model, index_config);
 
   // Import pre-computed 1D coords (overrides --compute-1d-sort)
   if (parsed.values.count("1d-coords-file")) {
     std::size_t num_nodes = result.graph_store->nodeCount();
     result.node_1d_coords =
-        piru::index::import_1d_coords_odgi(parsed.values.at("1d-coords-file"), num_nodes);
+        panomap::index::import_1d_coords_odgi(parsed.values.at("1d-coords-file"), num_nodes);
   }
 
   // Dump 1D coordinates if requested
   if (parsed.values.count("dump-1d-coords") && !result.node_1d_coords.empty()) {
-    auto* adj_store = dynamic_cast<piru::index::AdjListGraphStore*>(result.graph_store.get());
+    auto* adj_store = dynamic_cast<panomap::index::AdjListGraphStore*>(result.graph_store.get());
     if (adj_store) {
-      piru::index::dump_1d_coords_tsv(parsed.values.at("dump-1d-coords"), result.node_1d_coords,
+      panomap::index::dump_1d_coords_tsv(parsed.values.at("dump-1d-coords"), result.node_1d_coords,
                                       adj_store->flat());
     }
   }
 
   /* Serialize index */
 
-  PIRU_PROFILE_START(profile, "serialize");
+  PANOMAP_PROFILE_START(profile, "serialize");
 
   std::string output_path = output_base;
   if (!output_path.ends_with(".pirx")) {
     output_path += ".pirx";
   }
 
-  piru::io::index::IndexMetadata metadata;
+  panomap::io::index::IndexMetadata metadata;
   metadata.version = PIRU_VERSION;
   metadata.build_timestamp = static_cast<uint64_t>(
       std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()));
-  metadata.mode = piru::io::index::IndexMode::kSignal;
+  metadata.mode = panomap::io::index::IndexMode::kSignal;
   metadata.model_name = result.model_name;
   metadata.pore_k = result.pore_k;
   metadata.tokenizer = result.tokenizer;
-  piru::io::index::save_index(output_path, *result.graph_store, *result.seed_store,
+  panomap::io::index::save_index(output_path, *result.graph_store, *result.seed_store,
                               result.linearization_coords, metadata, result.node_1d_coords,
                               result.component_ids);
 
   LOG_INFO("Index written to " + output_path);
 
-  PIRU_PROFILE_STOP(profile, "serialize");
-  PIRU_PROFILE_STOP(profile, "index");
-  if (profile) piru::timing::report(std::cerr);
+  PANOMAP_PROFILE_STOP(profile, "serialize");
+  PANOMAP_PROFILE_STOP(profile, "index");
+  if (profile) panomap::timing::report(std::cerr);
 
   return 0;
 }

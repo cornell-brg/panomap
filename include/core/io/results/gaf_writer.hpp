@@ -12,7 +12,7 @@
 #include "core/index/flat_graph.hpp"
 #include "core/io/results/result_writer.hpp"
 
-namespace piru::io {
+namespace panomap::io {
 
 struct GafWriterConfig {
   bool primary_only{true};
@@ -46,4 +46,4 @@ private:
   mutable bool path_lengths_computed_{false};
 };
 
-}  // namespace piru::io
+}  // namespace panomap::io

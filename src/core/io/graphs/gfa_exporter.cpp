@@ -5,7 +5,7 @@
 
 #include "core/io/graphs/graph.hpp"
 
-namespace piru {
+namespace panomap {
 
 void GfaExporter::dumpImportedGraph(const io::ImportedGraph& graph, const std::string& path) {
   std::ofstream out(path);
@@ -63,4 +63,4 @@ void GfaExporter::dumpFlatGraph(const index::FlatGraph& graph, const std::string
   }
 }
 
-}  // namespace piru
+}  // namespace panomap

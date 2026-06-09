@@ -14,7 +14,7 @@
 #include "signal/io/reads/read_provider.hpp"
 #include "signal/signal_types.hpp"
 
-namespace piru::signal {
+namespace panomap::signal {
 
 struct EventPipelineConfig {
   std::string backend{"standard"};
@@ -85,4 +85,4 @@ public:
 
 using EventPipelinePtr = std::unique_ptr<EventPipeline>;
 
-}  // namespace piru::signal
+}  // namespace panomap::signal

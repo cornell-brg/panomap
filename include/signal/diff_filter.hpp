@@ -5,7 +5,7 @@
 
 #include "signal/signal_types.hpp"
 
-namespace piru::signal {
+namespace panomap::signal {
 
 // Drop events whose value is within `diff` of the last emitted event.
 // Compresses the signal in place and populates original_positions to map
@@ -13,4 +13,4 @@ namespace piru::signal {
 // No-op when diff <= 0.
 void apply_diff_filter(NormalizedSignal& signal, float diff);
 
-}  // namespace piru::signal
+}  // namespace panomap::signal

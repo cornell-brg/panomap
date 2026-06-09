@@ -15,7 +15,7 @@
 
 #include "core/util/kmer_hash.hpp"
 
-namespace piru::base {
+namespace panomap::base {
 
 namespace {
 constexpr std::uint64_t kInvalidHash = std::numeric_limits<std::uint64_t>::max();
@@ -37,7 +37,7 @@ SeedBuffer extract_minimizers(std::string_view bases, const BaseSeederConfig& cf
   int valid_bases = 0;
 
   for (std::size_t i = 0; i < bases.size(); ++i) {
-    std::uint8_t code = piru::core::base2bit(bases[i]);
+    std::uint8_t code = panomap::core::base2bit(bases[i]);
     if (code >= 4) {
       kmer = 0;
       valid_bases = 0;
@@ -49,7 +49,7 @@ SeedBuffer extract_minimizers(std::string_view bases, const BaseSeederConfig& cf
     if (i + 1 >= k) {
       const std::size_t kmer_idx = i + 1 - k;
       if (valid_bases >= static_cast<int>(k)) {
-        hashes[kmer_idx] = piru::core::hash64(kmer, kmer_mask);
+        hashes[kmer_idx] = panomap::core::hash64(kmer, kmer_mask);
       }
     }
   }
@@ -80,4 +80,4 @@ SeedBuffer extract_minimizers(std::string_view bases, const BaseSeederConfig& cf
   return out;
 }
 
-}  // namespace piru::base
+}  // namespace panomap::base

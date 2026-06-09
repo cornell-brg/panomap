@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-namespace piru::io {
+namespace panomap::io {
 
 struct RawRead {
   std::string read_id;
@@ -37,4 +37,4 @@ public:
 
 using ReadProviderPtr = std::unique_ptr<ReadProvider>;
 
-}  // namespace piru::io
+}  // namespace panomap::io

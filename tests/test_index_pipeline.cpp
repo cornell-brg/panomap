@@ -5,7 +5,7 @@
 
 #include "core/index/flat_graph.hpp"
 
-using namespace piru;
+using namespace panomap;
 
 TEST_CASE("FlatGraph basic construction via fromRawArrays") {
   std::vector<char> seq = {'A', 'C', 'G', 'T'};

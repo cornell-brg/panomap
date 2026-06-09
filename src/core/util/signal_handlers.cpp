@@ -8,7 +8,7 @@
 
 #include "version.hpp"
 
-namespace piru {
+namespace panomap {
 namespace {
 
 void segv_handler(int signum) {
@@ -36,4 +36,4 @@ void segv_handler(int signum) {
 
 void install_signal_handlers() { std::signal(SIGSEGV, segv_handler); }
 
-}  // namespace piru
+}  // namespace panomap

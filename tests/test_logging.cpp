@@ -36,16 +36,16 @@ struct EnvVarGuard {
 TEST_CASE("logger auto mode disables colors for non-terminal streams") {
   std::ostringstream capture;
 
-  piru::logger.set_output_stream(capture);
-  piru::logger.set_auto_colors();
-  piru::logger.set_show_file_line(false);
-  piru::logger.info("plain log");
+  panomap::logger.set_output_stream(capture);
+  panomap::logger.set_auto_colors();
+  panomap::logger.set_show_file_line(false);
+  panomap::logger.info("plain log");
 
   CHECK_FALSE(contains_ansi_escape(capture.str()));
 
-  piru::logger.set_output_stream(std::cerr);
-  piru::logger.set_auto_colors();
-  piru::logger.set_show_file_line(true);
+  panomap::logger.set_output_stream(std::cerr);
+  panomap::logger.set_auto_colors();
+  panomap::logger.set_show_file_line(true);
 }
 
 TEST_CASE("logger explicit color toggle overrides auto mode") {
@@ -60,21 +60,21 @@ TEST_CASE("logger explicit color toggle overrides auto mode") {
   ::unsetenv("CLICOLOR_FORCE");
   ::unsetenv("CLICOLOR");
 
-  piru::logger.set_output_stream(capture);
-  piru::logger.set_show_file_line(false);
+  panomap::logger.set_output_stream(capture);
+  panomap::logger.set_show_file_line(false);
 
-  piru::logger.set_enable_colors(true);
-  piru::logger.warn("forced color");
+  panomap::logger.set_enable_colors(true);
+  panomap::logger.warn("forced color");
   CHECK(contains_ansi_escape(capture.str()));
 
   capture.str("");
   capture.clear();
 
-  piru::logger.set_enable_colors(false);
-  piru::logger.warn("forced plain");
+  panomap::logger.set_enable_colors(false);
+  panomap::logger.warn("forced plain");
   CHECK_FALSE(contains_ansi_escape(capture.str()));
 
-  piru::logger.set_output_stream(std::cerr);
-  piru::logger.set_auto_colors();
-  piru::logger.set_show_file_line(true);
+  panomap::logger.set_output_stream(std::cerr);
+  panomap::logger.set_auto_colors();
+  panomap::logger.set_show_file_line(true);
 }

@@ -4,7 +4,7 @@
 
 #include "signal/tokenizers/tokenizer.hpp"
 
-namespace piru::signal {
+namespace panomap::signal {
 
 class Rh2Tokenizer : public Tokenizer {
 public:
@@ -18,4 +18,4 @@ private:
   TokenizerConfig config_;
 };
 
-}  // namespace piru::signal
+}  // namespace panomap::signal

@@ -20,7 +20,7 @@
 #include "core/index/linearizer.hpp"
 #include "core/mapping/chainer.hpp"
 
-namespace piru::mapping {
+namespace panomap::mapping {
 
 // Configuration for path-space chaining algorithm.
 // Scoring aligned with RawHash2/minimap2 (DEV061).
@@ -80,4 +80,4 @@ private:
   const std::vector<std::uint32_t>* component_ids_;
 };
 
-}  // namespace piru::mapping
+}  // namespace panomap::mapping

@@ -21,7 +21,7 @@
 
 #include "cli/parse.hpp"
 
-namespace piru::mapping {
+namespace panomap::mapping {
 
 // Minimal hit record: graph-space seed hit (16 bytes).
 // Produced by SeedLookup, consumed by chainer and seed merger.
@@ -76,4 +76,4 @@ public:
 
 using ChainerPtr = std::unique_ptr<Chainer>;
 
-}  // namespace piru::mapping
+}  // namespace panomap::mapping

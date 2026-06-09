@@ -8,7 +8,7 @@
 #include <numeric>
 #include <vector>
 
-namespace piru::signal {
+namespace panomap::signal {
 
 namespace {
 
@@ -322,4 +322,4 @@ const EventPipelineConfig& StandardEventPipeline::config() const { return config
 
 std::string StandardEventPipeline::name() const { return "standard"; }
 
-}  // namespace piru::signal
+}  // namespace panomap::signal

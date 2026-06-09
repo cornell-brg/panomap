@@ -6,7 +6,7 @@
 #include <cstdio>
 #include <cstring>
 
-namespace piru::util {
+namespace panomap::util {
 
 std::size_t getAvailableMemoryBytes() {
 #ifdef __linux__
@@ -103,4 +103,4 @@ void printProgress(std::size_t done, std::size_t total, const std::string& label
   fflush(stderr);
 }
 
-}  // namespace piru::util
+}  // namespace panomap::util

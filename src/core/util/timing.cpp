@@ -8,7 +8,7 @@
 
 #include "core/util/metrics.hpp"
 
-namespace piru::timing {
+namespace panomap::timing {
 namespace {
 
 struct Entry {
@@ -79,4 +79,4 @@ void stop(const std::string& label) { Collector::instance().stop(label); }
 
 void report(std::ostream& os) { Collector::instance().print(os); }
 
-}  // namespace piru::timing
+}  // namespace panomap::timing

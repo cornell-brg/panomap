@@ -47,7 +47,7 @@
 #include "core/util/logging.hpp"
 #include "core/util/timing.hpp"
 
-namespace piru::base {
+namespace panomap::base {
 
 namespace {
 
@@ -87,12 +87,12 @@ std::pair<std::uint32_t, std::uint32_t> basePosToNodeOffset(
 
 }  // namespace
 
-BaseBucketIndexResult bucketIndexBase(const piru::index::FlatGraph& graph,
+BaseBucketIndexResult bucketIndexBase(const panomap::index::FlatGraph& graph,
                                       const BaseBucketIndexConfig& config) {
-  using piru::index::Bucket;
-  using piru::index::BucketSeedStore;
-  using piru::index::LinearCoordinate;
-  using piru::index::SeedEntry;
+  using panomap::index::Bucket;
+  using panomap::index::BucketSeedStore;
+  using panomap::index::LinearCoordinate;
+  using panomap::index::SeedEntry;
 
   BaseBucketIndexResult result;
   result.linearization_coords.resize(graph.nodeCount());
@@ -163,7 +163,7 @@ BaseBucketIndexResult bucketIndexBase(const piru::index::FlatGraph& graph,
         if (base_pos + 1 >= k) {
           const std::size_t kmer_idx = base_pos + 1 - k;
           if (valid_bases >= static_cast<int>(k)) {
-            hashes[kmer_idx] = piru::core::hash64(kmer, kmer_mask);
+            hashes[kmer_idx] = panomap::core::hash64(kmer, kmer_mask);
           }
         }
         ++base_pos;
@@ -310,4 +310,4 @@ BaseBucketIndexResult bucketIndexBase(const piru::index::FlatGraph& graph,
   return result;
 }
 
-}  // namespace piru::base
+}  // namespace panomap::base

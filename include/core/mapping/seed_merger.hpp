@@ -17,7 +17,7 @@
 
 #include "core/mapping/chainer.hpp"
 
-namespace piru::mapping {
+namespace panomap::mapping {
 
 // Configuration for seed merging behavior.
 struct SeedMergerConfig {
@@ -43,4 +43,4 @@ public:
                                        const SeedMergerConfig& config);
 };
 
-}  // namespace piru::mapping
+}  // namespace panomap::mapping

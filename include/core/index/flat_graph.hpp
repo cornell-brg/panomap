@@ -25,7 +25,7 @@
 #include <string_view>
 #include <vector>
 
-namespace piru::index {
+namespace panomap::index {
 
 class FlatGraph {
 public:
@@ -213,4 +213,4 @@ private:
   std::vector<std::uint64_t> path_length_;       // [path_count] in base pairs
 };
 
-}  // namespace piru::index
+}  // namespace panomap::index

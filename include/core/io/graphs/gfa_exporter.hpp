@@ -5,7 +5,7 @@
 #include "core/index/flat_graph.hpp"
 #include "core/io/graphs/graph.hpp"
 
-namespace piru {
+namespace panomap {
 
 class GfaExporter {
 public:
@@ -16,4 +16,4 @@ public:
   static void dumpFlatGraph(const index::FlatGraph& graph, const std::string& path);
 };
 
-}  // namespace piru
+}  // namespace panomap

@@ -5,7 +5,7 @@
 #include <cmath>
 #include <limits>
 
-namespace piru::signal {
+namespace panomap::signal {
 
 void apply_diff_filter(NormalizedSignal& signal, float diff) {
   if (diff <= 0.0f) return;
@@ -41,4 +41,4 @@ void apply_diff_filter(NormalizedSignal& signal, float diff) {
   signal.original_positions = std::move(positions);
 }
 
-}  // namespace piru::signal
+}  // namespace panomap::signal

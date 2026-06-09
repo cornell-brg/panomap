@@ -2,7 +2,7 @@
 
 #include <sstream>
 
-namespace piru::cli {
+namespace panomap::cli {
 
 namespace {
 
@@ -130,4 +130,4 @@ void print_help(const ParseConfig& config, std::ostream& os) {
   }
 }
 
-}  // namespace piru::cli
+}  // namespace panomap::cli

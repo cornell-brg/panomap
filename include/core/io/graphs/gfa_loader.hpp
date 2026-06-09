@@ -8,7 +8,7 @@
 
 #include "core/io/graphs/graph_loader.hpp"
 
-namespace piru::io {
+namespace panomap::io {
 
 class GfaLoader : public GraphLoader {
 public:
@@ -24,4 +24,4 @@ private:
 
 using GfaLoaderPtr = std::unique_ptr<GfaLoader>;
 
-}  // namespace piru::io
+}  // namespace panomap::io

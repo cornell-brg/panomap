@@ -6,7 +6,7 @@
 #include "core/io/results/paf_writer.hpp"
 #include "core/util/logging.hpp"
 
-namespace piru::io {
+namespace panomap::io {
 
 namespace {
 
@@ -48,4 +48,4 @@ ResultWriterPtr make_result_writer_stdout(const index::FlatGraph& graph, bool pr
   return std::make_unique<GafWriter>(graph, config);
 }
 
-}  // namespace piru::io
+}  // namespace panomap::io

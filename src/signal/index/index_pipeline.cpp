@@ -25,7 +25,7 @@
 #include "signal/tokenizers/tokenizer_factory.hpp"
 #include "core/util/logging.hpp"
 
-namespace piru::index {
+namespace panomap::index {
 
 IndexPipelineResult run_index_pipeline(io::ImportedGraph imported, const io::KmerModel& model,
                                        const IndexPipelineConfig& config) {
@@ -124,4 +124,4 @@ IndexPipelineResult run_index_pipeline(io::ImportedGraph imported, const io::Kme
   return result;
 }
 
-}  // namespace piru::index
+}  // namespace panomap::index

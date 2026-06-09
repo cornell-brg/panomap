@@ -29,7 +29,7 @@
 #include "core/index/linearizer.hpp"
 #include "core/index/seed_store.hpp"
 
-namespace piru::base {
+namespace panomap::base {
 
 struct BaseBucketIndexConfig {
   std::size_t k{15};       // k-mer length
@@ -38,8 +38,8 @@ struct BaseBucketIndexConfig {
 };
 
 struct BaseBucketIndexResult {
-  std::unique_ptr<piru::index::SeedStore> seed_store;
-  std::vector<std::vector<piru::index::LinearCoordinate>> linearization_coords;
+  std::unique_ptr<panomap::index::SeedStore> seed_store;
+  std::vector<std::vector<panomap::index::LinearCoordinate>> linearization_coords;
   std::vector<std::size_t> path_lengths;
   std::size_t seeds_total{0};
 };
@@ -49,7 +49,7 @@ struct BaseBucketIndexResult {
 // k-mer containing an N base), sliding-window minimizer with leftmost
 // tiebreak. Hits are mapped back to (node_id, local_offset) via path
 // boundaries before bucket scatter.
-BaseBucketIndexResult bucketIndexBase(const piru::index::FlatGraph& graph,
+BaseBucketIndexResult bucketIndexBase(const panomap::index::FlatGraph& graph,
                                       const BaseBucketIndexConfig& config = {});
 
-}  // namespace piru::base
+}  // namespace panomap::base

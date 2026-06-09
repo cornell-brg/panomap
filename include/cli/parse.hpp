@@ -9,7 +9,7 @@
 #include <string_view>
 #include <vector>
 
-namespace piru::cli {
+namespace panomap::cli {
 
 struct Option {
   char short_opt;
@@ -36,4 +36,4 @@ bool parse_args(const std::vector<std::string>& args, const ParseConfig& config,
 
 void print_help(const ParseConfig& config, std::ostream& os);
 
-}  // namespace piru::cli
+}  // namespace panomap::cli

@@ -2,7 +2,7 @@
 
 #include "core/util/logging.hpp"
 
-namespace piru::io {
+namespace panomap::io {
 
 Pod5Provider::Pod5Provider(const std::string& path) : path_(path) {}
 
@@ -21,4 +21,4 @@ void Pod5Provider::reset() {
 
 std::string Pod5Provider::get_format_name() const { return "pod5"; }
 
-}  // namespace piru::io
+}  // namespace panomap::io

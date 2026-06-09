@@ -8,10 +8,10 @@
 
 #include "core/io/graphs/graph_loader.hpp"
 
-namespace piru::io {
+namespace panomap::io {
 
 // Attempt to choose a loader based on path/extension.
 // Returns nullptr if no suitable loader is available.
 GraphLoaderPtr make_graph_loader(const std::string& path);
 
-}  // namespace piru::io
+}  // namespace panomap::io

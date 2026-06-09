@@ -5,8 +5,8 @@
 
 #include "signal/seed_extractors/seed_extractor.hpp"
 
-namespace piru::signal {
+namespace panomap::signal {
 
 SeedExtractorPtr make_seed_extractor(const SeedExtractorConfig& config);
 
-}  // namespace piru::signal
+}  // namespace panomap::signal

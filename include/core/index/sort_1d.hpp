@@ -27,7 +27,7 @@
 #include "core/index/flat_graph.hpp"
 #include "core/index/linearizer.hpp"
 
-namespace piru::index {
+namespace panomap::index {
 
 struct Sort1DConfig {
   std::uint64_t iter_max{100};        // max SGD iterations
@@ -82,4 +82,4 @@ std::vector<float> import_1d_coords_odgi(const std::string& path, std::size_t nu
 void dump_1d_coords_tsv(const std::string& path, const std::vector<float>& coords,
                         const FlatGraph& graph);
 
-}  // namespace piru::index
+}  // namespace panomap::index

@@ -49,10 +49,10 @@ void print_top_level_usage(const std::vector<Command>& commands) {
 }  // namespace
 
 int main(int argc, char** argv) {
-  piru::install_signal_handlers();
+  panomap::install_signal_handlers();
 
-  const double realtime_0 = piru::realtime();
-  const double cputime_0 = piru::cputime();
+  const double realtime_0 = panomap::realtime();
+  const double cputime_0 = panomap::cputime();
 
   const std::vector<Command> commands = {
       {"index", "Build a base-mode minimizer index from a pangenome graph.",
@@ -94,9 +94,9 @@ int main(int argc, char** argv) {
     std::cerr << " " << arg;
   }
   std::cerr << "\n[main] Real time: " << std::fixed << std::setprecision(3)
-            << (piru::realtime() - realtime_0)
-            << " sec; CPU time: " << (piru::cputime() - cputime_0)
-            << " sec; Peak RAM: " << (piru::peakrss() / 1024.0 / 1024.0 / 1024.0) << " GB\n\n";
+            << (panomap::realtime() - realtime_0)
+            << " sec; CPU time: " << (panomap::cputime() - cputime_0)
+            << " sec; Peak RAM: " << (panomap::peakrss() / 1024.0 / 1024.0 / 1024.0) << " GB\n\n";
 
   return exit_code;
 }

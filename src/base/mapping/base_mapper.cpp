@@ -34,20 +34,20 @@
 #include "core/mapping/sort_chainer.hpp"
 #include "core/util/logging.hpp"
 
-namespace piru::base::mapping {
+namespace panomap::base::mapping {
 
-using piru::mapping::Chain;
-using piru::mapping::ChainResult;
-using piru::mapping::DecisionPath;
-using piru::mapping::Mapping;
-using piru::mapping::NodeAnchor;
-using piru::mapping::PanChainer;
-using piru::mapping::PanChainerConfig;
-using piru::mapping::PathChainer;
-using piru::mapping::PathChainerConfig;
-using piru::mapping::ReadMapResult;
-using piru::mapping::SortChainer;
-using piru::mapping::SortChainerConfig;
+using panomap::mapping::Chain;
+using panomap::mapping::ChainResult;
+using panomap::mapping::DecisionPath;
+using panomap::mapping::Mapping;
+using panomap::mapping::NodeAnchor;
+using panomap::mapping::PanChainer;
+using panomap::mapping::PanChainerConfig;
+using panomap::mapping::PathChainer;
+using panomap::mapping::PathChainerConfig;
+using panomap::mapping::ReadMapResult;
+using panomap::mapping::SortChainer;
+using panomap::mapping::SortChainerConfig;
 
 namespace {
 
@@ -143,7 +143,7 @@ bool checkMappingDecision(const std::vector<Chain>& chains, float w_bestq, float
 
 }  // namespace
 
-void BaseSeedLookup::lookup(const piru::base::SeedBuffer& seeds,
+void BaseSeedLookup::lookup(const panomap::base::SeedBuffer& seeds,
                             std::vector<NodeAnchor>& out_hits) const {
   if (!store_) return;
   out_hits.clear();
@@ -154,7 +154,7 @@ void BaseSeedLookup::lookup(const piru::base::SeedBuffer& seeds,
   struct Entry {
     std::size_t q_pos;
     std::uint32_t length;
-    piru::index::SeedHitSpan hits;
+    panomap::index::SeedHitSpan hits;
     bool flt;  // true = filter out
   };
   std::vector<Entry> entries;
@@ -257,7 +257,7 @@ void BaseBatchBuffer::resize(std::size_t capacity) {
 
 void BaseBatchBuffer::clear() {
   for (std::size_t i = 0; i < num_reads; ++i) {
-    reads[i] = piru::base::io::FastqRead{};
+    reads[i] = panomap::base::io::FastqRead{};
     seeds[i].seeds.clear();
     seed_hits[i].clear();
     map_results[i] = ReadMapResult{};
@@ -265,11 +265,11 @@ void BaseBatchBuffer::clear() {
   num_reads = 0;
 }
 
-BaseMapper::BaseMapper(piru::base::io::FastqProvider& provider, BaseMapperConfig config,
+BaseMapper::BaseMapper(panomap::base::io::FastqProvider& provider, BaseMapperConfig config,
                        std::ostream& output)
     : config_(std::move(config)),
       provider_(provider),
-      executor_(piru::concurrency::make_executor(config_.num_threads)),
+      executor_(panomap::concurrency::make_executor(config_.num_threads)),
       components_(create_components()),
       output_(output) {
   // Pre-size per-chunk-depth EMA. Index 0 unused (ck=0 means no chunks
@@ -449,7 +449,7 @@ void BaseMapper::process_read(BaseBatchBuffer& batch, std::size_t index) {
 
   if (config_.chunk_bp == 0 || read.sequence.size() <= config_.chunk_bp) {
     /* Whole-read path: extract once, look up, chain. */
-    seeds = piru::base::extract_minimizers(read.sequence, config_.seeder);
+    seeds = panomap::base::extract_minimizers(read.sequence, config_.seeder);
     components_.lookup.lookup(seeds, hits);
     last_chains = components_.chainer->chain(hits);
     total_hits = hits.size();
@@ -465,7 +465,7 @@ void BaseMapper::process_read(BaseBatchBuffer& batch, std::size_t index) {
       const std::size_t chunk_end = std::min((chunk_idx + 1) * config_.chunk_bp, total_bases);
       std::string_view prefix(read.sequence.data(), chunk_end);
 
-      seeds = piru::base::extract_minimizers(prefix, config_.seeder);
+      seeds = panomap::base::extract_minimizers(prefix, config_.seeder);
       hits.clear();
       components_.lookup.lookup(seeds, hits);
 
@@ -562,7 +562,7 @@ BaseMapperStats BaseMapper::output_batch(const BaseBatchBuffer& batch) const {
               "score=" + std::to_string(static_cast<int>(pri_score)) + "\t" +
               "anchors=" + std::to_string(pri_anchors));
 
-    piru::io::ResultWriter* writer = config_.result_writer;
+    panomap::io::ResultWriter* writer = config_.result_writer;
     if (!config_.per_file_writers.empty()) {
       auto it = config_.per_file_writers.find(read.source_file);
       if (it != config_.per_file_writers.end()) writer = it->second;
@@ -583,4 +583,4 @@ BaseMapperStats BaseMapper::output_batch(const BaseBatchBuffer& batch) const {
   return stats;
 }
 
-}  // namespace piru::base::mapping
+}  // namespace panomap::base::mapping

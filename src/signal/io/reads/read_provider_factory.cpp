@@ -7,7 +7,7 @@
 #include "signal/io/reads/slow5_provider.hpp"
 #include "core/util/logging.hpp"
 
-namespace piru::io {
+namespace panomap::io {
 
 namespace {
 
@@ -42,4 +42,4 @@ ReadProviderPtr make_read_provider(const std::string& path) {
   return nullptr;
 }
 
-}  // namespace piru::io
+}  // namespace panomap::io

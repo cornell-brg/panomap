@@ -16,7 +16,7 @@
 #include "core/index/flat_graph.hpp"
 #include "core/util/logging.hpp"
 
-namespace piru::io::index {
+namespace panomap::io::index {
 
 namespace {
 
@@ -74,17 +74,17 @@ const char* mode_name(IndexMode mode) {
   return "unknown";
 }
 
-void save_index(const std::string& path, const piru::index::GraphStore& graph_store,
-                const piru::index::SeedStore& seed_store,
-                const std::vector<std::vector<piru::index::LinearCoordinate>>& linearization_coords,
+void save_index(const std::string& path, const panomap::index::GraphStore& graph_store,
+                const panomap::index::SeedStore& seed_store,
+                const std::vector<std::vector<panomap::index::LinearCoordinate>>& linearization_coords,
                 const IndexMetadata& metadata, const std::vector<float>& node_1d_coords,
                 const std::vector<std::uint32_t>& component_ids) {
-  const auto* adj_store = dynamic_cast<const piru::index::AdjListGraphStore*>(&graph_store);
+  const auto* adj_store = dynamic_cast<const panomap::index::AdjListGraphStore*>(&graph_store);
   if (!adj_store) {
     throw std::runtime_error("Unsupported GraphStore backend for serialization");
   }
 
-  const auto* bucket_store = dynamic_cast<const piru::index::BucketSeedStore*>(&seed_store);
+  const auto* bucket_store = dynamic_cast<const panomap::index::BucketSeedStore*>(&seed_store);
   if (!bucket_store) {
     throw std::runtime_error("Only BucketSeedStore is supported for serialization");
   }
@@ -191,7 +191,7 @@ void save_index(const std::string& path, const piru::index::GraphStore& graph_st
     }
     if (n_entries > 0) {
       out.write(reinterpret_cast<const char*>(b.entries.data()),
-                static_cast<std::streamsize>(n_entries * sizeof(piru::index::SeedEntry)));
+                static_cast<std::streamsize>(n_entries * sizeof(panomap::index::SeedEntry)));
     }
   }
 
@@ -284,7 +284,7 @@ LoadedIndex load_index(const std::string& path) {
 
   /* 3-5. Graph - build FlatGraph directly from pirx */
 
-  piru::index::FlatGraph fg;
+  panomap::index::FlatGraph fg;
 
   // Temporary builder vectors (moved into FlatGraph at the end)
   uint64_t node_count;
@@ -341,7 +341,7 @@ LoadedIndex load_index(const std::string& path) {
   }
 
   // Assemble FlatGraph (seq_len passed as zeros; real lengths set below)
-  fg = piru::index::FlatGraph::fromRawArrays(
+  fg = panomap::index::FlatGraph::fromRawArrays(
       static_cast<std::uint32_t>(node_count), static_cast<std::uint32_t>(path_count),
       std::move(seq_data), std::move(seq_offset), std::move(seq_len), std::move(name_data),
       std::move(name_offset_nodes), std::move(name_len_nodes),
@@ -357,7 +357,7 @@ LoadedIndex load_index(const std::string& path) {
   uint64_t lin_node_count;
   read_pod(in, lin_node_count);
 
-  std::vector<std::vector<piru::index::LinearCoordinate>> linearization_coords(lin_node_count);
+  std::vector<std::vector<panomap::index::LinearCoordinate>> linearization_coords(lin_node_count);
   for (uint64_t i = 0; i < lin_node_count; ++i) {
     uint64_t coord_count;
     read_pod(in, coord_count);
@@ -401,7 +401,7 @@ LoadedIndex load_index(const std::string& path) {
   uint64_t num_buckets;
   read_pod(in, num_buckets);
 
-  std::vector<piru::index::Bucket> buckets(num_buckets);
+  std::vector<panomap::index::Bucket> buckets(num_buckets);
   std::size_t total_hits = 0;
 
   for (uint64_t bi = 0; bi < num_buckets; ++bi) {
@@ -424,12 +424,12 @@ LoadedIndex load_index(const std::string& path) {
     if (n_entries > 0) {
       b.entries.resize(n_entries);
       in.read(reinterpret_cast<char*>(b.entries.data()),
-              static_cast<std::streamsize>(n_entries * sizeof(piru::index::SeedEntry)));
+              static_cast<std::streamsize>(n_entries * sizeof(panomap::index::SeedEntry)));
     }
     total_hits += n_entries;
   }
 
-  auto seeds = std::make_unique<piru::index::BucketSeedStore>(
+  auto seeds = std::make_unique<panomap::index::BucketSeedStore>(
       std::move(buckets), bucket_bits, std::move(seed_extractor_name), std::move(seed_params),
       max_freq, freq_threshold, filter_fraction);
 
@@ -483,7 +483,7 @@ LoadedIndex load_index(const std::string& path) {
   sz.components = static_cast<uint64_t>(pos_end - pos_components);
   sz.total = static_cast<uint64_t>(pos_end - pos_start);
 
-  return {std::move(metadata), std::make_unique<piru::index::FlatGraphStore>(std::move(fg)),
+  return {std::move(metadata), std::make_unique<panomap::index::FlatGraphStore>(std::move(fg)),
           std::move(seeds), std::move(linearization_coords), std::move(node_1d_coords),
           std::move(component_ids), sz};
 }
@@ -499,4 +499,4 @@ bool is_pirx_index(const std::string& path) {
   return std::string(magic, 4) == std::string(kMagic, 4);
 }
 
-}  // namespace piru::io::index
+}  // namespace panomap::io::index

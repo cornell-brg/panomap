@@ -15,7 +15,7 @@
 #include "signal/io/models/model_factory.hpp"
 #include "core/util/logging.hpp"
 
-namespace piru::io {
+namespace panomap::io {
 
 namespace {
 
@@ -190,4 +190,4 @@ ModelPtr load_model_from_file(const std::string& path) {
   return nullptr;
 }
 
-}  // namespace piru::io
+}  // namespace panomap::io

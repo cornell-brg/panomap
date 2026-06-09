@@ -29,7 +29,7 @@
 #include "core/util/logging.hpp"
 #include "core/util/trace.hpp"
 
-namespace piru::mapping {
+namespace panomap::mapping {
 
 namespace {
 
@@ -448,27 +448,27 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) {
 
       /* Trace: per-chunk pipeline dumps */
       const auto& rid = read.read_id;
-      PIRU_TRACE_DUMP(trace::kSignal, rid, {
+      PANOMAP_TRACE_DUMP(trace::kSignal, rid, {
         std::ofstream ofs(trace::trace_path("1_pA", rid, chunk_idx));
         for (std::size_t i = 0; i < chunk_len; ++i) ofs << pA[chunk_start + i] << "\n";
       });
-      PIRU_TRACE_DUMP(trace::kNorm, rid, {
+      PANOMAP_TRACE_DUMP(trace::kNorm, rid, {
         std::ofstream ofs(trace::trace_path("1b_norm", rid, chunk_idx));
         for (const auto& v : events.debug_normalized) ofs << v << "\n";
       });
-      PIRU_TRACE_DUMP(trace::kEvents, rid, {
+      PANOMAP_TRACE_DUMP(trace::kEvents, rid, {
         std::ofstream ofs(trace::trace_path("2_events", rid, chunk_idx));
         for (const auto& v : events.samples) ofs << v << "\n";
       });
-      PIRU_TRACE_DUMP(trace::kTokens, rid, {
+      PANOMAP_TRACE_DUMP(trace::kTokens, rid, {
         std::ofstream ofs(trace::trace_path("3_tokens", rid, chunk_idx));
         for (const auto& v : tokens.tokens) ofs << v << "\n";
       });
-      PIRU_TRACE_DUMP(trace::kSeeds, rid, {
+      PANOMAP_TRACE_DUMP(trace::kSeeds, rid, {
         std::ofstream ofs(trace::trace_path("4_seeds", rid, chunk_idx));
         for (const auto& s : seeds.seeds) ofs << s.hash << "\t" << s.position << "\n";
       });
-      PIRU_TRACE_DUMP(trace::kHits, rid, {
+      PANOMAP_TRACE_DUMP(trace::kHits, rid, {
         std::ofstream ofs(trace::trace_path("5_hits", rid, chunk_idx));
         ofs << "chunk_new=" << chunk_hits.size() << "\n";
         for (const auto& h : chunk_hits)
@@ -478,7 +478,7 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) {
       /* Chain all accumulated hits, keep only survivors */
       ChainResult chunk_chains = components_.chainer->chain(all_hits);
 
-      PIRU_TRACE_DUMP(trace::kChains, rid, {
+      PANOMAP_TRACE_DUMP(trace::kChains, rid, {
         std::ofstream ofs(trace::trace_path("6_anchors", rid, chunk_idx));
         ofs << "# Anchor cloud: query_pos\t1d_ref_coord\tnode_id\toffset\tspan\n";
         for (const auto& h : all_hits) {
@@ -652,4 +652,4 @@ BatchMapperStats BatchMapper::output_batch(const BatchBuffer& batch) const {
   return stats;
 }
 
-}  // namespace piru::mapping
+}  // namespace panomap::mapping

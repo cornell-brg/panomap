@@ -25,7 +25,7 @@
 #include "signal/tokenizers/tokenizer_factory.hpp"
 #include "signal/seed_extractors/seed_extractor_factory.hpp"
 
-using namespace piru;
+using namespace panomap;
 
 namespace {
 

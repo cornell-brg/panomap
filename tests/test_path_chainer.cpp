@@ -4,8 +4,8 @@
 
 #include "core/mapping/path_chainer.hpp"
 
-using namespace piru::mapping;
-using namespace piru::index;
+using namespace panomap::mapping;
+using namespace panomap::index;
 
 namespace {
 

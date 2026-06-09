@@ -2,9 +2,9 @@
 
 #include <csignal>
 
-namespace piru {
+namespace panomap {
 
 // Install handlers for fatal signals (currently SIGSEGV) to aid debugging.
 void install_signal_handlers();
 
-}  // namespace piru
+}  // namespace panomap

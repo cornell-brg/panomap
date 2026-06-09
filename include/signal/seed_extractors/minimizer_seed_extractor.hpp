@@ -6,7 +6,7 @@
 
 #include "signal/seed_extractors/seed_extractor.hpp"
 
-namespace piru::signal {
+namespace panomap::signal {
 
 class MinimizerSeedExtractor : public SeedExtractor {
 public:
@@ -20,4 +20,4 @@ private:
   SeedExtractorConfig config_;
 };
 
-}  // namespace piru::signal
+}  // namespace panomap::signal

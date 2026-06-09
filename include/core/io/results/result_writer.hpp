@@ -8,7 +8,7 @@
 
 #include "core/mapping/map_result.hpp"
 
-namespace piru::io {
+namespace panomap::io {
 
 class ResultWriter {
 public:
@@ -21,4 +21,4 @@ public:
 
 using ResultWriterPtr = std::unique_ptr<ResultWriter>;
 
-}  // namespace piru::io
+}  // namespace panomap::io

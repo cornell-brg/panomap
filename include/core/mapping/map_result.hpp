@@ -19,7 +19,7 @@
 
 #include "core/mapping/chainer.hpp"
 
-namespace piru::mapping {
+namespace panomap::mapping {
 
 /**
  * A single mapping (one chain).
@@ -68,4 +68,4 @@ struct ReadMapResult {
   const Mapping* primary() const { return mappings.empty() ? nullptr : &mappings[0]; }
 };
 
-}  // namespace piru::mapping
+}  // namespace panomap::mapping

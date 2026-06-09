@@ -15,7 +15,7 @@
 #include <string>
 #include <vector>
 
-namespace piru::base::io {
+namespace panomap::base::io {
 
 struct FastqRead {
   std::string id;          // header up to first whitespace, no leading '@'
@@ -49,4 +49,4 @@ class FastqProvider {
   bool warned_malformed_{false};
 };
 
-}  // namespace piru::base::io
+}  // namespace panomap::base::io

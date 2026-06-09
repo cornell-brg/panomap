@@ -21,7 +21,7 @@
 #include "core/index/linearizer.hpp"
 #include "core/index/seed_store.hpp"
 
-namespace piru::io::index {
+namespace panomap::io::index {
 
 // Index modality. Stamped in the .pirx header by the binary that built it,
 // checked at load time so a piru-signal binary refuses a piru-base index
@@ -57,18 +57,18 @@ struct SectionSizes {
 
 struct LoadedIndex {
   IndexMetadata metadata;
-  std::unique_ptr<piru::index::FlatGraphStore> graph;
-  std::unique_ptr<piru::index::SeedStore> seeds;
-  std::vector<std::vector<piru::index::LinearCoordinate>> linearization_coords;
+  std::unique_ptr<panomap::index::FlatGraphStore> graph;
+  std::unique_ptr<panomap::index::SeedStore> seeds;
+  std::vector<std::vector<panomap::index::LinearCoordinate>> linearization_coords;
   std::vector<float> node_1d_coords;          // empty if not computed at index time
   std::vector<std::uint32_t> component_ids;  // connected component per node
   SectionSizes section_sizes;
 };
 
 /** Save an index to a single .pirx file. */
-void save_index(const std::string& path, const piru::index::GraphStore& graph,
-                const piru::index::SeedStore& seeds,
-                const std::vector<std::vector<piru::index::LinearCoordinate>>& linearization_coords,
+void save_index(const std::string& path, const panomap::index::GraphStore& graph,
+                const panomap::index::SeedStore& seeds,
+                const std::vector<std::vector<panomap::index::LinearCoordinate>>& linearization_coords,
                 const IndexMetadata& metadata, const std::vector<float>& node_1d_coords = {},
                 const std::vector<std::uint32_t>& component_ids = {});
 
@@ -78,4 +78,4 @@ LoadedIndex load_index(const std::string& path);
 /** Check if a file has the PIRX magic header. */
 bool is_pirx_index(const std::string& path);
 
-}  // namespace piru::io::index
+}  // namespace panomap::io::index

@@ -19,7 +19,7 @@
 
 #include "core/util/logging.hpp"
 
-namespace piru::io {
+namespace panomap::io {
 
 namespace {
 void write_header(std::ostream& out) {
@@ -332,4 +332,4 @@ std::size_t GafWriter::getPathLength(std::size_t path_id) const {
   return (path_id < path_lengths_.size()) ? path_lengths_[path_id] : 0;
 }
 
-}  // namespace piru::io
+}  // namespace panomap::io

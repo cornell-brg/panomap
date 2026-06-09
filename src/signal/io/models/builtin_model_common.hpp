@@ -3,11 +3,11 @@
 
 #include <cstddef>
 
-namespace piru::io::generated {
+namespace panomap::io::generated {
 
 struct ModelEntry {
   const char* kmer;
   double mean;
 };
 
-}  // namespace piru::io::generated
+}  // namespace panomap::io::generated

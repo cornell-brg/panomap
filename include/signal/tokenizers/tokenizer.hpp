@@ -8,7 +8,7 @@
 
 #include "signal/signal_types.hpp"
 
-namespace piru::signal {
+namespace panomap::signal {
 
 struct TokenizerConfig {
   std::string backend{"rh2"};
@@ -34,4 +34,4 @@ public:
 
 using TokenizerPtr = std::unique_ptr<Tokenizer>;
 
-}  // namespace piru::signal
+}  // namespace panomap::signal

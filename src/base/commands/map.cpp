@@ -29,8 +29,8 @@
 #include "core/util/timing.hpp"
 
 int handle_base_map(const std::vector<std::string>& args) {
-  piru::cli::Parsed parsed;
-  piru::cli::ParseConfig config;
+  panomap::cli::Parsed parsed;
+  panomap::cli::ParseConfig config;
   config.usage = "Usage: piru-base map [options] --index <index.pirx> <reads.fastq[.gz]>";
   config.positional_help = {"<reads.fastq[.gz]>  Basecalled FASTQ input (plain or gzip)"};
   config.options = {
@@ -66,7 +66,7 @@ int handle_base_map(const std::vector<std::string>& args) {
       {'\0', "no-anchor-merge", false, "Disable anchor merging"},
   };
   // Append backend-specific chaining options (path-chain / sort-chain / pan-chain).
-  auto chain_opts = piru::mapping::PathChainerConfig::cli_options();
+  auto chain_opts = panomap::mapping::PathChainerConfig::cli_options();
   config.options.insert(config.options.end(), chain_opts.begin(), chain_opts.end());
   config.options.push_back(
       {'\0', "chain-dd-tolerance", true,
@@ -97,28 +97,28 @@ int handle_base_map(const std::vector<std::string>& args) {
        "large: hg38 + real pangenomes (~1+ Gb) -- combo. (default: medium)"});
   config.on_error = [](const std::string&) { std::cerr << "map: invalid option\n"; };
 
-  if (!piru::cli::parse_args(args, config, parsed)) {
-    piru::cli::print_help(config, std::cerr);
+  if (!panomap::cli::parse_args(args, config, parsed)) {
+    panomap::cli::print_help(config, std::cerr);
     return 1;
   }
   if (parsed.values.count("help")) {
-    piru::cli::print_help(config, std::cout);
+    panomap::cli::print_help(config, std::cout);
     return 0;
   }
 
   if (!parsed.values.count("index")) {
     LOG_ERROR("map: must specify --index <file>");
-    piru::cli::print_help(config, std::cerr);
+    panomap::cli::print_help(config, std::cerr);
     return 1;
   }
   if (parsed.positionals.size() != 1) {
     LOG_ERROR("map: missing required <reads.fastq[.gz]>");
-    piru::cli::print_help(config, std::cerr);
+    panomap::cli::print_help(config, std::cerr);
     return 1;
   }
 
   const bool profile = parsed.values.count("profile") > 0;
-  if (parsed.values.count("verbose")) piru::logger.set_level(piru::LogLevel::DEBUG);
+  if (parsed.values.count("verbose")) panomap::logger.set_level(panomap::LogLevel::DEBUG);
 
   const int num_threads = [&]() {
     auto it = parsed.values.find("threads");
@@ -130,20 +130,20 @@ int handle_base_map(const std::vector<std::string>& args) {
     }
   }();
 
-  PIRU_PROFILE_START(profile, "map");
+  PANOMAP_PROFILE_START(profile, "map");
 
   /* 1. Load index. */
 
-  PIRU_PROFILE_START(profile, "index_load");
+  PANOMAP_PROFILE_START(profile, "index_load");
   const std::string index_path = parsed.values.at("index");
-  if (!piru::io::index::is_pirx_index(index_path)) {
+  if (!panomap::io::index::is_pirx_index(index_path)) {
     LOG_ERROR("map: not a .pirx file: " + index_path);
     return 1;
   }
-  auto loaded = piru::io::index::load_index(index_path);
-  if (loaded.metadata.mode != piru::io::index::IndexMode::kBase) {
+  auto loaded = panomap::io::index::load_index(index_path);
+  if (loaded.metadata.mode != panomap::io::index::IndexMode::kBase) {
     LOG_ERROR(std::string("map: index was built in mode '") +
-              piru::io::index::mode_name(loaded.metadata.mode) +
+              panomap::io::index::mode_name(loaded.metadata.mode) +
               "', but piru-base only loads 'base' indexes. Use piru-signal instead.");
     return 1;
   }
@@ -164,11 +164,11 @@ int handle_base_map(const std::vector<std::string>& args) {
   auto linearization_coords = std::move(loaded.linearization_coords);
   std::vector<float> node_1d_coords = std::move(loaded.node_1d_coords);
   std::vector<std::uint32_t> component_ids = std::move(loaded.component_ids);
-  PIRU_PROFILE_STOP(profile, "index_load");
+  PANOMAP_PROFILE_STOP(profile, "index_load");
 
   /* 2. Build mapper config. */
 
-  piru::base::mapping::BaseMapperConfig cfg;
+  panomap::base::mapping::BaseMapperConfig cfg;
   cfg.num_threads = num_threads;
 
   // Pull k/w from index seed-store params so seeder hashes the same way the
@@ -288,13 +288,13 @@ int handle_base_map(const std::vector<std::string>& args) {
   const std::vector<float>* writer_1d = node_1d_coords.empty() ? nullptr : &node_1d_coords;
   const std::vector<std::uint32_t>* writer_cc =
       component_ids.empty() ? nullptr : &component_ids;
-  piru::io::ResultWriterPtr result_writer;
+  panomap::io::ResultWriterPtr result_writer;
   if (output_path.empty()) {
     result_writer =
-        piru::io::make_result_writer_stdout(flat_graph, primary_only, writer_1d, writer_cc);
+        panomap::io::make_result_writer_stdout(flat_graph, primary_only, writer_1d, writer_cc);
   } else {
     result_writer =
-        piru::io::make_result_writer(output_path, flat_graph, primary_only, writer_1d, writer_cc);
+        panomap::io::make_result_writer(output_path, flat_graph, primary_only, writer_1d, writer_cc);
     LOG_INFO("Writing results to: " + output_path);
   }
   cfg.result_writer = result_writer.get();
@@ -302,23 +302,23 @@ int handle_base_map(const std::vector<std::string>& args) {
   /* 4. Run mapper on the single FASTQ input. */
 
   const std::string reads_path = parsed.positionals[0];
-  piru::base::io::FastqProvider provider(reads_path);
+  panomap::base::io::FastqProvider provider(reads_path);
   if (!provider.is_open()) {
     LOG_ERROR("map: failed to open " + reads_path);
     return 1;
   }
   LOG_INFO("input: " + reads_path);
 
-  PIRU_PROFILE_START(profile, "mapping");
-  piru::base::mapping::BaseMapper mapper(provider, cfg, std::cout);
+  PANOMAP_PROFILE_START(profile, "mapping");
+  panomap::base::mapping::BaseMapper mapper(provider, cfg, std::cout);
   auto stats = mapper.process_all();
-  PIRU_PROFILE_STOP(profile, "mapping");
+  PANOMAP_PROFILE_STOP(profile, "mapping");
 
   LOG_INFO("map: done. reads=" + std::to_string(stats.reads_processed) +
            ", mapped=" + std::to_string(stats.reads_mapped) +
            ", unmapped=" + std::to_string(stats.reads_unmapped));
 
-  PIRU_PROFILE_STOP(profile, "map");
-  if (profile) piru::timing::report(std::cerr);
+  PANOMAP_PROFILE_STOP(profile, "map");
+  if (profile) panomap::timing::report(std::cerr);
   return 0;
 }

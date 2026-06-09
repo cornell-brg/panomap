@@ -8,7 +8,7 @@
 
 #include "core/io/results/result_writer.hpp"
 
-namespace piru::io {
+namespace panomap::io {
 
 class PafWriter : public ResultWriter {
 public:
@@ -22,4 +22,4 @@ private:
   std::ofstream out_;
 };
 
-}  // namespace piru::io
+}  // namespace panomap::io

@@ -34,7 +34,7 @@
 #include "signal/seed_extractors/seed_extractor_factory.hpp"
 #include "signal/signal_types.hpp"
 
-namespace piru::mapping {
+namespace panomap::mapping {
 
 class SeedLookup {
 public:
@@ -176,4 +176,4 @@ private:
   mutable std::vector<double> ema_score_per_ck_;
 };
 
-}  // namespace piru::mapping
+}  // namespace panomap::mapping

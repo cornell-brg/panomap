@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <string>
 
-namespace piru::util {
+namespace panomap::util {
 
 // Query system memory from /proc/meminfo (Linux).
 // Returns 0 on failure or unsupported platform.
@@ -27,4 +27,4 @@ std::string formatDuration(double seconds);
 // Updates in-place (carriage return). Call with done=total for final newline.
 void printProgress(std::size_t done, std::size_t total, const std::string& label = "");
 
-}  // namespace piru::util
+}  // namespace panomap::util

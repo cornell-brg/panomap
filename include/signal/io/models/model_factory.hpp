@@ -8,7 +8,7 @@
 
 #include "signal/io/models/model.hpp"
 
-namespace piru::io {
+namespace panomap::io {
 
 using ModelPtr = std::unique_ptr<KmerModel>;
 
@@ -18,4 +18,4 @@ ModelPtr load_builtin_model(const std::string& name);
 // Load a model from file (to be implemented in later stages).
 ModelPtr load_model_from_file(const std::string& path);
 
-}  // namespace piru::io
+}  // namespace panomap::io

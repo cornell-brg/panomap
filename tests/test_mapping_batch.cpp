@@ -7,7 +7,7 @@
 #include "signal/io/reads/read_provider_factory.hpp"
 #include "signal/mapping/batch_mapper.hpp"
 
-using namespace piru;
+using namespace panomap;
 
 TEST_CASE("Batch mapper processes blow5 reads and emits seeds") {
 #ifdef PIRU_HAS_SLOW5

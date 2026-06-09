@@ -6,7 +6,7 @@
 #include <cstdint>
 #include <limits>
 
-namespace piru::signal {
+namespace panomap::signal {
 
 // Mix function used across seed backends; mask keeps the value bounded.
 inline std::uint64_t hash64(std::uint64_t key, std::uint64_t mask) {
@@ -55,4 +55,4 @@ inline bool hasSentinel(const std::int16_t* tokens, std::size_t start, std::size
   return false;
 }
 
-}  // namespace piru::signal
+}  // namespace panomap::signal

@@ -20,7 +20,7 @@
 
 #include "core/util/logging.hpp"
 
-namespace piru::base::io {
+namespace panomap::base::io {
 
 namespace {
 
@@ -126,4 +126,4 @@ bool FastqProvider::next(FastqRead& out) {
   return true;
 }
 
-}  // namespace piru::base::io
+}  // namespace panomap::base::io

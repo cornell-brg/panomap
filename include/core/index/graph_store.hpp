@@ -11,7 +11,7 @@
 
 #include "core/index/flat_graph.hpp"
 
-namespace piru::index {
+namespace panomap::index {
 
 class GraphStore {
 public:
@@ -41,4 +41,4 @@ private:
 // Legacy alias during migration
 using AdjListGraphStore = FlatGraphStore;
 
-}  // namespace piru::index
+}  // namespace panomap::index

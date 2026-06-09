@@ -8,7 +8,7 @@
 #include <variant>
 #include <vector>
 
-namespace piru::signal {
+namespace panomap::signal {
 
 struct NormalizedSignal {
   std::vector<float> samples;
@@ -58,4 +58,4 @@ struct SeedBuffer {
   std::vector<Seed> seeds;
 };
 
-}  // namespace piru::signal
+}  // namespace panomap::signal

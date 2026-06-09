@@ -7,7 +7,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace piru::index {
+namespace panomap::index {
 
 // Linear coordinate assigned to a node.
 // A node may have multiple coordinates if it appears on multiple paths
@@ -48,4 +48,4 @@ inline TransposedCoords buildTransposedCoords(
   return result;
 }
 
-}  // namespace piru::index
+}  // namespace panomap::index

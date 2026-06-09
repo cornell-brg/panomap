@@ -36,8 +36,8 @@
 
 namespace {
 
-piru::signal::SeedExtractorConfig seed_config_from_store(const piru::index::SeedStore& store) {
-  piru::signal::SeedExtractorConfig cfg;
+panomap::signal::SeedExtractorConfig seed_config_from_store(const panomap::index::SeedStore& store) {
+  panomap::signal::SeedExtractorConfig cfg;
   cfg.backend = store.extractor_name();
   const auto& params = store.params();
   auto get_u64 = [&params](const std::string& key, std::size_t default_val) -> std::size_t {
@@ -61,8 +61,8 @@ piru::signal::SeedExtractorConfig seed_config_from_store(const piru::index::Seed
 int handle_map(const std::vector<std::string>& args) {
   /* CLI parsing */
 
-  piru::cli::Parsed parsed;
-  piru::cli::ParseConfig config;
+  panomap::cli::Parsed parsed;
+  panomap::cli::ParseConfig config;
   config.usage = "Usage: piru map [options] --index <file> <reads-path>";
   config.positional_help = {
       "<reads-path>       Input slow5/blow5 file or directory containing reads"};
@@ -99,7 +99,7 @@ int handle_map(const std::vector<std::string>& args) {
        "1D coords TSV for sort-chain/pan-chain (from odgi sort --path-sgd-layout)"},
   };
   // Append backend-specific chaining options
-  auto chain_opts = piru::mapping::PathChainerConfig::cli_options();
+  auto chain_opts = panomap::mapping::PathChainerConfig::cli_options();
   config.options.insert(config.options.end(), chain_opts.begin(), chain_opts.end());
   config.options.push_back(
       {'\0', "chain-dd-tolerance", true,
@@ -129,12 +129,12 @@ int handle_map(const std::vector<std::string>& args) {
 
   config.on_error = [](const std::string&) { std::cerr << "map: invalid option\n"; };
 
-  if (!piru::cli::parse_args(args, config, parsed)) {
-    piru::cli::print_help(config, std::cerr);
+  if (!panomap::cli::parse_args(args, config, parsed)) {
+    panomap::cli::print_help(config, std::cerr);
     return 1;
   }
   if (parsed.values.count("help")) {
-    piru::cli::print_help(config, std::cout);
+    panomap::cli::print_help(config, std::cout);
     return 0;
   }
 
@@ -143,12 +143,12 @@ int handle_map(const std::vector<std::string>& args) {
   // Validate required --index
   if (!parsed.values.count("index")) {
     LOG_ERROR("map: must specify --index <file>");
-    piru::cli::print_help(config, std::cerr);
+    panomap::cli::print_help(config, std::cerr);
     return 1;
   }
   if (parsed.positionals.size() != 1) {
     LOG_ERROR("map: missing required <reads-path>");
-    piru::cli::print_help(config, std::cerr);
+    panomap::cli::print_help(config, std::cerr);
     return 1;
   }
 
@@ -156,7 +156,7 @@ int handle_map(const std::vector<std::string>& args) {
   const bool profile = parsed.values.count("profile") > 0;
   const bool verbose = parsed.values.count("verbose") > 0;
   if (verbose) {
-    piru::logger.set_level(piru::LogLevel::DEBUG);
+    panomap::logger.set_level(panomap::LogLevel::DEBUG);
   }
   const int num_threads = [&]() {
     auto it = parsed.values.find("threads");
@@ -170,7 +170,7 @@ int handle_map(const std::vector<std::string>& args) {
   }();
 
   // Create executor for parallel operations
-  auto executor = piru::concurrency::make_executor(num_threads);
+  auto executor = panomap::concurrency::make_executor(num_threads);
   LOG_DEBUG("Using " + std::to_string(executor->max_concurrency()) + " threads (" +
             executor->backend_name() + ")");
 
@@ -179,25 +179,25 @@ int handle_map(const std::vector<std::string>& args) {
 
   // Result writer created after index load (needs graph for GAF path lookups)
 
-  PIRU_PROFILE_START(profile, "map");
+  PANOMAP_PROFILE_START(profile, "map");
 
   /* Index loading */
 
-  PIRU_PROFILE_START(profile, "index");
+  PANOMAP_PROFILE_START(profile, "index");
 
   const std::string index_path = parsed.values.at("index");
   LOG_INFO("loading index from " + index_path);
 
-  if (!piru::io::index::is_pirx_index(index_path)) {
+  if (!panomap::io::index::is_pirx_index(index_path)) {
     LOG_ERROR("map: unsupported index format '" + index_path + "' (expected .pirx file)");
     return 1;
   }
 
-  auto loaded = piru::io::index::load_index(index_path);
+  auto loaded = panomap::io::index::load_index(index_path);
 
-  if (loaded.metadata.mode != piru::io::index::IndexMode::kSignal) {
+  if (loaded.metadata.mode != panomap::io::index::IndexMode::kSignal) {
     LOG_ERROR(std::string("map: index was built in mode '") +
-              piru::io::index::mode_name(loaded.metadata.mode) +
+              panomap::io::index::mode_name(loaded.metadata.mode) +
               "', but piru-signal only loads 'signal' indexes. Use piru-base instead.");
     return 1;
   }
@@ -226,7 +226,7 @@ int handle_map(const std::vector<std::string>& args) {
   const std::string pore_model_name = loaded.metadata.model_name;
   const std::size_t loaded_pore_k = loaded.metadata.pore_k;
 
-  PIRU_PROFILE_STOP(profile, "index");
+  PANOMAP_PROFILE_STOP(profile, "index");
 
   /* Read file discovery */
 
@@ -259,7 +259,7 @@ int handle_map(const std::vector<std::string>& args) {
 
   /* Mapper configuration */
 
-  piru::mapping::BatchMapperConfig map_config;
+  panomap::mapping::BatchMapperConfig map_config;
   map_config.num_threads = num_threads;
   map_config.seed_store = seed_store.get();
   map_config.graph_store = graph_store.get();
@@ -274,7 +274,7 @@ int handle_map(const std::vector<std::string>& args) {
   } else if (parsed.values.count("1d-coords-file")) {
     std::size_t num_nodes = graph_store->nodeCount();
     node_1d_coords =
-        piru::index::import_1d_coords_odgi(parsed.values.at("1d-coords-file"), num_nodes);
+        panomap::index::import_1d_coords_odgi(parsed.values.at("1d-coords-file"), num_nodes);
     map_config.node_1d_coords = &node_1d_coords;
   }
 
@@ -292,9 +292,9 @@ int handle_map(const std::vector<std::string>& args) {
   //   - otherwise -> single writer to the given path
   const std::vector<float>* writer_1d = node_1d_coords.empty() ? nullptr : &node_1d_coords;
   const std::vector<std::uint32_t>* writer_cc = component_ids.empty() ? nullptr : &component_ids;
-  piru::io::ResultWriterPtr result_writer;                    // single-file mode
-  std::vector<piru::io::ResultWriterPtr> per_file_writers;    // per-file mode (owning)
-  std::unordered_map<std::string, piru::io::ResultWriter*> per_file_writer_map;
+  panomap::io::ResultWriterPtr result_writer;                    // single-file mode
+  std::vector<panomap::io::ResultWriterPtr> per_file_writers;    // per-file mode (owning)
+  std::unordered_map<std::string, panomap::io::ResultWriter*> per_file_writer_map;
 
   auto is_per_file_output = [&]() {
     if (output_path.empty()) return false;
@@ -306,7 +306,7 @@ int handle_map(const std::vector<std::string>& args) {
 
   if (output_path.empty()) {
     result_writer =
-        piru::io::make_result_writer_stdout(flat_graph, primary_only, writer_1d, writer_cc);
+        panomap::io::make_result_writer_stdout(flat_graph, primary_only, writer_1d, writer_cc);
   } else if (is_per_file_output) {
     // Ensure output dir exists.
     std::error_code ec;
@@ -318,7 +318,7 @@ int handle_map(const std::vector<std::string>& args) {
       std::string out_file = output_path;
       if (out_file.back() != '/') out_file += '/';
       out_file += base + out_ext;
-      auto writer = piru::io::make_result_writer(out_file, flat_graph, primary_only,
+      auto writer = panomap::io::make_result_writer(out_file, flat_graph, primary_only,
                                                  writer_1d, writer_cc);
       per_file_writer_map[f.string()] = writer.get();
       per_file_writers.push_back(std::move(writer));
@@ -326,7 +326,7 @@ int handle_map(const std::vector<std::string>& args) {
     }
   } else {
     result_writer =
-        piru::io::make_result_writer(output_path, flat_graph, primary_only, writer_1d, writer_cc);
+        panomap::io::make_result_writer(output_path, flat_graph, primary_only, writer_1d, writer_cc);
     LOG_INFO("Writing results to: " + output_path);
   }
 
@@ -470,7 +470,7 @@ int handle_map(const std::vector<std::string>& args) {
 
   /* Read processing */
 
-  PIRU_PROFILE_START(profile, "mapping");
+  PANOMAP_PROFILE_START(profile, "mapping");
 
   // One BatchMapper per input file. Each file gets its own EMA state so the
   // adaptive fallback isn't corrupted by cross-file contamination (an artifact
@@ -482,19 +482,19 @@ int handle_map(const std::vector<std::string>& args) {
   std::size_t files_processed = 0;
 
   for (const auto& f : files) {
-    auto provider = piru::io::make_read_provider(f.string());
+    auto provider = panomap::io::make_read_provider(f.string());
     if (!provider) {
       LOG_WARN("map: unsupported read format for '" + f.string() + "', skipping");
       continue;
     }
     ++files_processed;
-    piru::mapping::BatchMapper mapper(*provider, map_config, std::cout);
+    panomap::mapping::BatchMapper mapper(*provider, map_config, std::cout);
     const auto stats = mapper.process_all();
     total_reads += stats.reads_processed;
     total_batches += stats.batches;
   }
 
-  PIRU_PROFILE_STOP(profile, "mapping");
+  PANOMAP_PROFILE_STOP(profile, "mapping");
 
   if (files_processed == 0) {
     LOG_ERROR("map: no readable input files");
@@ -504,7 +504,7 @@ int handle_map(const std::vector<std::string>& args) {
   LOG_INFO("map: done. files=" + std::to_string(files_processed) +
            ", batches=" + std::to_string(total_batches) + ", reads=" + std::to_string(total_reads));
 
-  PIRU_PROFILE_STOP(profile, "map");
-  if (profile) piru::timing::report(std::cerr);
+  PANOMAP_PROFILE_STOP(profile, "map");
+  if (profile) panomap::timing::report(std::cerr);
   return 0;
 }

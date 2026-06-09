@@ -16,7 +16,7 @@
 #include <thread>
 #include <unistd.h>
 
-namespace piru {
+namespace panomap {
 
 enum class LogLevel { TRACE = 0, DEBUG = 1, INFO = 2, WARN = 3, ERROR = 4, FATAL = 5 };
 
@@ -273,19 +273,19 @@ inline std::mutex Logger::mutex_;
 inline Logger& logger = Logger::get_instance();
 
 // Convenience macros for logging
-#define LOG_TRACE(msg) piru::logger.trace(msg, __FILE__, __LINE__)
-#define LOG_DEBUG(msg) piru::logger.debug(msg, __FILE__, __LINE__)
-#define LOG_INFO(msg) piru::logger.info(msg, __FILE__, __LINE__)
-#define LOG_WARN(msg) piru::logger.warn(msg, __FILE__, __LINE__)
-#define LOG_ERROR(msg) piru::logger.error(msg, __FILE__, __LINE__)
-#define LOG_FATAL(msg) piru::logger.fatal(msg, __FILE__, __LINE__)
+#define LOG_TRACE(msg) panomap::logger.trace(msg, __FILE__, __LINE__)
+#define LOG_DEBUG(msg) panomap::logger.debug(msg, __FILE__, __LINE__)
+#define LOG_INFO(msg) panomap::logger.info(msg, __FILE__, __LINE__)
+#define LOG_WARN(msg) panomap::logger.warn(msg, __FILE__, __LINE__)
+#define LOG_ERROR(msg) panomap::logger.error(msg, __FILE__, __LINE__)
+#define LOG_FATAL(msg) panomap::logger.fatal(msg, __FILE__, __LINE__)
 
 // Shorter macros for common use
-#define PIRU_TRACE(msg) LOG_TRACE(msg)
-#define PIRU_DEBUG(msg) LOG_DEBUG(msg)
-#define PIRU_INFO(msg) LOG_INFO(msg)
-#define PIRU_WARN(msg) LOG_WARN(msg)
-#define PIRU_ERROR(msg) LOG_ERROR(msg)
-#define PIRU_FATAL(msg) LOG_FATAL(msg)
+#define PANOMAP_TRACE(msg) LOG_TRACE(msg)
+#define PANOMAP_DEBUG(msg) LOG_DEBUG(msg)
+#define PANOMAP_INFO(msg) LOG_INFO(msg)
+#define PANOMAP_WARN(msg) LOG_WARN(msg)
+#define PANOMAP_ERROR(msg) LOG_ERROR(msg)
+#define PANOMAP_FATAL(msg) LOG_FATAL(msg)
 
-}  // namespace piru
+}  // namespace panomap

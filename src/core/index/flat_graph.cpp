@@ -4,7 +4,7 @@
 
 #include <cstring>
 
-namespace piru::index {
+namespace panomap::index {
 
 FlatGraph FlatGraph::fromRawArrays(
     std::uint32_t node_count, std::uint32_t path_count, std::vector<char> seq_data,
@@ -123,4 +123,4 @@ FlatGraph FlatGraph::fromPackedArrays(
   return fg;
 }
 
-}  // namespace piru::index
+}  // namespace panomap::index

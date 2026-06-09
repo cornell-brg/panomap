@@ -5,7 +5,7 @@
 #include "signal/seed_extractors/seed_extractor_factory.hpp"
 #include "signal/signal_types.hpp"
 
-using namespace piru::signal;
+using namespace panomap::signal;
 
 TEST_CASE("K-mer seed extractor emits sliding window hashes") {
   TokenizedSignal quantized;

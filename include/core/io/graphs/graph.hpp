@@ -8,7 +8,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace piru::io {
+namespace panomap::io {
 
 struct ImportedGraphNode {
   std::string id;
@@ -70,4 +70,4 @@ private:
   std::unordered_map<std::string, std::size_t> lookup_;
 };
 
-}  // namespace piru::io
+}  // namespace panomap::io

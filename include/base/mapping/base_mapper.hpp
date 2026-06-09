@@ -41,11 +41,11 @@
 #include "core/mapping/map_result.hpp"
 #include "cli/parse.hpp"
 
-namespace piru::base::mapping {
+namespace panomap::base::mapping {
 
 class BaseSeedLookup {
  public:
-  BaseSeedLookup(const piru::index::SeedStore* store, std::size_t mid_occ,
+  BaseSeedLookup(const panomap::index::SeedStore* store, std::size_t mid_occ,
                  std::size_t max_max_occ, std::size_t occ_dist,
                  std::size_t max_total_hits = 0)
       : store_(store),
@@ -60,11 +60,11 @@ class BaseSeedLookup {
   //     occ_dist) of the lowest-frequency high-occ seeds; drop the rest.
   //  3. Hard cap: anything with hits > max_max_occ is dropped no matter what.
   // See related/minimap2/seed.c:mm_seed_select.
-  void lookup(const piru::base::SeedBuffer& seeds,
-              std::vector<piru::mapping::NodeAnchor>& out_hits) const;
+  void lookup(const panomap::base::SeedBuffer& seeds,
+              std::vector<panomap::mapping::NodeAnchor>& out_hits) const;
 
  private:
-  const piru::index::SeedStore* store_{nullptr};
+  const panomap::index::SeedStore* store_{nullptr};
   std::size_t mid_occ_{0};       // soft cap (high-occ boundary)
   std::size_t max_max_occ_{0};   // hard cap (always-drop)
   std::size_t occ_dist_{0};      // query window for adaptive keep
@@ -76,24 +76,24 @@ struct BaseMapperConfig {
   int num_threads{-1};
 
   /* Seeding */
-  piru::base::BaseSeederConfig seeder{};
+  panomap::base::BaseSeederConfig seeder{};
 
   /* Chaining */
   std::string chainer_backend{"path-chain"};
-  piru::cli::Parsed chainer_parsed{};
+  panomap::cli::Parsed chainer_parsed{};
   bool enable_anchor_merge{true};
 
   /* Index views (non-owning) */
-  const piru::index::SeedStore* seed_store{nullptr};
-  const piru::index::GraphStore* graph_store{nullptr};
-  const std::vector<std::vector<piru::index::LinearCoordinate>>* linearization_coords{nullptr};
+  const panomap::index::SeedStore* seed_store{nullptr};
+  const panomap::index::GraphStore* graph_store{nullptr};
+  const std::vector<std::vector<panomap::index::LinearCoordinate>>* linearization_coords{nullptr};
   const std::vector<std::size_t>* path_lengths{nullptr};
   const std::vector<float>* node_1d_coords{nullptr};
   const std::vector<std::uint32_t>* component_ids{nullptr};
 
   /* Output */
-  piru::io::ResultWriter* result_writer{nullptr};
-  std::unordered_map<std::string, piru::io::ResultWriter*> per_file_writers;
+  panomap::io::ResultWriter* result_writer{nullptr};
+  std::unordered_map<std::string, panomap::io::ResultWriter*> per_file_writers;
 
   /* Seed-frequency filtering (minimap2-style mid_occ + adaptive in-window
    * selection + max_max_occ hard cap). Defaults match minimap2:
@@ -146,10 +146,10 @@ struct BaseMapperStats {
 };
 
 struct BaseBatchBuffer {
-  std::vector<piru::base::io::FastqRead> reads;
-  std::vector<piru::base::SeedBuffer> seeds;
-  std::vector<std::vector<piru::mapping::NodeAnchor>> seed_hits;
-  std::vector<piru::mapping::ReadMapResult> map_results;
+  std::vector<panomap::base::io::FastqRead> reads;
+  std::vector<panomap::base::SeedBuffer> seeds;
+  std::vector<std::vector<panomap::mapping::NodeAnchor>> seed_hits;
+  std::vector<panomap::mapping::ReadMapResult> map_results;
   std::size_t num_reads{0};
 
   void resize(std::size_t capacity);
@@ -157,15 +157,15 @@ struct BaseBatchBuffer {
 };
 
 struct BasePipelineComponents {
-  const piru::index::SeedStore* seed_store{nullptr};
-  const piru::index::GraphStore* graph_store{nullptr};
+  const panomap::index::SeedStore* seed_store{nullptr};
+  const panomap::index::GraphStore* graph_store{nullptr};
   BaseSeedLookup lookup{nullptr, 0, 0, 0};
-  piru::mapping::ChainerPtr chainer;
+  panomap::mapping::ChainerPtr chainer;
 };
 
 class BaseMapper {
  public:
-  BaseMapper(piru::base::io::FastqProvider& provider, BaseMapperConfig config,
+  BaseMapper(panomap::base::io::FastqProvider& provider, BaseMapperConfig config,
              std::ostream& output);
 
   BaseMapperStats process_all();
@@ -183,8 +183,8 @@ class BaseMapper {
   double getFallbackThreshold(std::size_t chunks_processed) const;
 
   BaseMapperConfig config_;
-  piru::base::io::FastqProvider& provider_;
-  std::unique_ptr<piru::concurrency::Executor> executor_;
+  panomap::base::io::FastqProvider& provider_;
+  std::unique_ptr<panomap::concurrency::Executor> executor_;
   BasePipelineComponents components_;
   std::ostream& output_;
 
@@ -192,4 +192,4 @@ class BaseMapper {
   mutable std::vector<double> ema_score_per_ck_;
 };
 
-}  // namespace piru::base::mapping
+}  // namespace panomap::base::mapping

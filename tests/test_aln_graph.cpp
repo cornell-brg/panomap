@@ -2,7 +2,7 @@
 
 #include "core/index/flat_graph.hpp"
 
-using namespace piru::index;
+using namespace panomap::index;
 
 TEST_CASE("FlatGraph 2-bit encoding round-trip") {
   // Build a simple graph with known sequences

@@ -20,8 +20,8 @@
 #include "core/util/logging.hpp"
 
 int handle_base_inspect(const std::vector<std::string>& args) {
-  piru::cli::Parsed parsed;
-  piru::cli::ParseConfig config;
+  panomap::cli::Parsed parsed;
+  panomap::cli::ParseConfig config;
   config.usage = "Usage: piru-base inspect <index.pirx>";
   config.positional_help = {"<index.pirx>    Index file to inspect"};
   config.options = {
@@ -30,32 +30,32 @@ int handle_base_inspect(const std::vector<std::string>& args) {
   };
   config.on_error = [](const std::string&) { std::cerr << "inspect: invalid option\n"; };
 
-  if (!piru::cli::parse_args(args, config, parsed)) {
-    piru::cli::print_help(config, std::cerr);
+  if (!panomap::cli::parse_args(args, config, parsed)) {
+    panomap::cli::print_help(config, std::cerr);
     return 1;
   }
   if (parsed.values.count("help")) {
-    piru::cli::print_help(config, std::cout);
+    panomap::cli::print_help(config, std::cout);
     return 0;
   }
   if (parsed.positionals.empty()) {
     LOG_ERROR("inspect: missing required <index.pirx>");
-    piru::cli::print_help(config, std::cerr);
+    panomap::cli::print_help(config, std::cerr);
     return 1;
   }
 
   const std::string index_path = parsed.positionals[0];
 
-  if (!piru::io::index::is_pirx_index(index_path)) {
+  if (!panomap::io::index::is_pirx_index(index_path)) {
     LOG_ERROR("inspect: not a valid .pirx file: " + index_path);
     return 1;
   }
 
-  auto loaded = piru::io::index::load_index(index_path);
+  auto loaded = panomap::io::index::load_index(index_path);
 
-  if (loaded.metadata.mode != piru::io::index::IndexMode::kBase) {
+  if (loaded.metadata.mode != panomap::io::index::IndexMode::kBase) {
     LOG_ERROR(std::string("inspect: index was built in mode '") +
-              piru::io::index::mode_name(loaded.metadata.mode) +
+              panomap::io::index::mode_name(loaded.metadata.mode) +
               "', but piru-base only loads 'base' indexes. Use piru-signal instead.");
     return 1;
   }
@@ -71,7 +71,7 @@ int handle_base_inspect(const std::vector<std::string>& args) {
   };
 
   std::cout << "index: " << index_path << "\n";
-  std::cout << "mode: " << piru::io::index::mode_name(meta.mode) << "\n";
+  std::cout << "mode: " << panomap::io::index::mode_name(meta.mode) << "\n";
   std::cout << "piru_version: " << (meta.version.empty() ? "unknown" : meta.version) << "\n";
   if (meta.build_timestamp > 0) {
     auto t = static_cast<std::time_t>(meta.build_timestamp);

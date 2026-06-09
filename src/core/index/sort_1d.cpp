@@ -31,7 +31,7 @@
 #include "dirty_zipfian_int_distribution.h"
 #include "core/util/logging.hpp"
 
-namespace piru::index {
+namespace panomap::index {
 
 std::vector<std::uint32_t> compute_components(const FlatGraph& graph) {
   std::uint32_t n = graph.nodeCount();
@@ -473,4 +473,4 @@ void dump_1d_coords_tsv(const std::string& path, const std::vector<float>& coord
   }
 }
 
-}  // namespace piru::index
+}  // namespace panomap::index

@@ -11,7 +11,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace piru::signal {
+namespace panomap::signal {
 
 namespace {
 
@@ -154,4 +154,4 @@ const TokenizerConfig& LandmarkTokenizer::config() const { return config_; }
 
 std::string LandmarkTokenizer::name() const { return "landmark"; }
 
-}  // namespace piru::signal
+}  // namespace panomap::signal

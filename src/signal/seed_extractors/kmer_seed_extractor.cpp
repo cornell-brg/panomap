@@ -8,7 +8,7 @@
 
 #include "signal/seed_extractors/seed_hash_util.hpp"
 
-namespace piru::signal {
+namespace panomap::signal {
 
 KmerSeedExtractor::KmerSeedExtractor(SeedExtractorConfig config) : config_(std::move(config)) {}
 
@@ -49,4 +49,4 @@ const SeedExtractorConfig& KmerSeedExtractor::config() const { return config_; }
 
 std::string KmerSeedExtractor::name() const { return config_.backend; }
 
-}  // namespace piru::signal
+}  // namespace panomap::signal

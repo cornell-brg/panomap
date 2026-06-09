@@ -11,7 +11,7 @@
  *   PIRU_TRACE_READS=MSH2,NF2          Comma-separated read ID substrings (default: all)
  *
  * Usage in code:
- *   PIRU_TRACE_DUMP(kTokens, read_id, {
+ *   PANOMAP_TRACE_DUMP(kTokens, read_id, {
  *     std::ofstream ofs(trace_path("tokens", read_id, chunk_idx));
  *     for (auto t : tokens) ofs << t << "\n";
  *   });
@@ -24,7 +24,7 @@
 #include <cstdint>
 #include <string>
 
-namespace piru::trace {
+namespace panomap::trace {
 
 enum Stage : std::uint32_t {
   kSignal = 1 << 0,  // Raw pA signal
@@ -45,9 +45,9 @@ std::string trace_path(const std::string& tag, const std::string& read_id,
 
 #ifdef PIRU_TRACE_ENABLED
 
-#define PIRU_TRACE_DUMP(stage, read_id, block)                                               \
+#define PANOMAP_TRACE_DUMP(stage, read_id, block)                                               \
   do {                                                                                       \
-    if ((::piru::trace::enabled_stages() & (stage)) && ::piru::trace::match_read(read_id)) { \
+    if ((::panomap::trace::enabled_stages() & (stage)) && ::panomap::trace::match_read(read_id)) { \
       block                                                                                  \
     }                                                                                        \
   } while (0)
@@ -56,7 +56,7 @@ std::string trace_path(const std::string& tag, const std::string& read_id,
 
 // When tracing is disabled, compile the block but never execute it.
 // This ensures the code stays valid (catches typos/refactoring breaks).
-#define PIRU_TRACE_DUMP(stage, read_id, block) \
+#define PANOMAP_TRACE_DUMP(stage, read_id, block) \
   do {                                         \
     if (false) {                               \
       (void)(read_id);                         \
@@ -66,4 +66,4 @@ std::string trace_path(const std::string& tag, const std::string& read_id,
 
 #endif
 
-}  // namespace piru::trace
+}  // namespace panomap::trace

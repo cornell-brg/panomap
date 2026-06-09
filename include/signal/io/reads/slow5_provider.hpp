@@ -14,7 +14,7 @@ extern "C" {
 
 #include "signal/io/reads/read_provider.hpp"
 
-namespace piru::io {
+namespace panomap::io {
 
 class Slow5Provider : public ReadProvider {
 public:
@@ -41,4 +41,4 @@ private:
   slow5_file_t* fp_{nullptr};
 };
 
-}  // namespace piru::io
+}  // namespace panomap::io

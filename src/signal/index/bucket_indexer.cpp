@@ -49,7 +49,7 @@
 #include "core/util/logging.hpp"
 #include "core/util/timing.hpp"
 
-namespace piru::index {
+namespace panomap::index {
 
 namespace {
 
@@ -332,4 +332,4 @@ BucketIndexResult bucketIndex(const FlatGraph& graph, const io::KmerModel& model
   return result;
 }
 
-}  // namespace piru::index
+}  // namespace panomap::index

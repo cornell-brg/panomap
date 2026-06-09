@@ -23,7 +23,7 @@
 
 #include "core/util/logging.hpp"
 
-namespace piru::mapping {
+namespace panomap::mapping {
 
 namespace {
 
@@ -499,4 +499,4 @@ PanChainerConfig PanChainerConfig::from_parsed(const cli::Parsed& parsed) {
   return cfg;
 }
 
-}  // namespace piru::mapping
+}  // namespace panomap::mapping
