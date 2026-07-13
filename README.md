@@ -1,23 +1,18 @@
 <p align="center">
-  <img src="docs/assets/logo.png" alt="PANOMAP" width="200">
-</p>
-
----
-
-<p align="center">
-  <em>Real-time squiggle-to-graph mapping for Nanopore adaptive sampling</em>
+  <em>Nanopore signal mapping to pangenome variation graphs</em>
 </p>
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
 </p>
 
-## What is PANOMAP?
+> *Note: this README is a work in progress. More complete documentation and examples will be added shortly.*
 
-PANOMAP maps raw Nanopore signal directly to pangenome graphs without basecalling.
-By working at the squiggle level, it enables real-time keep/reject decisions
-during adaptive sampling experiments. Supports GFA graphs, SLOW5/BLOW5 signals,
-and R9.4/R10.4 pore chemistries.
+## What is Panomap?
+
+Panomap maps raw Nanopore signal reads (in SLOW5/BLOW5 format) to pangenome
+variation graphs without basecalling. It works at the signal level and targets
+GFA graphs built with tools like PGGB and minigraph-cactus.
 
 ## Quick Start
 
@@ -25,14 +20,17 @@ and R9.4/R10.4 pore chemistries.
 
 ```bash
 # Clone and build
-git clone --recursive https://github.com/xxx/panomap.git
+git clone --recursive https://github.com/cornell-brg/panomap.git
 cd panomap && mkdir build && cd build && cmake .. && make -j8
 
-# Index a graph (RH2 tokenizer, default)
-./panomap index -m r10.4 reference.gfa -o ref.pirx
+# Try the bundled example (SARS-CoV-2 pangenome + 20 simulated reads)
+./panomap index -m r10.4 ../examples/covid/covid-pangenome.gfa -o covid.pirx
+./panomap map --index covid.pirx ../examples/covid/reads.blow5 -o out.gaf
 
-# Index with landmark tokenizer (amplitude-based peak seeding)
-./panomap index -m r9.4 --tokenizer landmark --seed-k 4 reference.gfa -o ref.pirx
+# --- with your own data ---
+
+# Index a graph
+./panomap index -m r10.4 reference.gfa -o ref.pirx
 
 # Map reads (GAF to stdout by default)
 ./panomap map --index ref.pirx reads.blow5 -o out.gaf
@@ -73,20 +71,6 @@ Run `panomap <command> --help` for full options.
 | `ck:i:` | int | Chunks processed before decision |
 | `dt:f:` | float | Processing time (seconds) |
 
-## Tokenizers
-
-PANOMAP supports two tokenization strategies for converting signal to seeds:
-
-| Tokenizer | Description | Seed bits | Typical use |
-|-----------|-------------|-----------|-------------|
-| `rh2` (default) | Adaptive quantization of event values | 24 (k=6, 4-bit tokens) | General purpose |
-| `landmark` | Log-quantized peak rise/fall amplitudes | 16 (k=4, 4-bit tokens) | Fewer seeds, faster chaining |
-
-The landmark tokenizer detects valleys in the signal, extracts peaks between
-them, and encodes each peak by its rise and fall amplitudes. This produces
-~3x fewer index seeds and ~4x fewer hits per read compared to RH2, with
-equivalent or better mapping accuracy.
-
 ## Simulation Workflow
 
 Generate test reads using [squigulator](https://github.com/hasindu2008/squigulator):
@@ -112,27 +96,38 @@ squigulator reference.fa -x dna-r10-min \
 mkdir build && cd build
 cmake ..
 make -j8
-ctest              # all tests (unit + integration)
-ctest -V           # verbose
-ctest -L integration  # integration tests only
-ctest -E integration  # unit tests only
+make test
 ```
 
-### Tests
+## Citing Panomap
 
-- **Unit tests** (51): C++ tests for individual components (tokenizer, chainer,
-  seed store, etc.). Fast, no external deps.
-- **Integration tests**: End-to-end accuracy checks. Simulate reads with
-  squigulator, index, map, evaluate accuracy against ground truth.
-  - `integration.drb1_accuracy`: 1000 simulated reads on DRB1 pangenome,
-    asserts >= 90% accuracy. Requires squigulator + Python with pyslow5.
+If you use Panomap in your work, please cite:
 
-## Contributing
+```bibtex
+@article{shih2026panomap,
+  title   = {Panomap: Unbiased Nanopore Signal Mapping with Pangenome Variation Graphs},
+  author  = {Shih, Po Jui and Sanghani, Zephan and Guarracino, Andrea and Gamaarachchi, Hasindu and Batten, Christopher},
+  journal = {bioRxiv},
+  year    = {2026},
+  doi     = {10.64898/2026.07.10.737796},
+  url     = {https://doi.org/10.64898/2026.07.10.737796}
+}
+```
 
-1. Run `make -j8 && ctest` in the build directory before submitting changes
-2. Follow `.clang-format` style (Google base, 2-space indent, 100-col limit)
-3. Add tests for new functionality in `tests/`
-4. Integration tests go in `tests/integration/`
+## Acknowledgements
+
+Panomap builds on code and ideas from several projects:
+
+- [RawHash2](https://github.com/CMU-SAFARI/RawHash) -- signal event detection
+  (originally from Scrappie), signal tokenization (adaptive quantization), and
+  mapping result scoring (adapted).
+- [minimap2](https://github.com/lh3/minimap2) -- seed index / hash table construction.
+- [odgi](https://github.com/pangenome/odgi) -- PG-SGD 1D layout.
+
+Bundled dependencies: [slow5lib](https://github.com/hasindu2008/slow5lib) (SLOW5/BLOW5
+IO) and [kmer_models](https://github.com/nanoporetech/kmer_models) (ONT pore models).
+Example and test reads are simulated with
+[squigulator](https://github.com/hasindu2008/squigulator).
 
 ## License
 
