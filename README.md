@@ -119,8 +119,8 @@ If you use Panomap in your work, please cite:
 Panomap builds on code and ideas from several projects:
 
 - [RawHash2](https://github.com/CMU-SAFARI/RawHash) -- signal event detection
-  (originally from Scrappie), signal tokenization (adaptive quantization), and
-  mapping result scoring (adapted).
+  (originally from Scrappie), signal tokenization (adaptive quantization),
+  chaining (originally from minimap2), and mapping result scoring.
 - [minimap2](https://github.com/lh3/minimap2) -- seed index / hash table construction.
 - [odgi](https://github.com/pangenome/odgi) -- PG-SGD 1D layout.
 
