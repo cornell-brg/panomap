@@ -73,12 +73,13 @@ Run `panomap <command> --help` for full options.
 Generate test reads using [squigulator](https://github.com/hasindu2008/squigulator):
 
 ```bash
-squigulator reference.fa -x dna-r10-min \
-  -o reads.blow5 -n 20 -r 2000 \
+squigulator reference.fa -x dna-r9-min \
+  -o reads.blow5 -n 20 -r 8000 \
+  --sample-rate 4000 \
   -q reads.fasta -c reads.paf \
-  --ideal --seed 123
+  --seed 123
 
-./panomap index -m r10.4 reference.gfa -o ref.pirx
+./panomap index -m r9.4 reference.gfa -o ref.pirx
 ./panomap map --index ref.pirx reads.blow5 -o out.gaf
 ```
 
