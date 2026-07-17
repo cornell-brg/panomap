@@ -8,8 +8,6 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
 </p>
 
-> *Note: this README is a work in progress. More complete documentation and examples will be added shortly.*
-
 ## What is Panomap?
 
 Panomap maps raw Nanopore signal reads (in SLOW5/BLOW5 format) to pangenome
@@ -92,6 +90,13 @@ cmake ..
 make -j8
 make test
 ```
+
+## Reproducing paper results
+
+The [`reproduce/`](reproduce/) directory has self-contained scripts to reproduce
+the panomap results in the paper from the data on Zenodo
+([10.5281/zenodo.21420009](https://doi.org/10.5281/zenodo.21420009)). See
+[`reproduce/README.md`](reproduce/README.md).
 
 ## Citing Panomap
 
