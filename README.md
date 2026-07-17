@@ -1,8 +1,10 @@
-<p align="center">
+# Panomap
+
+<p align="left">
   <em>Nanopore signal mapping to pangenome variation graphs</em>
 </p>
 
-<p align="center">
+<p align="left">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
 </p>
 
@@ -39,9 +41,6 @@ cd panomap && mkdir build && cd build && cmake .. && make -j8
 ./panomap map --index ref.pirx reads.blow5 \
   --chain-bw 100 --chain-max-dist 500 --chain-pen-gap 1.2 \
   --chain-pen-skip 0.3 --max-chunks 5 -o out.gaf
-
-# Tune sensitivity (higher = more events, more seeds)
-./panomap map --index ref.pirx reads.blow5 --sensitivity 1.5 -o out.gaf
 ```
 
 ## Subcommands
@@ -84,11 +83,6 @@ squigulator reference.fa -x dna-r10-min \
 ./panomap index -m r10.4 reference.gfa -o ref.pirx
 ./panomap map --index ref.pirx reads.blow5 -o out.gaf
 ```
-
-## Documentation
-
-- [ARCHITECTURE.md](docs/ARCHITECTURE.md) -- System architecture
-- [index_format.md](docs/index_format.md) -- Binary index format specification
 
 ## Build & Test
 
