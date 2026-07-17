@@ -1,4 +1,5 @@
 #include <doctest/doctest.h>
+#include <filesystem>
 #include <string>
 
 #include "signal/io/reads/read_provider.hpp"
@@ -6,7 +7,10 @@
 
 TEST_CASE("slow5 provider reads bundled blow5") {
 #ifdef PANOMAP_HAS_SLOW5
-  const std::string path = "tests/data/HLA/test_reads/quick_r9_2k.blow5";
+  // Source-relative path (robust to test CWD); reuses the covid example reads.
+  const auto src_dir = std::filesystem::path(__FILE__).parent_path();
+  const std::string path =
+      (src_dir.parent_path() / "examples/covid/reads.blow5").string();
   auto provider = panomap::io::make_read_provider(path);
   REQUIRE(provider != nullptr);
   CHECK(provider->get_format_name() == "slow5");
@@ -18,7 +22,7 @@ TEST_CASE("slow5 provider reads bundled blow5") {
     CHECK_FALSE(read.read_id.empty());
     CHECK(read.len_raw_signal > 0);
   }
-  CHECK(count == 5);
+  CHECK(count == 20);  // examples/covid/reads.blow5 bundles 20 reads
 #else
   MESSAGE("PANOMAP_HAS_SLOW5 not set; skipping slow5 read test");
   CHECK(true);

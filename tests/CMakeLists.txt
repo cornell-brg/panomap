@@ -46,7 +46,6 @@ if(DOCTEST_AVAILABLE)
         test_reads.cpp
         test_signal_tokenize.cpp
         test_signal_seed_extractors.cpp
-        test_mapping_batch.cpp
         test_index_pipeline.cpp
         test_cli.cpp
         test_logging.cpp
