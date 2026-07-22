@@ -4,6 +4,3 @@
 [submodule "third_party/kmer_models"]
 	path = third_party/kmer_models
 	url = https://github.com/nanoporetech/kmer_models.git
-[submodule "third_party/libvgio"]
-	path = third_party/libvgio
-	url = https://github.com/vgteam/libvgio.git
