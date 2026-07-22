@@ -40,6 +40,12 @@ set(PANOMAP_TBB_AVAILABLE OFF)
 if(PANOMAP_USE_TBB)
     find_package(TBB QUIET)
     if(NOT TBB_FOUND AND PANOMAP_FETCH_TBB)
+        if(CMAKE_VERSION VERSION_GREATER_EQUAL 4.0 AND NOT CMAKE_POLICY_VERSION_MINIMUM)
+            message(FATAL_ERROR
+                "Fetching pinned oneTBB v2021.10.0, whose CMakeLists needs a "
+                "CMake <3.5 policy and errors under CMake ${CMAKE_VERSION}.\n"
+                "Re-run:  cmake .. -DCMAKE_POLICY_VERSION_MINIMUM=3.5")
+        endif()
         include(FetchContent)
         FetchContent_Declare(
             TBB
@@ -58,6 +64,7 @@ endif()
 
 # slow5lib (signal-mode read I/O). Pulled in early so panomap_signal can link against it.
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/third_party/slow5lib/CMakeLists.txt)
+    set(SLOW5_LINK_STATIC ON CACHE BOOL "" FORCE)
     add_subdirectory(third_party/slow5lib)
 else()
     message(FATAL_ERROR "slow5lib submodule not present; required for signal-mode read I/O.")

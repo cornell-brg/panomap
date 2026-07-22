@@ -16,7 +16,21 @@ GFA graphs built with tools like PGGB and minigraph-cactus.
 
 ## Quick Start
 
-**Requirements:** CMake 3.16+, C++20 compiler, zlib, TBB (or `-DPIRU_FETCH_TBB=ON`)
+**Requirements:** CMake 3.16–3.31, a C++20 compiler, zlib
+
+Panomap has been developed and tested mainly on Red Hat Enterprise Linux 8
+with GCC 13.3.1 and CMake 3.26. Compiling requires a C++20 compiler. If it
+doesn't build on your system, please open an issue or pull request — we're
+happy to help.
+
+Panomap uses oneTBB for concurrency. If your system already has TBB, it is
+used directly; otherwise CMake fetches oneTBB v2021.10.0 during configure
+(controlled by `PANOMAP_FETCH_TBB`, on by default).
+
+> **CMake 4.x note:** the fetched oneTBB v2021.10.0 predates CMake 4, and its
+> build errors during configure (`Compatibility with CMake < 3.5 has been
+> removed`). Either build with CMake 3.16–3.31, or add
+> `-DCMAKE_POLICY_VERSION_MINIMUM=3.5` to the `cmake` command.
 
 ```bash
 # Clone and build
@@ -84,6 +98,9 @@ squigulator reference.fa -x dna-r9-min \
 ```
 
 ## Build & Test
+
+Tests use [doctest](https://github.com/doctest/doctest) (fetched automatically
+during configure). Build and run them with:
 
 ```bash
 mkdir build && cd build
