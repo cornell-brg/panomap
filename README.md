@@ -14,17 +14,20 @@ Panomap maps raw Nanopore signal reads (in SLOW5/BLOW5 format) to pangenome
 variation graphs without basecalling. It works at the signal level and targets
 GFA graphs built with tools like PGGB and minigraph-cactus.
 
+Note: Panomap is an experimental proof-of-concept implementation and currently does
+not scale to large genomes such as the human pangenome.
+
 ## Requirements
 
-- **CMake** 3.16–3.31 (CMake 4.x works with one extra flag — see [Build options](#build-options))
+- **CMake** 3.16–3.31 (CMake 4.x works with one extra flag, see [Build options](#build-options))
 - **C++20 compiler** (GCC 13+ recommended)
 - **zlib**
-- **oneTBB** — parallel index/map backend; uses a system install if present, otherwise auto-fetched during configure
-- **libzstd** *(optional)* — only needed for zstd-compressed BLOW5 input
+- **oneTBB**: parallel index/map backend; uses a system install if present, otherwise auto-fetched during configure
+- **libzstd** *(optional)*: only needed for zstd-compressed BLOW5 input
 
 Developed and tested mainly on Red Hat Enterprise Linux 8 with GCC 13.3.1 and
 CMake 3.26. If it doesn't build on your system, please open an issue or pull
-request — we're happy to help.
+request, we're happy to help.
 
 ## Quick Start
 
@@ -59,11 +62,11 @@ cd panomap && mkdir build && cd build && cmake .. && make -j8
 |------|---------|---------|
 | `-DPANOMAP_USE_ZSTD=AUTO\|ON\|OFF` | `AUTO` | zstd-compressed BLOW5 support. `AUTO` enables it when libzstd is found; `ON` fails configure if libzstd is missing; `OFF` disables. |
 | `-DPANOMAP_FETCH_TBB=ON\|OFF` | `ON` | Auto-fetch oneTBB when no system install is found. `OFF` requires a system oneTBB. |
-| `-DCMAKE_POLICY_VERSION_MINIMUM=3.5` | — | Required on **CMake 4.x**: the pinned oneTBB predates CMake 4 and otherwise errors with `Compatibility with CMake < 3.5 has been removed`. |
+| `-DCMAKE_POLICY_VERSION_MINIMUM=3.5` | (none) | Required on **CMake 4.x**: the pinned oneTBB predates CMake 4 and otherwise errors with `Compatibility with CMake < 3.5 has been removed`. |
 
 **zstd-compressed BLOW5.** BLOW5 records may be zlib- or zstd-compressed; zlib is
 always supported. To read zstd-compressed files, install `libzstd-dev`
-(Debian/Ubuntu) or `libzstd-devel` (RHEL/Fedora) before configuring — it is then
+(Debian/Ubuntu) or `libzstd-devel` (RHEL/Fedora) before configuring; it is then
 picked up automatically. Without it, mapping a zstd BLOW5 aborts with
 `slow5lib has not been compiled with zstd support`.
 
