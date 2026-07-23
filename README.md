@@ -14,23 +14,19 @@ Panomap maps raw Nanopore signal reads (in SLOW5/BLOW5 format) to pangenome
 variation graphs without basecalling. It works at the signal level and targets
 GFA graphs built with tools like PGGB and minigraph-cactus.
 
+## Requirements
+
+- **CMake** 3.16–3.31 (CMake 4.x works with one extra flag — see [Build options](#build-options))
+- **C++20 compiler** (GCC 13+ recommended)
+- **zlib**
+- **oneTBB** — parallel index/map backend; uses a system install if present, otherwise auto-fetched during configure
+- **libzstd** *(optional)* — only needed for zstd-compressed BLOW5 input
+
+Developed and tested mainly on Red Hat Enterprise Linux 8 with GCC 13.3.1 and
+CMake 3.26. If it doesn't build on your system, please open an issue or pull
+request — we're happy to help.
+
 ## Quick Start
-
-**Requirements:** CMake 3.16–3.31, a C++20 compiler, zlib
-
-Panomap has been developed and tested mainly on Red Hat Enterprise Linux 8
-with GCC 13.3.1 and CMake 3.26. Compiling requires a C++20 compiler. If it
-doesn't build on your system, please open an issue or pull request — we're
-happy to help.
-
-Panomap uses oneTBB for concurrency. If your system already has TBB, it is
-used directly; otherwise CMake fetches oneTBB v2021.10.0 during configure
-(controlled by `PANOMAP_FETCH_TBB`, on by default).
-
-> **CMake 4.x note:** the fetched oneTBB v2021.10.0 predates CMake 4, and its
-> build errors during configure (`Compatibility with CMake < 3.5 has been
-> removed`). Either build with CMake 3.16–3.31, or add
-> `-DCMAKE_POLICY_VERSION_MINIMUM=3.5` to the `cmake` command.
 
 ```bash
 # Clone and build
@@ -54,6 +50,22 @@ cd panomap && mkdir build && cd build && cmake .. && make -j8
   --chain-bw 100 --chain-max-dist 500 --chain-pen-gap 1.2 \
   --chain-pen-skip 0.3 --max-chunks 5 -o out.gaf
 ```
+
+## Build options
+
+`cmake .. && make` works out of the box. The flags below cover special cases only.
+
+| Flag | Default | Purpose |
+|------|---------|---------|
+| `-DPANOMAP_USE_ZSTD=AUTO\|ON\|OFF` | `AUTO` | zstd-compressed BLOW5 support. `AUTO` enables it when libzstd is found; `ON` fails configure if libzstd is missing; `OFF` disables. |
+| `-DPANOMAP_FETCH_TBB=ON\|OFF` | `ON` | Auto-fetch oneTBB when no system install is found. `OFF` requires a system oneTBB. |
+| `-DCMAKE_POLICY_VERSION_MINIMUM=3.5` | — | Required on **CMake 4.x**: the pinned oneTBB predates CMake 4 and otherwise errors with `Compatibility with CMake < 3.5 has been removed`. |
+
+**zstd-compressed BLOW5.** BLOW5 records may be zlib- or zstd-compressed; zlib is
+always supported. To read zstd-compressed files, install `libzstd-dev`
+(Debian/Ubuntu) or `libzstd-devel` (RHEL/Fedora) before configuring — it is then
+picked up automatically. Without it, mapping a zstd BLOW5 aborts with
+`slow5lib has not been compiled with zstd support`.
 
 ## Subcommands
 

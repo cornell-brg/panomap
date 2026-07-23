@@ -1,5 +1,6 @@
 #include "cli/parse.hpp"
 
+#include <algorithm>
 #include <sstream>
 
 namespace panomap::cli {

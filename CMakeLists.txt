@@ -20,11 +20,27 @@ else()
 endif()
 
 option(PANOMAP_ENABLE_WARNINGS "Enable compiler warnings" ON)
-option(PANOMAP_USE_TBB "Enable oneTBB backend for concurrency" ON)
 option(PANOMAP_FETCH_TBB "Fetch oneTBB via FetchContent if not found" ON)
 option(PANOMAP_FETCH_DOCTEST "Fetch doctest during configure (for tests)" ON)
 option(PANOMAP_ENABLE_BASE_MODE "Build experimental base-mode binary (panomap-base)" OFF)
+# zstd-compressed BLOW5 support. AUTO = enable if libzstd is found, otherwise
+# build without it. Force with ON (errors if libzstd missing) or OFF.
+set(PANOMAP_USE_ZSTD "AUTO" CACHE STRING "zstd-compressed BLOW5 support: ON, OFF, or AUTO")
 find_package(ZLIB REQUIRED)
+
+set(PANOMAP_ZSTD_ENABLED OFF)
+if(NOT PANOMAP_USE_ZSTD STREQUAL "OFF")
+    find_library(ZSTD_LIBRARY zstd)
+    find_path(ZSTD_INCLUDE_DIR zstd.h)
+    if(ZSTD_LIBRARY AND ZSTD_INCLUDE_DIR)
+        set(PANOMAP_ZSTD_ENABLED ON)
+        message(STATUS "zstd found (${ZSTD_LIBRARY}); enabling zstd-compressed BLOW5 support.")
+    elseif(PANOMAP_USE_ZSTD STREQUAL "ON")
+        message(FATAL_ERROR "PANOMAP_USE_ZSTD=ON but libzstd not found. Install libzstd-dev (or set PANOMAP_USE_ZSTD=OFF).")
+    else()
+        message(STATUS "libzstd not found; zstd-compressed BLOW5 files will not be readable. Install libzstd-dev to enable.")
+    endif()
+endif()
 
 set(PANOMAP_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
 file(MAKE_DIRECTORY ${PANOMAP_GENERATED_DIR})
@@ -36,35 +52,42 @@ configure_file(
     @ONLY
 )
 
-set(PANOMAP_TBB_AVAILABLE OFF)
-if(PANOMAP_USE_TBB)
-    find_package(TBB QUIET)
-    if(NOT TBB_FOUND AND PANOMAP_FETCH_TBB)
-        if(CMAKE_VERSION VERSION_GREATER_EQUAL 4.0 AND NOT CMAKE_POLICY_VERSION_MINIMUM)
-            message(FATAL_ERROR
-                "Fetching pinned oneTBB v2021.10.0, whose CMakeLists needs a "
-                "CMake <3.5 policy and errors under CMake ${CMAKE_VERSION}.\n"
-                "Re-run:  cmake .. -DCMAKE_POLICY_VERSION_MINIMUM=3.5")
-        endif()
-        include(FetchContent)
-        FetchContent_Declare(
-            TBB
-            GIT_REPOSITORY https://github.com/oneapi-src/oneTBB.git
-            GIT_TAG v2021.10.0
-        )
-        set(TBB_TEST OFF CACHE BOOL "" FORCE)
-        FetchContent_MakeAvailable(TBB)
+# oneTBB is required (parallel index/map backend). Use the system install if
+# present, otherwise auto-fetch a pinned copy (PANOMAP_FETCH_TBB, on by default).
+find_package(TBB QUIET)
+if(NOT TBB_FOUND AND PANOMAP_FETCH_TBB)
+    if(CMAKE_VERSION VERSION_GREATER_EQUAL 4.0 AND NOT CMAKE_POLICY_VERSION_MINIMUM)
+        message(FATAL_ERROR
+            "Fetching pinned oneTBB v2021.10.0, whose CMakeLists needs a "
+            "CMake <3.5 policy and errors under CMake ${CMAKE_VERSION}.\n"
+            "Re-run:  cmake .. -DCMAKE_POLICY_VERSION_MINIMUM=3.5")
     endif()
-    if(TBB_FOUND OR TARGET TBB::tbb)
-        set(PANOMAP_TBB_AVAILABLE ON)
-    else()
-        message(FATAL_ERROR "oneTBB requested but not found. Set PANOMAP_FETCH_TBB=ON to fetch automatically.")
-    endif()
+    include(FetchContent)
+    FetchContent_Declare(
+        TBB
+        GIT_REPOSITORY https://github.com/oneapi-src/oneTBB.git
+        GIT_TAG v2021.10.0
+    )
+    set(TBB_TEST OFF CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(TBB)
+endif()
+if(NOT (TBB_FOUND OR TARGET TBB::tbb))
+    message(FATAL_ERROR "oneTBB is required but was not found. Install it, or leave PANOMAP_FETCH_TBB=ON to fetch it automatically.")
 endif()
 
 # slow5lib (signal-mode read I/O). Pulled in early so panomap_signal can link against it.
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/third_party/slow5lib/CMakeLists.txt)
     set(SLOW5_LINK_STATIC ON CACHE BOOL "" FORCE)
+    if(PANOMAP_ZSTD_ENABLED)
+        # Compiles slow5_press.c with -DSLOW5_USE_ZSTD (guarded code paths).
+        set(SLOW5_USE_ZSTD ON CACHE BOOL "" FORCE)
+        # slow5lib includes <zstd.h> and links a bare -lzstd, but adds no search
+        # paths for either; supply them here for prefixes outside the default
+        # (e.g. Homebrew /opt/homebrew, conda, /usr/local).
+        include_directories(${ZSTD_INCLUDE_DIR})
+        get_filename_component(PANOMAP_ZSTD_LIBDIR ${ZSTD_LIBRARY} DIRECTORY)
+        link_directories(${PANOMAP_ZSTD_LIBDIR})
+    endif()
     add_subdirectory(third_party/slow5lib)
 else()
     message(FATAL_ERROR "slow5lib submodule not present; required for signal-mode read I/O.")
@@ -98,12 +121,8 @@ target_include_directories(panomap_core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/dirtyzipf
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/concurrentqueue
 )
-if(PANOMAP_TBB_AVAILABLE)
-    target_link_libraries(panomap_core PUBLIC TBB::tbb)
-    target_compile_definitions(panomap_core PUBLIC PANOMAP_USE_TBB)
-else()
-    message(STATUS "oneTBB not found; using serial concurrency backend.")
-endif()
+target_link_libraries(panomap_core PUBLIC TBB::tbb)
+target_compile_definitions(panomap_core PUBLIC PANOMAP_USE_TBB)
 
 # pthread for std::async / std::thread used in sort_1d.cpp parallel SGD
 find_package(Threads REQUIRED)
@@ -148,6 +167,10 @@ target_link_libraries(panomap_signal
     PUBLIC panomap_core slow5 ZLIB::ZLIB
 )
 target_compile_definitions(panomap_signal PUBLIC PANOMAP_HAS_SLOW5)
+if(PANOMAP_ZSTD_ENABLED)
+    # slow5 is static; -lzstd must appear on panomap_signal's final link line.
+    target_link_libraries(panomap_signal PUBLIC ${ZSTD_LIBRARY})
+endif()
 if(PANOMAP_ENABLE_WARNINGS)
     if(MSVC)
         target_compile_options(panomap_signal PRIVATE /W4 /permissive-)
