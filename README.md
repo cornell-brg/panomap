@@ -79,6 +79,10 @@ picked up automatically. Without it, mapping a zstd BLOW5 aborts with
 
 Run `panomap <command> --help` for full options.
 
+*Note: the node walk in the GAF output lists the nodes containing the chain's
+anchors. When there is a large gap between anchors, the nodes in between can be
+skipped, so the walk is not guaranteed to be a fully connected path.*
+
 ## GAF Output Tags
 
 | Tag | Type | Description |
