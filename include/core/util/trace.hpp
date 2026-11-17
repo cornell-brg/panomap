@@ -2,7 +2,7 @@
  * trace.hpp
  *
  * Compile-time optional pipeline tracing for debugging.
- * Build with -DPIRU_TRACE_ENABLED to enable. Zero overhead when compiled out.
+ * Build with -DPANOMAP_TRACE_ENABLED to enable. Zero overhead when compiled out.
  *
  * At runtime, tracing is OFF by default even when compiled in.
  * Set PANOMAP_TRACE_DIR to activate:
