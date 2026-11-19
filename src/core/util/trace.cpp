@@ -67,7 +67,11 @@ std::string trace_path(const std::string& tag, const std::string& read_id, std::
   std::string gene = "unknown";
   std::string sid = "unknown";
   auto bang = read_id.find('!');
-  if (bang != std::string::npos) {
+  if (bang == std::string::npos) {
+    // Real (non-Squigulator) read IDs have no '!': use the whole ID, so that each
+    // read gets its own trace file.
+    sid = read_id;
+  } else {
     sid = read_id.substr(0, bang);
     auto colon = read_id.find(':', bang + 1);
     if (colon != std::string::npos) {
