@@ -2,14 +2,17 @@
 
 #include "core/io/results/paf_writer.hpp"
 
+#include <algorithm>
 #include <cstdio>
 #include <sstream>
+#include <string_view>
 
 #include "core/util/logging.hpp"
 
 namespace panomap::io {
 
-PafWriter::PafWriter(const std::string& path) : out_(path, std::ios::out | std::ios::trunc) {
+PafWriter::PafWriter(const std::string& path, const index::FlatGraph& graph)
+    : out_(path, std::ios::out | std::ios::trunc), graph_(graph) {
   if (!out_) {
     LOG_ERROR("Failed to open PAF output: " + path);
   }
@@ -76,11 +79,37 @@ void PafWriter::write(const mapping::ReadMapResult& result, const std::string& r
     max_query = std::max(max_query, static_cast<std::size_t>(a.read_pos) + a.length);
   }
 
+  /* Target name, length, span and strand: same rules as the GAF writer. A path named
+   * "<name>_reverse" is the reverse strand of <name>, with coordinates flipped. */
+  std::string target = "*";
+  std::int64_t target_len = 0;
+  char strand = '+';
   std::int64_t min_ref = mapping.anchors.front().ref_coord;
   std::int64_t max_ref = mapping.anchors.front().ref_coord;
+  const bool on_path = mapping.coord_space != mapping::CoordSpace::kCanonical &&
+                       mapping.path_id < graph_.pathCount();
+  if (on_path) {
+    const auto pid = static_cast<std::uint32_t>(mapping.path_id);
+    target = std::string(graph_.pathName(pid));
+    target_len = static_cast<std::int64_t>(graph_.pathLength(pid));
+  }
   for (const auto& a : mapping.anchors) {
+    const auto end = a.ref_coord + static_cast<std::int64_t>(a.length);
     min_ref = std::min(min_ref, a.ref_coord);
-    max_ref = std::max(max_ref, a.ref_coord + static_cast<std::int64_t>(a.length));
+    max_ref = std::max(max_ref, end);
+  }
+  if (on_path) {
+    min_ref = std::max(std::int64_t{0}, min_ref);
+    if (target_len > 0) max_ref = std::min(max_ref, target_len);
+    constexpr std::string_view kRevSuffix = "_reverse";
+    if (target.size() > kRevSuffix.size() &&
+        std::string_view(target).substr(target.size() - kRevSuffix.size()) == kRevSuffix) {
+      strand = '-';
+      target.resize(target.size() - kRevSuffix.size());
+      const auto flipped_start = target_len - max_ref;
+      max_ref = target_len - min_ref;
+      min_ref = flipped_start;
+    }
   }
 
   std::uint64_t total_anchor_len = 0;
@@ -89,8 +118,8 @@ void PafWriter::write(const mapping::ReadMapResult& result, const std::string& r
   auto qspan = max_query - min_query;
 
   std::stringstream ss;
-  ss << read_id << '\t' << read_length << '\t' << min_query << '\t' << max_query << "\t+\t*\t0\t"
-     << min_ref << '\t' << max_ref << '\t' << total_anchor_len << '\t' << (max_ref - min_ref)
+  ss << read_id << '\t' << read_length << '\t' << min_query << '\t' << max_query << '\t' << strand
+     << '\t' << target << '\t' << target_len << '\t' << min_ref << '\t' << max_ref << '\t' << total_anchor_len << '\t' << (max_ref - min_ref)
      << '\t' << mapping.mapq;
   ss << "\ttp:A:P";
   ss << "\tcs:i:" << static_cast<int>(mapping.chain_score);
@@ -99,6 +128,17 @@ void PafWriter::write(const mapping::ReadMapResult& result, const std::string& r
     char buf[32];
     std::snprintf(buf, sizeof(buf), "se:f:%.3f", mapping.chain_score / static_cast<double>(qspan));
     ss << '\t' << buf;
+  }
+  {
+    char ws_buf[32];
+    std::snprintf(ws_buf, sizeof(ws_buf), "ws:f:%.3f", result.standout);
+    ss << '\t' << ws_buf;
+    ss << "\tnc:i:" << result.mappings.size();
+    ss << "\tdf:A:" << static_cast<char>(result.decision_path);
+    ss << "\tck:i:" << result.chunks_processed;
+    char dt_buf[32];
+    std::snprintf(dt_buf, sizeof(dt_buf), "dt:f:%.6f", result.processing_time_sec);
+    ss << '\t' << dt_buf;
   }
 
   out_ << ss.str() << '\n';

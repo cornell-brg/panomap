@@ -28,7 +28,7 @@ ResultWriterPtr make_result_writer(const std::string& path, const index::FlatGra
                                    const std::vector<std::uint32_t>* component_ids) {
   const std::string ext = extension_of(path);
   if (ext == "paf") {
-    return std::make_unique<PafWriter>(path);
+    return std::make_unique<PafWriter>(path, graph);
   }
   // Default to GAF for .gaf or any unrecognized extension
   GafWriterConfig config;
