@@ -11,6 +11,16 @@
 
 namespace panomap::io {
 
+namespace {
+// Timing tags in the form common PAF scoring scripts read: mt:f = map time in ms,
+// ci:i = number of chunks processed.
+void write_timing_tags(std::ostream& ss, const mapping::ReadMapResult& result) {
+  char mt_buf[32];
+  std::snprintf(mt_buf, sizeof(mt_buf), "mt:f:%.3f", result.processing_time_sec * 1000.0);
+  ss << '\t' << mt_buf << "\tci:i:" << result.chunks_processed;
+}
+}  // namespace
+
 PafWriter::PafWriter(const std::string& path, const index::FlatGraph& graph)
     : out_(path, std::ios::out | std::ios::trunc), graph_(graph) {
   if (!out_) {
@@ -65,6 +75,7 @@ void PafWriter::write(const mapping::ReadMapResult& result, const std::string& r
       std::snprintf(dt_buf, sizeof(dt_buf), "dt:f:%.6f", result.processing_time_sec);
       ss << '\t' << dt_buf;
     }
+    write_timing_tags(ss, result);
     out_ << ss.str() << '\n';
     return;
   }
@@ -140,6 +151,7 @@ void PafWriter::write(const mapping::ReadMapResult& result, const std::string& r
     std::snprintf(dt_buf, sizeof(dt_buf), "dt:f:%.6f", result.processing_time_sec);
     ss << '\t' << dt_buf;
   }
+  write_timing_tags(ss, result);
 
   out_ << ss.str() << '\n';
 }
