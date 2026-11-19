@@ -36,4 +36,14 @@ bool parse_args(const std::vector<std::string>& args, const ParseConfig& config,
 
 void print_help(const ParseConfig& config, std::ostream& os);
 
+// Preset name -> the arguments it stands for.
+using PresetTable = std::map<std::string, std::vector<std::string>>;
+
+// Replace `-x <name>` / `-x<name>` / `--preset <name>` / `--preset=<name>` in args
+// with the preset's arguments, placed before all other arguments, so that an
+// explicit flag later on the command line overrides the preset value.
+// Returns false and sets *error for an unknown preset or a missing name.
+bool expand_preset(std::vector<std::string>& args, const PresetTable& presets,
+                   std::string* error);
+
 }  // namespace panomap::cli

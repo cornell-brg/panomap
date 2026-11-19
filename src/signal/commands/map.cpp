@@ -58,7 +58,20 @@ panomap::signal::SeedExtractorConfig seed_config_from_store(const panomap::index
 
 }  // namespace
 
-int handle_map(const std::vector<std::string>& args) {
+// R10.4.1 preset, used with an index built with `index -x r10`: no raw diff filter,
+// skip limit 5, gap scale 1.2, no anchor merge, end-of-read rule at mapq 10.
+const panomap::cli::PresetTable kMapPresets = {
+    {"r10", {"--diff", "0", "--chain-max-skip", "5", "--no-anchor-merge", "--chain-pen-gap",
+             "1.2", "--map-end-mapq", "10"}},
+};
+
+int handle_map(const std::vector<std::string>& args_in) {
+  std::vector<std::string> args = args_in;
+  std::string preset_error;
+  if (!panomap::cli::expand_preset(args, kMapPresets, &preset_error)) {
+    std::cerr << "map: " << preset_error << "\n";
+    return 1;
+  }
   /* CLI parsing */
 
   panomap::cli::Parsed parsed;
@@ -72,6 +85,9 @@ int handle_map(const std::vector<std::string>& args) {
       {'t', "threads", true, "Worker threads (default: 1)"},
       {'p', "profile", false, "Emit timing profile (tree)"},
       {'v', "verbose", false, "Enable verbose logging (DEBUG level)"},
+      {'x', "preset", true,
+       "Preset: r10 (= --diff 0 --chain-max-skip 5 --no-anchor-merge --chain-pen-gap 1.2 "
+       "--map-end-mapq 10); later flags override it"},
       {'\0', "", false, "\nSignal Processing Options:"},
       {'\0', "chunk-size", true, "Signal chunk size in samples (default: 4000, 0 = no chunking)"},
       {'\0', "max-chunks", true, "Max chunks to process per read (default: 10, 0 = unlimited)"},

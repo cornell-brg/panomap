@@ -46,7 +46,20 @@ panomap::io::ModelPtr load_model_or_file(const std::string& model_arg) {
 
 }  // namespace
 
-int handle_index(const std::vector<std::string>& args) {
+// R10.4.1 preset: token collapse instead of the raw diff filter, and minimizer
+// seeds (window 2).
+const panomap::cli::PresetTable kIndexPresets = {
+    {"r10", {"--diff", "0", "--collapse-tokens", "--seed-type", "minimizer",
+             "--minimizer-window", "2"}},
+};
+
+int handle_index(const std::vector<std::string>& args_in) {
+  std::vector<std::string> args = args_in;
+  std::string preset_error;
+  if (!panomap::cli::expand_preset(args, kIndexPresets, &preset_error)) {
+    std::cerr << "index: " << preset_error << "\n";
+    return 1;
+  }
   panomap::cli::Parsed parsed;
   panomap::cli::ParseConfig config;
   config.usage = "Usage: panomap index [options] <graph-file>";
@@ -59,6 +72,9 @@ int handle_index(const std::vector<std::string>& args) {
       {'o', "output", true, "Output index file (default: <graph-file>.pirx)"},
       {'t', "threads", true, "Worker threads (default: 1)"},
       {'p', "profile", false, "Emit timing profile (tree)"},
+      {'x', "preset", true,
+       "Preset: r10 (= --diff 0 --collapse-tokens --seed-type minimizer --minimizer-window 2); "
+       "later flags override it"},
       {'\0', "", false, "\nSignal Processing Options:"},
       {'\0', "tokenizer", true, "Tokenizer backend: rh2 (default), landmark"},
       {'\0', "landmark-prominence", true,

@@ -39,6 +39,43 @@ std::vector<::option> build_longopts(const std::vector<Option>& opts) {
 
 }  // namespace
 
+bool expand_preset(std::vector<std::string>& args, const PresetTable& presets,
+                   std::string* error) {
+  std::vector<std::string> rest;
+  std::vector<std::string> expanded;
+  for (std::size_t i = 0; i < args.size(); ++i) {
+    const std::string& a = args[i];
+    std::string name;
+    bool is_preset = true;
+    if (a == "-x" || a == "--preset") {
+      if (i + 1 >= args.size()) {
+        if (error) *error = "missing preset name after " + a;
+        return false;
+      }
+      name = args[++i];
+    } else if (a.rfind("--preset=", 0) == 0) {
+      name = a.substr(9);
+    } else if (a.size() > 2 && a.rfind("-x", 0) == 0) {
+      name = a.substr(2);
+    } else {
+      is_preset = false;
+    }
+    if (!is_preset) {
+      rest.push_back(a);
+      continue;
+    }
+    auto it = presets.find(name);
+    if (it == presets.end()) {
+      if (error) *error = "unknown preset '" + name + "'";
+      return false;
+    }
+    expanded.insert(expanded.end(), it->second.begin(), it->second.end());
+  }
+  expanded.insert(expanded.end(), rest.begin(), rest.end());
+  args = std::move(expanded);
+  return true;
+}
+
 bool parse_args(const std::vector<std::string>& args, const ParseConfig& config, Parsed& out) {
   const std::string optstring = build_optstring(config.options);
   const auto longopts = build_longopts(config.options);

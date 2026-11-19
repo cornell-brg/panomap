@@ -29,3 +29,28 @@ TEST_CASE("CLI smoke test: panomap index") {
   // Clean up
   std::filesystem::remove(index_file);
 }
+
+TEST_CASE("expand_preset puts preset arguments first so later flags override them") {
+  const panomap::cli::PresetTable presets = {{"r10", {"--diff", "0", "--no-anchor-merge"}}};
+  std::string error;
+
+  std::vector<std::string> a = {"--threads", "4", "-x", "r10", "--diff", "0.1", "reads.blow5"};
+  REQUIRE(panomap::cli::expand_preset(a, presets, &error));
+  CHECK(a == std::vector<std::string>{"--diff", "0", "--no-anchor-merge", "--threads", "4",
+                                      "--diff", "0.1", "reads.blow5"});
+
+  std::vector<std::string> b = {"--preset=r10"};
+  REQUIRE(panomap::cli::expand_preset(b, presets, &error));
+  CHECK(b.size() == 3);
+
+  std::vector<std::string> c = {"-xr10", "in.gfa"};
+  REQUIRE(panomap::cli::expand_preset(c, presets, &error));
+  CHECK(c.back() == "in.gfa");
+
+  std::vector<std::string> d = {"-x", "r9"};
+  CHECK_FALSE(panomap::cli::expand_preset(d, presets, &error));
+  CHECK(error == "unknown preset 'r9'");
+
+  std::vector<std::string> e = {"-x"};
+  CHECK_FALSE(panomap::cli::expand_preset(e, presets, &error));
+}
