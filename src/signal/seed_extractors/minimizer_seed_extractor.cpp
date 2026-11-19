@@ -40,35 +40,29 @@ SeedBuffer MinimizerSeedExtractor::extract(const TokenizedSignal& signal) const 
     hashes[i] = hashKmer(tokens.data(), i, k, qbits, token_mask, window_mask, use_shift);
   }
 
-  // Step 2: Slide window of size w, emit minimizer (leftmost on tie).
+  // Step 2: Slide a window of size w and mark every position that ties for the
+  // window minimum, so equal k-mers in a window are all kept. Windows whose
+  // minimum is a sentinel emit nothing.
   if (num_kmers < w) return buffer;
 
-  buffer.seeds.reserve(num_kmers / w + 1);
-  std::size_t last_emitted = std::numeric_limits<std::size_t>::max();
-
+  std::vector<bool> is_minimizer(num_kmers, false);
   for (std::size_t i = 0; i <= num_kmers - w; ++i) {
-    // Find leftmost minimum in window [i, i+w).
-    std::size_t min_idx = i;
     std::uint64_t min_hash = hashes[i];
-    for (std::size_t j = i + 1; j < i + w; ++j) {
-      if (hashes[j] < min_hash) {
-        min_hash = hashes[j];
-        min_idx = j;
-      }
-    }
-
-    // Skip windows where the minimizer is a sentinel.
+    for (std::size_t j = i + 1; j < i + w; ++j) min_hash = std::min(min_hash, hashes[j]);
     if (min_hash == kInvalidHash) continue;
-
-    // Deduplicate: don't emit the same position twice.
-    if (min_idx != last_emitted) {
-      const bool has_pos = !signal.original_positions.empty();
-      const std::size_t pos = has_pos ? signal.original_positions[min_idx] : min_idx;
-      const std::size_t end = has_pos ? signal.original_positions[min_idx + k - 1] : min_idx + k - 1;
-      const std::size_t span = end - pos + 1;
-      buffer.seeds.push_back(Seed{.hash = min_hash, .position = pos, .length = span});
-      last_emitted = min_idx;
+    for (std::size_t j = i; j < i + w; ++j) {
+      if (hashes[j] == min_hash) is_minimizer[j] = true;
     }
+  }
+
+  // Step 3: Emit each marked position once, in read order.
+  buffer.seeds.reserve(num_kmers / w + 1);
+  const bool has_pos = !signal.original_positions.empty();
+  for (std::size_t j = 0; j < num_kmers; ++j) {
+    if (!is_minimizer[j]) continue;
+    const std::size_t pos = has_pos ? signal.original_positions[j] : j;
+    const std::size_t end = has_pos ? signal.original_positions[j + k - 1] : j + k - 1;
+    buffer.seeds.push_back(Seed{.hash = hashes[j], .position = pos, .length = end - pos + 1});
   }
 
   return buffer;

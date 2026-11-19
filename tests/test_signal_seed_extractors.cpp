@@ -53,3 +53,18 @@ TEST_CASE("Seed length can be updated after merging") {
   seed.length = 35;
   CHECK(seed.length == 35);  // Updated coverage after hypothetical merge
 }
+
+TEST_CASE("Minimizer seed extractor emits every position tied for the window minimum") {
+  TokenizedSignal quantized;
+  quantized.tokens = {5, 5, 5, 5};  // three equal 2-mers in one window of 3
+
+  auto extractor = make_seed_extractor(
+      SeedExtractorConfig{.backend = "minimizer", .k = 2, .qbits = 4, .window = 3});
+  auto seeds = extractor->extract(quantized);
+
+  REQUIRE(seeds.seeds.size() == 3);
+  CHECK(seeds.seeds[0].position == 0);
+  CHECK(seeds.seeds[1].position == 1);
+  CHECK(seeds.seeds[2].position == 2);
+  CHECK(seeds.seeds[0].hash == seeds.seeds[2].hash);
+}
