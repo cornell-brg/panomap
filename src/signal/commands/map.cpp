@@ -63,6 +63,10 @@ panomap::signal::SeedExtractorConfig seed_config_from_store(const panomap::index
 const panomap::cli::PresetTable kMapPresets = {
     {"r10", {"--diff", "0", "--chain-max-skip", "5", "--no-anchor-merge", "--chain-pen-gap",
              "1.2", "--map-end-mapq", "10"}},
+    // R9.4 preset, used with an index built with `index -x r9`. Chain settings tuned
+    // per dataset (gap, skip, bandwidth) still go on the command line.
+    {"r9", {"--diff", "0", "--map-fallback-floor", "70", "--map-w-threshold", "0.40",
+            "--chain-max-survivor-chains", "50", "--no-anchor-merge"}},
 };
 
 int handle_map(const std::vector<std::string>& args_in) {
@@ -87,7 +91,8 @@ int handle_map(const std::vector<std::string>& args_in) {
       {'v', "verbose", false, "Enable verbose logging (DEBUG level)"},
       {'x', "preset", true,
        "Preset: r10 (= --diff 0 --chain-max-skip 5 --no-anchor-merge --chain-pen-gap 1.2 "
-       "--map-end-mapq 10); later flags override it"},
+       "--map-end-mapq 10), r9 (= --diff 0 --map-fallback-floor 70 --map-w-threshold 0.40 "
+       "--chain-max-survivor-chains 50 --no-anchor-merge); later flags override it"},
       {'\0', "", false, "\nSignal Processing Options:"},
       {'\0', "chunk-size", true, "Signal chunk size in samples (default: 4000, 0 = no chunking)"},
       {'\0', "max-chunks", true, "Max chunks to process per read (default: 10, 0 = unlimited)"},

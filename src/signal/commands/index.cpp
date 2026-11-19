@@ -51,6 +51,10 @@ panomap::io::ModelPtr load_model_or_file(const std::string& model_arg) {
 const panomap::cli::PresetTable kIndexPresets = {
     {"r10", {"--diff", "0", "--collapse-tokens", "--seed-type", "minimizer",
              "--minimizer-window", "2"}},
+    // R9.4: the same front end with the R9.4 model. Higher recall and less map
+    // time than the defaults, at slightly lower precision.
+    {"r9", {"-m", "r9.4", "--diff", "0", "--collapse-tokens", "--seed-type", "minimizer",
+            "--minimizer-window", "2"}},
 };
 
 int handle_index(const std::vector<std::string>& args_in) {
@@ -73,8 +77,8 @@ int handle_index(const std::vector<std::string>& args_in) {
       {'t', "threads", true, "Worker threads (default: 1)"},
       {'p', "profile", false, "Emit timing profile (tree)"},
       {'x', "preset", true,
-       "Preset: r10 (= --diff 0 --collapse-tokens --seed-type minimizer --minimizer-window 2); "
-       "later flags override it"},
+       "Preset: r10 (= --diff 0 --collapse-tokens --seed-type minimizer --minimizer-window 2), "
+       "r9 (= r10 with -m r9.4); later flags override it"},
       {'\0', "", false, "\nSignal Processing Options:"},
       {'\0', "tokenizer", true, "Tokenizer backend: rh2 (default), landmark"},
       {'\0', "landmark-prominence", true,
