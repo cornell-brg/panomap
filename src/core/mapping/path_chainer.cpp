@@ -39,8 +39,6 @@ struct DPBuffers {
   /* DP state */
   std::vector<std::int32_t> f, v;
   std::vector<std::int32_t> pred, t;
-  /* Sort permutation */
-  std::vector<std::uint32_t> order;
 
   void resize(std::size_t n);
 };
@@ -55,7 +53,6 @@ void DPBuffers::resize(std::size_t n) {
   v.resize(n);
   pred.resize(n);
   t.resize(n);
-  order.resize(n);
 }
 
 // Fast approximate log2 from minimap2/RawHash2 (lchain.c).
@@ -101,14 +98,51 @@ void anchors_merge_into(PathAnchor& a, const PathAnchor& b) {
   a.length = static_cast<std::uint16_t>(std::min(merged_end - a.query_pos, 0xFFFFu));
 }
 
-// Merge overlapping anchors within a single path's anchor list.
+inline std::uint64_t ref_query_key(const PathAnchor& a) {
+  return (static_cast<std::uint64_t>(a.ref_coord) << 32) | a.query_pos;
+}
+
+// Sort one path's anchors by (ref_coord, query_pos): the order the DP needs.
+// LSD radix sort on the 64-bit key, skipping byte positions where every key has the
+// same byte. Stable, so ties keep input order. Small groups use std::stable_sort.
+void sort_ref_query(std::vector<PathAnchor>& anchors) {
+  const std::size_t n = anchors.size();
+  if (n < 2) return;
+  if (n < 256) {
+    std::stable_sort(anchors.begin(), anchors.end(), [](const PathAnchor& a, const PathAnchor& b) {
+      return ref_query_key(a) < ref_query_key(b);
+    });
+    return;
+  }
+  thread_local std::vector<PathAnchor> buf;
+  buf.resize(n);
+  PathAnchor* src = anchors.data();
+  PathAnchor* dst = buf.data();
+  std::uint64_t all_or = 0, all_and = ~std::uint64_t{0};
+  for (std::size_t i = 0; i < n; ++i) {
+    const auto k = ref_query_key(src[i]);
+    all_or |= k;
+    all_and &= k;
+  }
+  const std::uint64_t varying = all_or ^ all_and;
+  for (int shift = 0; shift < 64; shift += 8) {
+    if (((varying >> shift) & 0xFF) == 0) continue;
+    std::size_t count[257] = {0};
+    for (std::size_t i = 0; i < n; ++i) ++count[((ref_query_key(src[i]) >> shift) & 0xFF) + 1];
+    for (int d = 0; d < 256; ++d) count[d + 1] += count[d];
+    for (std::size_t i = 0; i < n; ++i) dst[count[(ref_query_key(src[i]) >> shift) & 0xFF]++] = src[i];
+    std::swap(src, dst);
+  }
+  if (src != anchors.data()) std::copy(src, src + n, anchors.data());
+}
+
+// Merge overlapping anchors within a single path's anchor list, after sorting it by
+// (ref, query). Merging only extends lengths, so the result stays in that order.
 // Anchors must already be on the same path (caller guarantees via grouping).
 void merge_path_anchors(std::vector<PathAnchor>& anchors) {
   if (anchors.size() < 2) return;
 
-  std::sort(anchors.begin(), anchors.end(), [](const PathAnchor& a, const PathAnchor& b) {
-    return a.ref_coord != b.ref_coord ? a.ref_coord < b.ref_coord : a.query_pos < b.query_pos;
-  });
+  sort_ref_query(anchors);
 
   std::vector<PathAnchor> merged;
   merged.reserve(anchors.size());
@@ -124,32 +158,6 @@ void merge_path_anchors(std::vector<PathAnchor>& anchors) {
   }
   merged.push_back(current);
   anchors = std::move(merged);
-}
-
-// Apply a permutation in-place to parallel SoA arrays.
-// order[i] = source index for position i after sorting.
-void apply_permutation(DPBuffers& dp, std::size_t n) {
-  // Use a temp copy approach (simple, cache-friendly for small n).
-  // For very large n a cycle-based in-place permutation would avoid the copy,
-  // but pangenome path groups are typically <10k anchors.
-  std::vector<std::uint32_t> tmp_u32(n);
-  std::vector<std::uint16_t> tmp_u16(n);
-
-  // ref_coord
-  for (std::size_t i = 0; i < n; ++i) tmp_u32[i] = dp.ref_coord[dp.order[i]];
-  std::copy(tmp_u32.begin(), tmp_u32.begin() + n, dp.ref_coord.begin());
-
-  // query_pos
-  for (std::size_t i = 0; i < n; ++i) tmp_u32[i] = dp.query_pos[dp.order[i]];
-  std::copy(tmp_u32.begin(), tmp_u32.begin() + n, dp.query_pos.begin());
-
-  // src_idx
-  for (std::size_t i = 0; i < n; ++i) tmp_u32[i] = dp.src_idx[dp.order[i]];
-  std::copy(tmp_u32.begin(), tmp_u32.begin() + n, dp.src_idx.begin());
-
-  // length
-  for (std::size_t i = 0; i < n; ++i) tmp_u16[i] = dp.length[dp.order[i]];
-  std::copy(tmp_u16.begin(), tmp_u16.begin() + n, dp.length.begin());
 }
 
 // Hash the ordered node_id sequence of a chain's anchors.
@@ -259,7 +267,9 @@ ChainResult PathChainer::chain(const std::vector<NodeAnchor>& hits) const {
   std::size_t total_anchors = 0;
   for (auto& group : groups) {
     if (config_.merge_anchors) {
-      merge_path_anchors(group);
+      merge_path_anchors(group);  // sorts by (ref, query)
+    } else {
+      sort_ref_query(group);
     }
     total_anchors += group.size();
   }
@@ -285,15 +295,9 @@ ChainResult PathChainer::chain(const std::vector<NodeAnchor>& hits) const {
       dp.query_pos[i] = anchors[i].query_pos;
       dp.length[i] = anchors[i].length;
       dp.src_idx[i] = anchors[i].src_idx;
-      dp.order[i] = static_cast<std::uint32_t>(i);
     }
 
-    /* 2. Sort via index permutation, then apply to all SoA arrays */
-    std::sort(dp.order.begin(), dp.order.begin() + n, [&dp](std::uint32_t a, std::uint32_t b) {
-      if (dp.ref_coord[a] != dp.ref_coord[b]) return dp.ref_coord[a] < dp.ref_coord[b];
-      return dp.query_pos[a] < dp.query_pos[b];
-    });
-    apply_permutation(dp, n);
+    /* 2. The group is already in (ref, query) order (sorted above). */
 
     /* 3. Precompute q_span per anchor */
     const bool has_pore_k = config_.pore_k > 0;
