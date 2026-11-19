@@ -120,6 +120,7 @@ int handle_map(const std::vector<std::string>& args) {
   config.options.push_back({'\0', "no-early-exit", false, "Disable early exit: process all chunks before deciding"});
   config.options.push_back({'\0', "map-fallback-floor", true, "Fallback: absolute score floor (default: 100). Threshold = max(ema_mean, floor)."});
   config.options.push_back({'\0', "no-adaptive", false, "Disable EMA assist, use floor score only"});
+  config.options.push_back({'\0', "map-end-mapq", true, "End of read: if nothing mapped, accept the best chain with mapq above this (default: off)"});
   config.options.push_back({'\0', "", false, "\nOutput Options:"});
   config.options.push_back({'o', "output", true, "Output file (.paf or .gaf, default: GAF to stdout)"});
   config.options.push_back({'\0', "secondary", false, "Output secondary alignments (default: primary only)"});
@@ -466,13 +467,16 @@ int handle_map(const std::vector<std::string>& args) {
     map_config.map_fallback_floor_score = std::stod(parsed.values.at("map-fallback-floor"));
   if (parsed.values.count("no-adaptive"))
     map_config.map_fallback_adaptive = false;
+  if (parsed.values.count("map-end-mapq"))
+    map_config.map_end_mapq = std::stoi(parsed.values.at("map-end-mapq"));
   LOG_INFO("Mapping decision: w-threshold=" + std::to_string(map_config.map_w_threshold) +
            " sc-min-anchors=" + std::to_string(map_config.map_sc_min_anchors) +
            " sc-ratio=[" + std::to_string(map_config.map_sc_ratio_lo) + "," +
            std::to_string(map_config.map_sc_ratio_hi) + "]" +
            " fallback-floor=" + std::to_string(map_config.map_fallback_floor_score) +
            " adaptive=" + (map_config.map_fallback_adaptive ? "on" : "off") +
-           " early-exit=" + (map_config.no_early_exit ? "off" : "on"));
+           " early-exit=" + (map_config.no_early_exit ? "off" : "on") +
+           " end-mapq=" + (map_config.map_end_mapq >= 0 ? std::to_string(map_config.map_end_mapq) : "off"));
 
   /* Read processing */
 

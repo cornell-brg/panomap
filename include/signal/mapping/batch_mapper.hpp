@@ -109,6 +109,9 @@ struct BatchMapperConfig {
   double map_fallback_floor_score{100.0};   // Absolute minimum score to rescue
   float map_fallback_alpha{0.02f};          // EMA smoothing (0.02 ~ 50-read memory)
   bool map_fallback_adaptive{true};         // false = use floor only, no EMA learning
+  // End of read: if nothing mapped, accept the best chain when its mapq is above
+  // this value. Negative = off.
+  int map_end_mapq{-1};
 };
 
 struct BatchMapperStats {

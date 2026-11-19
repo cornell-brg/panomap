@@ -595,6 +595,13 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) {
       decision_path = DecisionPath::kFallback;
     }
   }
+
+  /* End-of-read rule: nothing mapped, but the best chain's mapq is high enough. */
+  if (config_.map_end_mapq >= 0 && !result.is_mapped && !result.mappings.empty() &&
+      result.mappings[0].mapq > config_.map_end_mapq) {
+    result.is_mapped = true;
+    decision_path = DecisionPath::kFallback;
+  }
   result.decision_path = decision_path;
 
 }
