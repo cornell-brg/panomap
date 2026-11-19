@@ -53,6 +53,7 @@ if(DOCTEST_AVAILABLE)
         test_seed_merger.cpp
         test_path_chainer.cpp
         test_bucket_indexer.cpp
+        ${CMAKE_SOURCE_DIR}/src/cli/parse.cpp
     )
 
     target_include_directories(panomap_tests PRIVATE

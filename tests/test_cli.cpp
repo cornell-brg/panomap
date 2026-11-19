@@ -3,6 +3,9 @@
 #include <doctest/doctest.h>
 #include <filesystem>
 #include <string>
+#include <vector>
+
+#include "cli/parse.hpp"
 
 // This is a simple smoke test to check that the CLI commands run without crashing.
 // It does not check for correctness of the output.
