@@ -439,8 +439,9 @@ ChainResult PathChainer::chain(const std::vector<NodeAnchor>& hits) const {
       std::size_t idx;
     };
 
-    std::vector<ScoreIdx> z;
-    z.reserve(n);
+    // Buffers reused across paths and calls on this thread (allocation was ~5% of map CPU).
+    thread_local std::vector<ScoreIdx> z;
+    z.clear();
     for (std::size_t i = 0; i < n; ++i) {
       if (f[i] >= static_cast<std::int32_t>(config_.min_chain_score) && v[i] <= f[i]) {
         z.push_back({f[i], i});
@@ -449,7 +450,8 @@ ChainResult PathChainer::chain(const std::vector<NodeAnchor>& hits) const {
     std::sort(z.begin(), z.end(),
               [](const ScoreIdx& a, const ScoreIdx& b) { return a.score > b.score; });
 
-    std::vector<bool> used(n, false);
+    thread_local std::vector<bool> used;
+    used.assign(n, false);
     std::size_t path_chain_count = 0;
     const std::size_t survivor_limit = config_.max_survivor_chains;  // 0 = unlimited
 
@@ -464,7 +466,8 @@ ChainResult PathChainer::chain(const std::vector<NodeAnchor>& hits) const {
       /* Backtrack, marking used as we go.
        * If we hit an already-used anchor, this chain shares a prefix
        * with a previously extracted chain -- discard it entirely. */
-      std::vector<std::size_t> chain_indices;
+      thread_local std::vector<std::size_t> chain_indices;
+      chain_indices.clear();
       bool shared_prefix = false;
       {
         std::int32_t cur = static_cast<std::int32_t>(z[k].idx);
