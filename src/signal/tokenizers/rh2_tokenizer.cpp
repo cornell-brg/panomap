@@ -4,6 +4,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <limits>
+#include <vector>
 
 namespace panomap::signal {
 
@@ -48,6 +51,31 @@ std::uint32_t dynamic_quantize(float value, const TokenizerConfig& cfg) {
   return qnt_val;
 }
 
+// Drop each token equal to the last kept token. A sentinel (NaN sample) is always
+// kept and resets the comparison.
+// Kept tokens keep their original event positions, so seed positions stay in
+// event units.
+void collapse_repeats(TokenizedSignal& signal, std::int16_t sentinel) {
+  if (signal.tokens.empty()) return;
+  const bool has_pos = !signal.original_positions.empty();
+  std::vector<std::int16_t> kept;
+  std::vector<std::uint32_t> kept_pos;
+  kept.reserve(signal.tokens.size());
+  kept_pos.reserve(signal.tokens.size());
+  bool have_prev = false;
+  std::int16_t prev = 0;
+  for (std::size_t i = 0; i < signal.tokens.size(); ++i) {
+    const std::int16_t tok = signal.tokens[i];
+    if (tok != sentinel && have_prev && tok == prev) continue;
+    kept.push_back(tok);
+    kept_pos.push_back(has_pos ? signal.original_positions[i] : static_cast<std::uint32_t>(i));
+    have_prev = tok != sentinel;
+    prev = tok;
+  }
+  signal.tokens = std::move(kept);
+  signal.original_positions = std::move(kept_pos);
+}
+
 }  // namespace
 
 Rh2Tokenizer::Rh2Tokenizer(TokenizerConfig config) : config_(std::move(config)) {}
@@ -67,6 +95,7 @@ TokenizedSignal Rh2Tokenizer::quantize(const NormalizedSignal& signal) const {
 
   // Pass through position mapping from diff filter (if present)
   result.original_positions = signal.original_positions;
+  if (config_.collapse_repeats) collapse_repeats(result, sentinel);
   return result;
 }
 

@@ -349,6 +349,12 @@ int handle_map(const std::vector<std::string>& args) {
   if (parsed.values.count("diff")) {
     map_config.diff_filter = std::stof(parsed.values.at("diff"));
   }
+  // Token collapse follows the index (older indexes have no "collapse" key: off).
+  {
+    const auto& params = seed_store->params();
+    auto it = params.find("collapse");
+    map_config.tokenizer_config.collapse_repeats = it != params.end() && it->second == "1";
+  }
   LOG_DEBUG("Using tokenizer: " + map_config.tokenizer_config.backend);
 
   // Configure seed extractor from seed store parameters

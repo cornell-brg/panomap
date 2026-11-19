@@ -66,6 +66,8 @@ int handle_index(const std::vector<std::string>& args) {
        "higher = stricter, fewer tokens)"},
       {'\0', "diff", true,
        "Diff filter: skip events within diff of last emitted (default: 0.35, ignored for peak)"},
+      {'\0', "collapse-tokens", false,
+       "Drop a token equal to the last kept token; map follows the index"},
       {'\0', "", false, "\nSeed Generation Options:"},
       {'\0', "seed-type", true, "Seed extractor type: kmer (default), minimizer"},
       {'\0', "seed-k", true, "Seed k-mer size (default: 8)"},
@@ -185,6 +187,7 @@ int handle_index(const std::vector<std::string>& args) {
   index_config.diff_filter = diff_filter;
   index_config.tokenizer =
       parsed.values.count("tokenizer") ? parsed.values.at("tokenizer") : "rh2";
+  index_config.tokenizer_collapse = parsed.values.count("collapse-tokens") > 0;
   if (parsed.values.count("landmark-prominence")) {
     index_config.tokenizer_landmark_prominence =
         std::stof(parsed.values.at("landmark-prominence"));
