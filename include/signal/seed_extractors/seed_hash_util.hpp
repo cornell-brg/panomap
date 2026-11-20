@@ -44,7 +44,10 @@ inline std::uint64_t hashKmer(const std::int16_t* tokens, std::size_t start, std
     packed =
         (!use_shift) ? hash64(packed ^ token, kMixMask) : ((packed << qbits) | token) & window_mask;
   }
-  return hash64(packed, kMixMask);
+  // A seed wider than 32 bits mixes in 64 bits, so every token counts. Narrower seeds keep
+  // the 32-bit mix, so their hashes do not change.
+  const std::uint64_t mix_mask = (k * qbits > 32) ? std::numeric_limits<std::uint64_t>::max() : kMixMask;
+  return hash64(packed, mix_mask);
 }
 
 // Check if a k-mer window starting at tokens[start] contains a sentinel.

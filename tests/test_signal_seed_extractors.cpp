@@ -2,6 +2,8 @@
 
 #include <doctest/doctest.h>
 
+#include "signal/seed_extractors/seed_hash_util.hpp"
+
 #include "signal/seed_extractors/seed_extractor_factory.hpp"
 #include "signal/signal_types.hpp"
 
@@ -67,4 +69,20 @@ TEST_CASE("Minimizer seed extractor emits every position tied for the window min
   CHECK(seeds.seeds[1].position == 1);
   CHECK(seeds.seeds[2].position == 2);
   CHECK(seeds.seeds[0].hash == seeds.seeds[2].hash);
+}
+
+TEST_CASE("seed hash: every token of a seed longer than 8 tokens counts") {
+  using panomap::signal::hashKmer;
+  using panomap::signal::makeMask;
+  const std::uint32_t qbits = 4;
+  const std::uint64_t token_mask = makeMask(qbits);
+  // Two 10-token seeds that differ only in their first token.
+  const std::int16_t a[10] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+  const std::int16_t b[10] = {11, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+  const std::uint64_t mask10 = makeMask(10 * qbits);
+  CHECK(hashKmer(a, 0, 10, qbits, token_mask, mask10, true) !=
+        hashKmer(b, 0, 10, qbits, token_mask, mask10, true));
+  // An 8-token seed keeps its 32-bit hash.
+  const std::uint64_t mask8 = makeMask(8 * qbits);
+  CHECK(hashKmer(a, 0, 8, qbits, token_mask, mask8, true) <= 0xFFFFFFFFULL);
 }
