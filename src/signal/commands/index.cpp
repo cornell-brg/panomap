@@ -84,6 +84,13 @@ int handle_index(const std::vector<std::string>& args_in) {
       {'\0', "landmark-prominence", true,
        "Landmark: min peak prominence in normalized units (default: 0.5; "
        "higher = stricter, fewer tokens)"},
+      {'\0', "landmark-bits", true, "Landmark: bits for each of rise and fall (default: 2)"},
+      {'\0', "landmark-max-amp", true, "Landmark: amplitude clip (default: 4.0)"},
+      {'\0', "n-buckets", true,
+       "rh2: number of ordered quantization buckets (default: 0 = original formula)"},
+      {'\0', "fine-min", true, "rh2: lower end of the fine range (default: -2.0)"},
+      {'\0', "fine-max", true, "rh2: upper end of the fine range (default: 2.0)"},
+      {'\0', "fine-range", true, "rh2: share of buckets in the fine range (default: 0.4)"},
       {'\0', "diff", true,
        "Diff filter: skip events within diff of last emitted (default: 0.35, ignored for peak)"},
       {'\0', "collapse-tokens", false,
@@ -212,6 +219,18 @@ int handle_index(const std::vector<std::string>& args_in) {
     index_config.tokenizer_landmark_prominence =
         std::stof(parsed.values.at("landmark-prominence"));
   }
+  auto set_f = [&parsed](const char* key, float& out) {
+    if (parsed.values.count(key)) out = std::stof(parsed.values.at(key));
+  };
+  auto set_u = [&parsed](const char* key, std::uint32_t& out) {
+    if (parsed.values.count(key)) out = static_cast<std::uint32_t>(std::stoul(parsed.values.at(key)));
+  };
+  set_u("landmark-bits", index_config.tokenizer_landmark_bits);
+  set_f("landmark-max-amp", index_config.tokenizer_landmark_max_amp);
+  set_u("n-buckets", index_config.tokenizer_n_buckets);
+  set_f("fine-min", index_config.tokenizer_fine_min);
+  set_f("fine-max", index_config.tokenizer_fine_max);
+  set_f("fine-range", index_config.tokenizer_fine_range);
   if (parsed.values.count("no-1d-sort")) {
     index_config.compute_1d_sort = false;
   }

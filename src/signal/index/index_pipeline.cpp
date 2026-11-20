@@ -56,8 +56,11 @@ IndexPipelineResult run_index_pipeline(io::ImportedGraph imported, const io::Kme
   tok_cfg.fine_min = config.tokenizer_fine_min;
   tok_cfg.fine_max = config.tokenizer_fine_max;
   tok_cfg.fine_range = config.tokenizer_fine_range;
-  tok_cfg.n_bins = config.tokenizer_n_bins;
+  tok_cfg.n_buckets = config.tokenizer_n_buckets;
   tok_cfg.landmark_min_prominence = config.tokenizer_landmark_prominence;
+  tok_cfg.landmark_bits = config.tokenizer_landmark_bits;
+  tok_cfg.landmark_max_amp = config.tokenizer_landmark_max_amp;
+  tok_cfg.qbits = signal::token_bits(tok_cfg);
   tok_cfg.collapse_repeats = config.tokenizer_collapse;
   auto tokenizer = signal::make_tokenizer(tok_cfg);
   if (!tokenizer) {
@@ -68,7 +71,7 @@ IndexPipelineResult run_index_pipeline(io::ImportedGraph imported, const io::Kme
   extractor_cfg.backend = config.seed_type;
   extractor_cfg.k = config.seed_k;
   extractor_cfg.window = config.minimizer_window;
-  extractor_cfg.qbits = 4;
+  extractor_cfg.qbits = tok_cfg.qbits;
   auto extractor = signal::make_seed_extractor(extractor_cfg);
   if (!extractor) {
     throw std::runtime_error("Failed to create seed extractor");

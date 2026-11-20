@@ -316,7 +316,15 @@ BucketIndexResult bucketIndex(const FlatGraph& graph, const io::KmerModel& model
   params["qbits"] = std::to_string(cfg.qbits);
   params["window"] = std::to_string(cfg.window);
   // Tokenizer setting that map must repeat to produce the same tokens.
-  params["collapse"] = tokenizer.config().collapse_repeats ? "1" : "0";
+  const auto& tok = tokenizer.config();
+  params["collapse"] = tok.collapse_repeats ? "1" : "0";
+  params["fine_min"] = std::to_string(tok.fine_min);
+  params["fine_max"] = std::to_string(tok.fine_max);
+  params["fine_range"] = std::to_string(tok.fine_range);
+  params["n_buckets"] = std::to_string(tok.n_buckets);
+  params["lm_prominence"] = std::to_string(tok.landmark_min_prominence);
+  params["lm_bits"] = std::to_string(tok.landmark_bits);
+  params["lm_max_amp"] = std::to_string(tok.landmark_max_amp);
 
   result.seed_store =
       std::make_unique<BucketSeedStore>(std::move(finalized), bucket_bits, extractor.name(),

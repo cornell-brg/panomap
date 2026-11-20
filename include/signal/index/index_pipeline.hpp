@@ -50,8 +50,10 @@ struct IndexPipelineConfig {
   float tokenizer_fine_min{-2.0f};
   float tokenizer_fine_max{2.0f};
   float tokenizer_fine_range{0.4f};
-  std::uint32_t tokenizer_n_bins{0};  // 0 = use 2^qbits = 16
+  std::uint32_t tokenizer_n_buckets{0};  // 0 = original formula over 16 values
   float tokenizer_landmark_prominence{0.5f};  // Landmark: drop peaks below this prominence
+  std::uint32_t tokenizer_landmark_bits{2};   // Landmark: bits for each of rise and fall
+  float tokenizer_landmark_max_amp{4.0f};     // Landmark: amplitude clip
   float diff_filter{0.35f};  // Skip events within diff of last emitted (0 = disabled)
   bool tokenizer_collapse{false};  // Drop repeated tokens; stored in the index
 
@@ -74,8 +76,8 @@ struct IndexPipelineConfig {
   // If nullptr, indexing runs sequentially.
   concurrency::Executor* executor{nullptr};
 
-  // Note: qbits hardcoded to 4 in both tokenizer.hpp and seed extractor.
-  // Do not change without coordinating both.
+  // Bits per token follow the tokenizer: 2 * landmark bits for landmark,
+  // ceil(log2(n_buckets)) for rh2 buckets, else 4.
   //
   // Pore model k: determined by model (r9.4->k=6, r10.4->k=9), not configurable.
 };

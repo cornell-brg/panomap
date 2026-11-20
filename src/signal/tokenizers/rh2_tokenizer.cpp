@@ -12,7 +12,33 @@ namespace panomap::signal {
 
 namespace {
 
+// N ordered buckets: the fine range gets round(N * fine_range) of them, the tails
+// below and above share the rest. Matches RawHash2 2.5 dynamic_quantize.
+std::uint32_t bucket_quantize(float value, const TokenizerConfig& cfg) {
+  const std::uint32_t n = cfg.n_buckets;
+  const std::uint32_t n_fine =
+      std::clamp<std::uint32_t>(static_cast<std::uint32_t>(n * cfg.fine_range + 0.5f), 1u, n);
+  const std::uint32_t n_low = (n - n_fine) / 2;
+  const std::uint32_t n_high = n - n_fine - n_low;
+  const float lo = -3.0f;
+  const float hi = 3.0f;
+  auto bucket = [](float t, std::uint32_t count) {
+    t = std::clamp(t, 0.0f, 1.0f);
+    return std::min(static_cast<std::uint32_t>(t * count), count - 1);
+  };
+  if (value < cfg.fine_min) {
+    if (n_low == 0) return 0;
+    return bucket((value - lo) / (cfg.fine_min - lo), n_low);
+  }
+  if (value <= cfg.fine_max) {
+    return n_low + bucket((value - cfg.fine_min) / (cfg.fine_max - cfg.fine_min), n_fine);
+  }
+  if (n_high == 0) return n - 1;
+  return n_low + n_fine + bucket((value - cfg.fine_max) / (hi - cfg.fine_max), n_high);
+}
+
 std::uint32_t dynamic_quantize(float value, const TokenizerConfig& cfg) {
+  if (cfg.n_buckets > 0) return bucket_quantize(value, cfg);
   const float fine_min = cfg.fine_min;
   const float fine_max = cfg.fine_max;
   const float fine_range = cfg.fine_range;

@@ -74,3 +74,36 @@ TEST_CASE("RH2 tokenizer collapses repeated tokens when asked") {
   CHECK(out.tokens[4] == 3);
   CHECK(out.original_positions == std::vector<std::uint32_t>{10, 12, 14, 15, 16});
 }
+
+TEST_CASE("RH2 bucket quantizer gives ordered buckets that use every value") {
+  TokenizerConfig cfg;
+  cfg.backend = "rh2";
+  cfg.fine_min = -1.6f;
+  cfg.fine_max = 1.6f;
+  cfg.fine_range = 0.6f;
+  cfg.n_buckets = 12;
+
+  NormalizedSignal norm;
+  for (int i = 0; i <= 600; ++i) norm.samples.push_back(-3.0f + 0.01f * static_cast<float>(i));
+  auto out = make_tokenizer(cfg)->quantize(norm);
+
+  REQUIRE(out.tokens.size() == norm.samples.size());
+  CHECK(out.tokens.front() == 0);
+  CHECK(out.tokens.back() == 11);
+  for (std::size_t i = 1; i < out.tokens.size(); ++i) CHECK(out.tokens[i] >= out.tokens[i - 1]);
+  // 12 buckets: 7 in the fine range, 2 below it, 3 above it.
+  CHECK(make_tokenizer(cfg)->quantize(NormalizedSignal{{-1.7f}}).tokens[0] == 1);
+  CHECK(make_tokenizer(cfg)->quantize(NormalizedSignal{{-1.5f}}).tokens[0] == 2);
+  CHECK(make_tokenizer(cfg)->quantize(NormalizedSignal{{1.5f}}).tokens[0] == 8);
+  CHECK(make_tokenizer(cfg)->quantize(NormalizedSignal{{1.7f}}).tokens[0] == 9);
+}
+
+TEST_CASE("Token bits follow the tokenizer") {
+  TokenizerConfig cfg;
+  CHECK(token_bits(cfg) == 4);
+  cfg.n_buckets = 24;
+  CHECK(token_bits(cfg) == 5);
+  cfg.backend = "landmark";
+  cfg.landmark_bits = 3;
+  CHECK(token_bits(cfg) == 6);
+}

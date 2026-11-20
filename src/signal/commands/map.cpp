@@ -361,11 +361,28 @@ int handle_map(const std::vector<std::string>& args_in) {
     map_config.tokenizer_config.backend = tokenizer_name;
   }
   map_config.tokenizer_config.pore_model = pore_model_name;
-  map_config.tokenizer_config.fine_min = -2.0f;
-  map_config.tokenizer_config.fine_max = 2.0f;
-  map_config.tokenizer_config.fine_range = 0.4f;  // must match IndexPipelineConfig::tokenizer_fine_range
-  map_config.tokenizer_config.n_bins =
-      0;  // must match IndexPipelineConfig::tokenizer_n_bins (0 = use qbits)
+  // Tokenizer settings follow the index. Older indexes lack these keys and used
+  // the values below.
+  {
+    const auto& params = seed_store->params();
+    auto get_f = [&params](const std::string& key, float def) {
+      auto it = params.find(key);
+      return it == params.end() ? def : std::stof(it->second);
+    };
+    auto get_u = [&params](const std::string& key, std::uint32_t def) {
+      auto it = params.find(key);
+      return it == params.end() ? def : static_cast<std::uint32_t>(std::stoul(it->second));
+    };
+    auto& tc = map_config.tokenizer_config;
+    tc.fine_min = get_f("fine_min", -2.0f);
+    tc.fine_max = get_f("fine_max", 2.0f);
+    tc.fine_range = get_f("fine_range", 0.4f);
+    tc.n_buckets = get_u("n_buckets", 0);
+    tc.landmark_min_prominence = get_f("lm_prominence", 0.5f);
+    tc.landmark_bits = get_u("lm_bits", 2);
+    tc.landmark_max_amp = get_f("lm_max_amp", 4.0f);
+    tc.qbits = get_u("qbits", 4);
+  }
   if (parsed.values.count("landmark-prominence")) {
     map_config.tokenizer_config.landmark_min_prominence =
         std::stof(parsed.values.at("landmark-prominence"));

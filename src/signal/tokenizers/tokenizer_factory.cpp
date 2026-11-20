@@ -14,9 +14,9 @@ TokenizerPtr make_tokenizer(const TokenizerConfig& config) {
   }
   if (config.backend == "landmark") {
     LandmarkTokenizerConfig lm_cfg;
-    lm_cfg.rise_bits = 2;
-    lm_cfg.fall_bits = 2;
-    lm_cfg.max_amp = 4.0f;
+    lm_cfg.rise_bits = config.landmark_bits;
+    lm_cfg.fall_bits = config.landmark_bits;
+    lm_cfg.max_amp = config.landmark_max_amp;
     lm_cfg.min_prominence = config.landmark_min_prominence;
     return std::make_unique<LandmarkTokenizer>(config, lm_cfg);
   }
