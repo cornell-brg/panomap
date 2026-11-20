@@ -101,6 +101,7 @@ struct PathStep {
   std::uint32_t node_id;
   std::int64_t ref_pos;      // cumulative position along path (start of node)
   std::uint32_t node_length;  // base length of this node
+  bool reverse{false};        // path walks this node in reverse
 };
 using PathStepIndex = std::vector<std::vector<PathStep>>;
 
@@ -114,16 +115,18 @@ PathStepIndex build_path_step_index(const FlatGraph& graph,
     }
   }
 
-  // Collect steps per path, using only forward nodes (even node IDs)
-  // and forward paths (even path IDs). simpleExpand creates both forward
-  // and reverse versions; we only need forward to match odgi's behavior.
+  // Collect steps per path from forward paths (even path IDs) only.
+  // simpleExpand stores each node twice: forward (even ID) and reverse (odd ID).
+  // A forward path that walks a node in reverse is recorded on the odd ID, so
+  // both IDs are scanned and the step keeps its direction.
   PathStepIndex index(num_paths);
-  for (std::size_t nid = 0; nid < coords.size(); nid += 2) {
+  for (std::size_t nid = 0; nid < coords.size(); ++nid) {
     std::uint32_t fwd_idx = static_cast<std::uint32_t>(nid / 2);
     auto nlen = static_cast<std::uint32_t>(graph.seqLen(static_cast<std::uint32_t>(nid)));
+    const bool rev = (nid % 2) != 0;
     for (const auto& lc : coords[nid]) {
       if (lc.path_id % 2 != 0) continue;  // skip reverse-strand paths
-      index[lc.path_id].push_back({fwd_idx, lc.ref_coord, nlen});
+      index[lc.path_id].push_back({fwd_idx, lc.ref_coord, nlen, rev});
     }
   }
 
@@ -314,6 +317,10 @@ std::vector<float> compute_1d_sort(const FlatGraph& graph,
     double pos_b = static_cast<double>(steps[s_rank_b].ref_pos);
     if (offset_i) pos_a += static_cast<double>(steps[s_rank].node_length);
     if (offset_j) pos_b += static_cast<double>(steps[s_rank_b].node_length);
+    // Offset 0 is where the path enters the node: the node start for a forward
+    // step, the node end for a reverse step.
+    offset_i ^= static_cast<std::uint32_t>(steps[s_rank].reverse);
+    offset_j ^= static_cast<std::uint32_t>(steps[s_rank_b].reverse);
 
     double target_dist = std::abs(pos_a - pos_b);
     if (target_dist == 0) return;
