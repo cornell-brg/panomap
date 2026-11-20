@@ -45,6 +45,7 @@ if(DOCTEST_AVAILABLE)
         test_results.cpp
         test_reads.cpp
         test_signal_tokenize.cpp
+        test_event_borders.cpp
         test_signal_seed_extractors.cpp
         test_index_pipeline.cpp
         test_cli.cpp

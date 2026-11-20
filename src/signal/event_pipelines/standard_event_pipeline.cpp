@@ -318,6 +318,37 @@ NormalizedSignal StandardEventPipeline::process_chunk(const float* pA, std::size
   return result;
 }
 
+NormalizedSignal events_from_borders(const float* pA, std::size_t len, NormState& norm_state,
+                                     const std::vector<std::uint32_t>& borders) {
+  NormalizedSignal result;
+  if (len == 0) return result;
+
+  for (std::size_t i = 0; i < len; ++i) {
+    norm_state.sum += pA[i];
+    norm_state.sum_sq += static_cast<double>(pA[i]) * pA[i];
+  }
+  norm_state.n += len;
+  const double mean = norm_state.sum / static_cast<double>(norm_state.n);
+  const double stddev =
+      std::sqrt(norm_state.sum_sq / static_cast<double>(norm_state.n) - mean * mean);
+  if (stddev < 1e-12) return result;
+
+  constexpr std::uint32_t kMaxSegmentLength = 500;
+  std::vector<float> segment;
+  for (std::size_t bi = 1; bi < borders.size(); ++bi) {
+    const std::uint32_t start = borders[bi - 1];
+    const std::uint32_t end = std::min<std::uint32_t>(borders[bi], static_cast<std::uint32_t>(len));
+    if (end <= start || end - start >= kMaxSegmentLength) continue;
+    segment.clear();
+    for (std::uint32_t i = start; i < end; ++i) {
+      const float z = static_cast<float>((pA[i] - mean) / stddev);
+      if (z > -3.0f && z < 3.0f) segment.push_back(z);
+    }
+    if (!segment.empty()) result.samples.push_back(iqr_filtered_mean(segment));
+  }
+  return result;
+}
+
 const EventPipelineConfig& StandardEventPipeline::config() const { return config_; }
 
 std::string StandardEventPipeline::name() const { return "standard"; }

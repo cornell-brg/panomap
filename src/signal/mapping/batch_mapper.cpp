@@ -12,6 +12,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include "signal/event_pipelines/standard_event_pipeline.hpp"
 #include "signal/mapping/batch_mapper.hpp"
 
 #include "signal/diff_filter.hpp"
@@ -406,13 +407,29 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) {
 
     /* Convert raw ADC to picoamps (once, full signal) */
     const float raw_unit = (read.digitisation == 0.0f) ? 1.0f : (read.range / read.digitisation);
+    const std::vector<std::uint32_t>* raw_borders = nullptr;
+    if (config_.event_borders != nullptr) {
+      auto it = config_.event_borders->find(read.read_id);
+      if (it != config_.event_borders->end()) raw_borders = &it->second;
+    }
     std::vector<float> pA;
+    std::vector<std::uint32_t> pa_borders;  // borders as indices into pA
     pA.reserve(read.raw_signal.size());
-    for (auto value : read.raw_signal) {
-      float pa = (static_cast<float>(value) + read.offset) * raw_unit;
+    std::size_t next_border = 0;
+    for (std::size_t r = 0; r < read.raw_signal.size(); ++r) {
+      while (raw_borders != nullptr && next_border < raw_borders->size() &&
+             (*raw_borders)[next_border] <= r) {
+        pa_borders.push_back(static_cast<std::uint32_t>(pA.size()));
+        ++next_border;
+      }
+      float pa = (static_cast<float>(read.raw_signal[r]) + read.offset) * raw_unit;
       if (pa > 30.0f && pa < 200.0f) {
         pA.push_back(pa);
       }
+    }
+    while (raw_borders != nullptr && next_border < raw_borders->size()) {
+      pa_borders.push_back(static_cast<std::uint32_t>(pA.size()));
+      ++next_border;
     }
 
     const std::size_t total_samples = pA.size();
@@ -428,8 +445,19 @@ void BatchMapper::process_read(BatchBuffer& batch, std::size_t index) {
       std::size_t chunk_len = std::min(chunk_size, total_samples - chunk_start);
 
       /* Per-chunk DSP: event detection, quantization, seed extraction */
-      auto events =
-          components_.event_pipeline->process_chunk(pA.data() + chunk_start, chunk_len, norm_state);
+      signal::NormalizedSignal events;
+      if (raw_borders != nullptr) {
+        std::vector<std::uint32_t> local;
+        for (auto b : pa_borders) {
+          if (b >= chunk_start && b <= chunk_start + chunk_len) {
+            local.push_back(static_cast<std::uint32_t>(b - chunk_start));
+          }
+        }
+        events = signal::events_from_borders(pA.data() + chunk_start, chunk_len, norm_state, local);
+      } else {
+        events = components_.event_pipeline->process_chunk(pA.data() + chunk_start, chunk_len,
+                                                           norm_state);
+      }
       signal::apply_diff_filter(events, config_.diff_filter);
       auto tokens = components_.tokenizer->quantize(events);
 

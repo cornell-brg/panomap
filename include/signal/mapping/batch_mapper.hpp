@@ -59,6 +59,10 @@ struct BatchMapperConfig {
   signal::TokenizerConfig tokenizer_config{};
   signal::SeedExtractorConfig seed_config{};
   float diff_filter{0.35f};  // Skip events within diff of last emitted (0 = disabled)
+  /* Event borders given per read (non-owning, optional): read ID -> raw-signal sample
+   * indices. A read listed here gets its events from these borders instead of
+   * t-test detection. Chunked mapping only. */
+  const std::unordered_map<std::string, std::vector<std::uint32_t>>* event_borders{nullptr};
   std::string chainer_backend{"path-chain"};
   cli::Parsed chainer_parsed{};                   // CLI args forwarded to chainer
   const index::SeedStore* seed_store{nullptr};    // non-owning pointer to loaded SeedStore

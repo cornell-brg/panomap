@@ -108,6 +108,8 @@ int handle_map(const std::vector<std::string>& args_in) {
       {'\0', "event-t1", true, ""},
       {'\0', "event-t2", true, ""},
       {'\0', "event-peak", true, ""},
+      // Hidden: TSV of read ID, then comma-separated border sample indices into the raw signal
+      {'\0', "event-borders", true, ""},
       {'\0', "", false, "\nSeed Lookup Options:"},
       {'\0', "seed-freq-cap", true,
        "Skip high-freq seeds: <N> for absolute, p<F> for percentile (default: p0.99)"},
@@ -405,6 +407,28 @@ int handle_map(const std::vector<std::string>& args_in) {
   map_config.event_pipeline_config.pore_model = pore_model_name;
   if (parsed.values.count("sensitivity")) {
     map_config.event_pipeline_config.sensitivity = std::stof(parsed.values.at("sensitivity"));
+  }
+  std::unordered_map<std::string, std::vector<std::uint32_t>> event_borders;
+  if (parsed.values.count("event-borders")) {
+    std::ifstream in(parsed.values.at("event-borders"));
+    if (!in) throw std::runtime_error("cannot open --event-borders file");
+    std::string line;
+    while (std::getline(in, line)) {
+      const auto tab = line.find('\t');
+      if (tab == std::string::npos) continue;
+      std::vector<std::uint32_t> borders;
+      std::size_t pos = tab + 1;
+      while (pos < line.size()) {
+        std::size_t next = line.find(',', pos);
+        if (next == std::string::npos) next = line.size();
+        borders.push_back(static_cast<std::uint32_t>(std::stoul(line.substr(pos, next - pos))));
+        pos = next + 1;
+      }
+      std::sort(borders.begin(), borders.end());
+      event_borders.emplace(line.substr(0, tab), std::move(borders));
+    }
+    map_config.event_borders = &event_borders;
+    LOG_INFO("Loaded event borders for " + std::to_string(event_borders.size()) + " reads");
   }
   // Event detection parameter overrides (take precedence over sensitivity scaling)
   if (parsed.values.count("event-w1")) {
