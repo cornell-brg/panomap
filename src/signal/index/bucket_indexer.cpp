@@ -18,7 +18,8 @@
  *      multiple paths), finalize into BucketSeedStore.
  *
  * Threading: TBB parallel_for over paths with thread-local bucket
- * buffers, merged after all paths. Per-bucket finalization is parallel.
+ * buffers. Finalization is parallel over buckets, and each bucket is
+ * gathered from the thread buffers there, so no seed is held twice.
  *
  * Related:
  *  - bucket_indexer.hpp
@@ -107,15 +108,12 @@ BucketIndexResult bucketIndex(const FlatGraph& graph, const io::KmerModel& model
   std::vector<BucketVec> buckets(num_buckets);
   std::atomic<std::size_t> atomic_seeds_total{0};
 
-  using LinearCoordVec = std::vector<std::vector<LinearCoordinate>>;
-
   // =========================================================================
   // Phase 1: Walk paths, extract seeds, scatter to buckets
   // =========================================================================
   timing::start("bucket:path_walk");
 
-  auto process_path = [&](std::size_t path_idx, LinearCoordVec& coords_out,
-                          std::vector<BucketVec>& local_buckets) {
+  auto process_path = [&](std::size_t path_idx, std::vector<BucketVec>& local_buckets) {
     const auto* steps = graph.pathStepsBegin(static_cast<std::uint32_t>(path_idx));
     const std::size_t num_steps = graph.pathStepCount(static_cast<std::uint32_t>(path_idx));
 
@@ -126,7 +124,6 @@ BucketIndexResult bucketIndex(const FlatGraph& graph, const io::KmerModel& model
       std::uint32_t nid = steps[s];
       if (nid >= graph.nodeCount()) continue;
       boundaries.push_back({nid, path_len});
-      coords_out[nid].emplace_back(path_idx, static_cast<std::int64_t>(path_len));
       path_len += graph.seqLen(nid);
     }
 
@@ -199,39 +196,35 @@ BucketIndexResult bucketIndex(const FlatGraph& graph, const io::KmerModel& model
     }
   };
 
+  /* Seed buffers: one set per thread with TBB, else the one global set. */
+  std::vector<std::vector<BucketVec>*> parts;
 #ifdef PANOMAP_USE_TBB
+  tbb::enumerable_thread_specific<std::vector<BucketVec>> thread_buckets(
+      [&]() { return std::vector<BucketVec>(num_buckets); });
   if (config.executor) {
-    using ThreadBuckets = std::vector<BucketVec>;
-    tbb::enumerable_thread_specific<LinearCoordVec> thread_coords(
-        [&]() { return LinearCoordVec(graph.nodeCount()); });
-    tbb::enumerable_thread_specific<ThreadBuckets> thread_buckets(
-        [&]() { return ThreadBuckets(num_buckets); });
-
-    config.executor->parallel_for(std::size_t{0}, static_cast<std::size_t>(graph.pathCount()),
-                                  std::size_t{1}, [&](std::size_t path_idx) {
-                                    process_path(path_idx, thread_coords.local(),
-                                                 thread_buckets.local());
-                                  });
-
-    for (auto& coords : thread_coords) {
-      for (std::size_t i = 0; i < coords.size(); ++i) {
-        auto& dst = result.linearization_coords[i];
-        dst.insert(dst.end(), coords[i].begin(), coords[i].end());
-      }
-    }
-    for (auto& tb : thread_buckets) {
-      for (std::size_t i = 0; i < num_buckets; ++i) {
-        if (!tb[i].empty()) {
-          buckets[i].insert(buckets[i].end(), tb[i].begin(), tb[i].end());
-          BucketVec().swap(tb[i]);
-        }
-      }
-    }
+    config.executor->parallel_for(
+        std::size_t{0}, static_cast<std::size_t>(graph.pathCount()), std::size_t{1},
+        [&](std::size_t path_idx) { process_path(path_idx, thread_buckets.local()); });
+    for (auto& tb : thread_buckets) parts.push_back(&tb);
   } else
 #endif
   {
     for (std::size_t path_idx = 0; path_idx < graph.pathCount(); ++path_idx) {
-      process_path(path_idx, result.linearization_coords, buckets);
+      process_path(path_idx, buckets);
+    }
+    parts.push_back(&buckets);
+  }
+
+  /* Linearization coordinates: where each node sits on each path. */
+  for (std::size_t path_idx = 0; path_idx < graph.pathCount(); ++path_idx) {
+    const auto* steps = graph.pathStepsBegin(static_cast<std::uint32_t>(path_idx));
+    const std::size_t num_steps = graph.pathStepCount(static_cast<std::uint32_t>(path_idx));
+    std::size_t pos = 0;
+    for (std::size_t s = 0; s < num_steps; ++s) {
+      std::uint32_t nid = steps[s];
+      if (nid >= graph.nodeCount()) continue;
+      result.linearization_coords[nid].emplace_back(path_idx, static_cast<std::int64_t>(pos));
+      pos += graph.seqLen(nid);
     }
   }
 
@@ -255,8 +248,16 @@ BucketIndexResult bucketIndex(const FlatGraph& graph, const io::KmerModel& model
   std::vector<std::size_t> per_bucket_max_freq(num_buckets, 0);
 
   auto finalize_one = [&](std::size_t bi) {
-    auto& bv = buckets[bi];
-    if (bv.empty()) return;
+    std::size_t n = 0;
+    for (const auto* part : parts) n += (*part)[bi].size();
+    if (n == 0) return;
+    BucketVec bv;
+    bv.reserve(n);
+    for (auto* part : parts) {
+      auto& src = (*part)[bi];
+      bv.insert(bv.end(), src.begin(), src.end());
+      BucketVec().swap(src);
+    }
 
     std::sort(bv.begin(), bv.end());
 
