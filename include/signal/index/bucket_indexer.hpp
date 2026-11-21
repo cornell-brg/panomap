@@ -35,6 +35,9 @@ struct BucketIndexConfig {
   /* Signal processing */
   float diff_filter{0.0f};  // Diff filter threshold (0 = disabled)
 
+  /* Memory: build seeds in this many passes over the buckets (1 = one pass) */
+  std::size_t passes{1};
+
   /* Parallelization */
   concurrency::Executor* executor{nullptr};
 };

@@ -84,6 +84,7 @@ IndexPipelineResult run_index_pipeline(io::ImportedGraph imported, const io::Kme
   bi_config.seed_k = config.seed_k;
   bi_config.diff_filter = config.diff_filter;
   bi_config.executor = config.executor;
+  bi_config.passes = config.passes;
 
   auto bi_result = bucketIndex(flat_graph, model, *tokenizer, *extractor, bi_config);
 

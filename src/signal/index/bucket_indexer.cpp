@@ -17,6 +17,11 @@
  *      exact duplicates (shared nodes generate identical hits from
  *      multiple paths), finalize into BucketSeedStore.
  *
+ * Passes: with passes = K, steps 1 and 2 run K times, and each time keep
+ * only the seeds of 1/K of the buckets. Seed buffers then take about 1/K
+ * of the memory, at the cost of walking the paths K times. The index
+ * is the same for any K.
+ *
  * Threading: TBB parallel_for over paths with thread-local bucket
  * buffers. Finalization is parallel over buckets, and each bucket is
  * gathered from the thread buffers there, so no seed is held twice.
@@ -111,7 +116,9 @@ BucketIndexResult bucketIndex(const FlatGraph& graph, const io::KmerModel& model
   // =========================================================================
   // Phase 1: Walk paths, extract seeds, scatter to buckets
   // =========================================================================
-  timing::start("bucket:path_walk");
+  /* Buckets kept in the current pass: [pass_lo, pass_hi). */
+  std::size_t pass_lo = 0;
+  std::size_t pass_hi = num_buckets;
 
   auto process_path = [&](std::size_t path_idx, std::vector<BucketVec>& local_buckets) {
     const auto* steps = graph.pathStepsBegin(static_cast<std::uint32_t>(path_idx));
@@ -186,34 +193,17 @@ BucketIndexResult bucketIndex(const FlatGraph& graph, const io::KmerModel& model
 
     if (seeds.seeds.empty()) return;
 
-    /* Scatter to buckets */
-    atomic_seeds_total.fetch_add(seeds.seeds.size(), std::memory_order_relaxed);
-
+    /* Scatter to the buckets of this pass */
+    std::size_t kept = 0;
     for (const auto& seed : seeds.seeds) {
-      auto [nid, local_off] = signalPosToNodeOffset(seed.position, boundaries);
       std::size_t bi = seed.hash & bucket_mask;
+      if (bi < pass_lo || bi >= pass_hi) continue;
+      auto [nid, local_off] = signalPosToNodeOffset(seed.position, boundaries);
       local_buckets[bi].push_back({seed.hash, nid, local_off});
+      ++kept;
     }
+    atomic_seeds_total.fetch_add(kept, std::memory_order_relaxed);
   };
-
-  /* Seed buffers: one set per thread with TBB, else the one global set. */
-  std::vector<std::vector<BucketVec>*> parts;
-#ifdef PANOMAP_USE_TBB
-  tbb::enumerable_thread_specific<std::vector<BucketVec>> thread_buckets(
-      [&]() { return std::vector<BucketVec>(num_buckets); });
-  if (config.executor) {
-    config.executor->parallel_for(
-        std::size_t{0}, static_cast<std::size_t>(graph.pathCount()), std::size_t{1},
-        [&](std::size_t path_idx) { process_path(path_idx, thread_buckets.local()); });
-    for (auto& tb : thread_buckets) parts.push_back(&tb);
-  } else
-#endif
-  {
-    for (std::size_t path_idx = 0; path_idx < graph.pathCount(); ++path_idx) {
-      process_path(path_idx, buckets);
-    }
-    parts.push_back(&buckets);
-  }
 
   /* Linearization coordinates: where each node sits on each path. */
   for (std::size_t path_idx = 0; path_idx < graph.pathCount(); ++path_idx) {
@@ -228,17 +218,9 @@ BucketIndexResult bucketIndex(const FlatGraph& graph, const io::KmerModel& model
     }
   }
 
-  // seeds_interior/boundary are legacy from the node-first design.
-  // Path-walk produces all seeds in one pass. Store total in seeds_interior
-  // for backward compatibility with callers that read it.
-  result.seeds_interior = atomic_seeds_total.load();
-  result.seeds_boundary = 0;
-  timing::stop("bucket:path_walk");
-
   // =========================================================================
   // Phase 2: Per-bucket finalization -> BucketSeedStore
   // =========================================================================
-  timing::start("bucket:finalize");
 
   /* Finalize each bucket: sort, dedup, build.
    * No index-time frequency filtering -- that happens at runtime
@@ -246,6 +228,13 @@ BucketIndexResult bucketIndex(const FlatGraph& graph, const io::KmerModel& model
   std::size_t max_freq = 0;
   std::vector<Bucket> finalized(num_buckets);
   std::vector<std::size_t> per_bucket_max_freq(num_buckets, 0);
+
+  /* Seed buffers: one set per thread with TBB, else the one global set. */
+  std::vector<std::vector<BucketVec>*> parts;
+#ifdef PANOMAP_USE_TBB
+  tbb::enumerable_thread_specific<std::vector<BucketVec>> thread_buckets(
+      [&]() { return std::vector<BucketVec>(num_buckets); });
+#endif
 
   auto finalize_one = [&](std::size_t bi) {
     std::size_t n = 0;
@@ -284,16 +273,52 @@ BucketIndexResult bucketIndex(const FlatGraph& graph, const io::KmerModel& model
     per_bucket_max_freq[bi] = local_max_freq;
   };
 
+  const std::size_t passes = std::max<std::size_t>(1, config.passes);
+  for (std::size_t pass = 0; pass < passes; ++pass) {
+    pass_lo = num_buckets * pass / passes;
+    pass_hi = num_buckets * (pass + 1) / passes;
+
+    timing::start("bucket:path_walk");
+    parts.clear();
 #ifdef PANOMAP_USE_TBB
-  if (config.executor) {
-    config.executor->parallel_for(std::size_t{0}, num_buckets, std::size_t{1}, finalize_one);
-  } else
+    if (config.executor) {
+      config.executor->parallel_for(
+          std::size_t{0}, static_cast<std::size_t>(graph.pathCount()), std::size_t{1},
+          [&](std::size_t path_idx) { process_path(path_idx, thread_buckets.local()); });
+      for (auto& tb : thread_buckets) parts.push_back(&tb);
+    } else
 #endif
-  {
-    for (std::size_t bi = 0; bi < num_buckets; ++bi) {
-      finalize_one(bi);
+    {
+      for (std::size_t path_idx = 0; path_idx < graph.pathCount(); ++path_idx) {
+        process_path(path_idx, buckets);
+      }
+      parts.push_back(&buckets);
+    }
+    timing::stop("bucket:path_walk");
+
+    timing::start("bucket:finalize");
+#ifdef PANOMAP_USE_TBB
+    if (config.executor) {
+      config.executor->parallel_for(pass_lo, pass_hi, std::size_t{1}, finalize_one);
+    } else
+#endif
+    {
+      for (std::size_t bi = pass_lo; bi < pass_hi; ++bi) {
+        finalize_one(bi);
+      }
+    }
+    timing::stop("bucket:finalize");
+    if (passes > 1) {
+      LOG_INFO("BucketIndex: pass " + std::to_string(pass + 1) + "/" + std::to_string(passes) +
+               " done, buckets " + std::to_string(pass_lo) + "-" + std::to_string(pass_hi - 1));
     }
   }
+
+  // seeds_interior/boundary are legacy from the node-first design.
+  // Path-walk produces all seeds in one pass. Store total in seeds_interior
+  // for backward compatibility with callers that read it.
+  result.seeds_interior = atomic_seeds_total.load();
+  result.seeds_boundary = 0;
 
   // Reduce per-bucket max freq
   for (std::size_t bi = 0; bi < num_buckets; ++bi) {
@@ -332,8 +357,6 @@ BucketIndexResult bucketIndex(const FlatGraph& graph, const io::KmerModel& model
                                         std::move(params), max_freq, max_freq + 1, 1.0);
 
   result.seeds_total = total_entries;
-
-  timing::stop("bucket:finalize");
 
   LOG_INFO("BucketIndex: " + std::to_string(atomic_seeds_total.load()) + " raw seeds, " +
            std::to_string(total_unique) + " unique hashes, " + std::to_string(total_entries) +

@@ -76,6 +76,9 @@ struct IndexPipelineConfig {
   // If nullptr, indexing runs sequentially.
   concurrency::Executor* executor{nullptr};
 
+  // Build seeds in this many passes over the hash buckets: less memory, more path walks.
+  std::uint32_t passes{1};
+
   // Bits per token follow the tokenizer: 2 * landmark bits for landmark,
   // ceil(log2(n_buckets)) for rh2 buckets, else 4.
   //

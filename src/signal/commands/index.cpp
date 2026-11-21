@@ -102,6 +102,9 @@ int handle_index(const std::vector<std::string>& args_in) {
        "Minimizer window size (default: 5, only with --seed-type minimizer)"},
       {'\0', "", false, "\nIndexer Options:"},
       {'\0', "no-1d-sort", false, "Skip 1D canonical coordinate computation"},
+      {'\0', "passes", true,
+       "Build seeds in this many passes: the seed buffers take about 1/passes of the memory, "
+       "and the paths are walked once per pass. The index is the same (default: 1)"},
       {'\0', "1d-coords-file", true,
        "Import pre-computed 1D coords from TSV (overrides built-in PG-SGD)"},
       {'\0', "sgd-iter", true, "PG-SGD max iterations (default: 100)"},
@@ -231,6 +234,7 @@ int handle_index(const std::vector<std::string>& args_in) {
   set_f("fine-min", index_config.tokenizer_fine_min);
   set_f("fine-max", index_config.tokenizer_fine_max);
   set_f("fine-range", index_config.tokenizer_fine_range);
+  set_u("passes", index_config.passes);
   if (parsed.values.count("no-1d-sort")) {
     index_config.compute_1d_sort = false;
   }
