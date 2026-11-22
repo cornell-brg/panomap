@@ -1,10 +1,11 @@
 /**
  * gaf_writer.cpp
  *
- * Writes mapping results in GAF. For a chain on a path, column 6 lists the nodes the
- * anchors fall on, columns 7 to 9 are the path length and the chain start and end on
- * the path (as in PAF), and pn:Z names the path. Tags shared with PAF come from
- * result_tags.hpp.
+ * Writes mapping results in GAF. For a chain on a path, column 6 is the walk of every
+ * path step the chain covers, columns 7 to 9 are the walk length and the chain start
+ * and end on the walk, and pn:Z names the path. With anchor_nodes set, column 6 lists
+ * only the nodes the anchors fall on, and columns 7 to 9 hold path positions as in PAF.
+ * Tags shared with PAF come from result_tags.hpp.
  *
  * SPDX-License-Identifier: MIT
  */
@@ -82,11 +83,35 @@ void GafWriter::write(const mapping::ReadMapResult& result, const std::string& r
       if (rev) name.resize(name.size() - kRevSuffix.size());
       return rev;
     };
-    if (on_path) {
-      // Column 6 lists the nodes the anchors fall on, and columns 7 to 9 are the path
-      // length and the positions on the path (forward strand), as in PAF. The index
-      // stores no path steps, so the walk between anchored nodes is not filled in.
-      const auto pid = static_cast<std::uint32_t>(mapping.path_id);
+    const auto pid = static_cast<std::uint32_t>(mapping.path_id);
+    if (on_path && !config_.anchor_nodes && graph_.pathStepCount(pid) > 0) {
+      // Full walk: every path step from the step that holds the chain start to the step
+      // that holds its end. Columns 7 to 9 are the walk length and the chain start and
+      // end on the walk, as the GAF spec defines them. A "<name>_reverse" path gives a
+      // reverse walk on strand '+'.
+      const auto& starts = stepStarts(pid);
+      const auto path_len = static_cast<std::int64_t>(starts.back());
+      const std::int64_t lo = std::max(std::int64_t{0}, s.r_lo);
+      const std::int64_t hi = std::max(lo + 1, std::min(s.r_hi, path_len));
+      const auto last = starts.end() - 1;
+      const std::size_t first_step = std::upper_bound(starts.begin(), last, lo) - starts.begin() - 1;
+      const std::size_t last_step = std::upper_bound(starts.begin(), last, hi - 1) - starts.begin() - 1;
+      const auto* steps = graph_.pathStepsBegin(pid);
+      for (std::size_t k = first_step; k <= last_step; ++k) {
+        const auto node = steps[k];
+        walk += graph_.isReverse(node) ? '<' : '>';
+        const auto name = graph_.name(node);
+        walk.append(name.data(), name.size());
+      }
+      walk_len = static_cast<std::int64_t>(starts[last_step + 1] - starts[first_step]);
+      start = lo - static_cast<std::int64_t>(starts[first_step]);
+      end = hi - static_cast<std::int64_t>(starts[first_step]);
+      path_name = std::string(graph_.pathName(pid));
+      strip_reverse(path_name);
+    } else if (on_path) {
+      // Anchored nodes only (--gaf-anchor-nodes, or a graph without path steps): column 6
+      // lists the nodes the anchors fall on, and columns 7 to 9 are the path length and
+      // the positions on the path (forward strand), as in PAF.
       walk = buildPathString(mapping.anchors);
       path_name = std::string(graph_.pathName(pid));
       walk_len = static_cast<std::int64_t>(graph_.pathLength(pid));
@@ -149,6 +174,16 @@ void GafWriter::write(const mapping::ReadMapResult& result, const std::string& r
     if (is_primary) tags::write_read(ss, result);
     *out_ << ss.str() << '\n';
   }
+}
+
+const std::vector<std::uint64_t>& GafWriter::stepStarts(std::uint32_t path_id) const {
+  auto it = step_starts_.find(path_id);
+  if (it != step_starts_.end()) return it->second;
+  const std::size_t n = graph_.pathStepCount(path_id);
+  const auto* steps = graph_.pathStepsBegin(path_id);
+  std::vector<std::uint64_t> starts(n + 1, 0);
+  for (std::size_t k = 0; k < n; ++k) starts[k + 1] = starts[k] + graph_.seqLen(steps[k]);
+  return step_starts_.emplace(path_id, std::move(starts)).first->second;
 }
 
 std::string GafWriter::buildPathString(const std::vector<mapping::ChainedAnchor>& anchors) const {

@@ -274,8 +274,7 @@ int handle_index(const std::vector<std::string>& args_in) {
   metadata.pore_k = result.pore_k;
   metadata.tokenizer = result.tokenizer;
   panomap::io::index::save_index(output_path, *result.graph_store, *result.seed_store,
-                              result.linearization_coords, metadata, result.node_1d_coords,
-                              result.component_ids);
+                              metadata, result.node_1d_coords, result.component_ids);
 
   LOG_INFO("Index written to " + output_path);
 

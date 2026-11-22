@@ -185,8 +185,7 @@ int handle_base_index(const std::vector<std::string>& args) {
   metadata.tokenizer = "";         // signal-only field
 
   panomap::io::index::save_index(output_path, *graph_store, *bi_result.seed_store,
-                              bi_result.linearization_coords, metadata, node_1d_coords,
-                              component_ids);
+                              metadata, node_1d_coords, component_ids);
 
   LOG_INFO("Index written to " + output_path);
 

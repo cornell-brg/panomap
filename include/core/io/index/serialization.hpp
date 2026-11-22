@@ -2,10 +2,11 @@
  * serialization.hpp
  *
  * .pirx index format: single-file binary containing graph topology,
- * linearization coordinates, and seed hash table.
+ * path steps, and seed hash table. The per-node linearization is rebuilt from
+ * the path steps at load.
  *
  * Format: PIRX magic + metadata + graph (nodes/edges/paths)
- *         + linearization + seeds.
+ *         + path steps + seeds.
  *
  * SPDX-License-Identifier: MIT
  */
@@ -48,7 +49,7 @@ struct IndexMetadata {
 struct SectionSizes {
   uint64_t header_meta{0};   // magic + version + flags + mode + metadata strings
   uint64_t graph{0};         // nodes + edges + paths
-  uint64_t linearization{0}; // per-node (path_id, ref_coord) array
+  uint64_t path_steps{0};    // node ids of each path, in order (v2.4)
   uint64_t seeds{0};         // bucket-native seed store (keys + counts + offsets + entries)
   uint64_t coords_1d{0};     // float32 per node (optional)
   uint64_t components{0};    // uint32 per node (optional)
@@ -68,7 +69,6 @@ struct LoadedIndex {
 /** Save an index to a single .pirx file. */
 void save_index(const std::string& path, const panomap::index::GraphStore& graph,
                 const panomap::index::SeedStore& seeds,
-                const std::vector<std::vector<panomap::index::LinearCoordinate>>& linearization_coords,
                 const IndexMetadata& metadata, const std::vector<float>& node_1d_coords = {},
                 const std::vector<std::uint32_t>& component_ids = {});
 

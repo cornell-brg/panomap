@@ -84,11 +84,12 @@ names another preset. Flags given after the preset override it.
 
 `map` writes PAF for a `.paf` output name and GAF otherwise. Both formats give the query
 length in signal samples (column 2) and the query start and end as event positions
-(columns 3 and 4). PAF gives the chosen path as the target. In GAF, column 6 lists the
-nodes the anchors fall on, and `pn:Z` names the chosen path. The index stores no path
-steps, so the nodes between anchored nodes are not filled in, and GAF columns 7 to 9
-hold the path length and the positions on the path, as in PAF, not positions on the
-column 6 walk. Unmapped reads get a line with `tp:A:U`.
+(columns 3 and 4). PAF gives the chosen path as the target. In GAF, column 6 is the walk
+of every path step the chain covers, columns 7 to 9 are the walk length and the chain
+start and end on that walk, and `pn:Z` names the chosen path. With `map
+--gaf-anchor-nodes`, column 6 lists only the nodes the anchors fall on, and columns 7 to
+9 hold the path length and the positions on the path, as in PAF. Unmapped reads get a
+line with `tp:A:U`.
 
 | Tag | Type | Meaning |
 |-----|------|---------|
@@ -107,6 +108,15 @@ column 6 walk. Unmapped reads get a line with `tp:A:U`.
 
 `mt` and `ci` use the names that RawHash2 and its scripts read. Read tags (`ws` to `ci`)
 appear once per read, on the primary or unmapped line.
+
+## Reproducible indexes
+
+Two index builds of the same graph at more than one thread differ only in the 1D
+layout. The layout uses path-guided SGD with lock-free parallel updates (Hogwild), as in
+odgi, so its coordinates change slightly from run to run. Mapping uses the layout to
+merge duplicate chains, so a few reads can map differently. `panomap inspect --compare
+a.pirx b.pirx` shows which sections of two indexes differ. Builds at one thread are
+identical.
 
 ## Subcommands
 

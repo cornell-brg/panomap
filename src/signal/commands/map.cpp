@@ -136,6 +136,9 @@ int handle_map(const std::vector<std::string>& args_in) {
   config.options.push_back({'\0', "", false, "\nOutput Options:"});
   config.options.push_back({'o', "output", true, "Output file (.paf or .gaf, default: GAF to stdout)"});
   config.options.push_back({'\0', "secondary", false, "Output secondary alignments (default: primary only)"});
+  config.options.push_back({'\0', "gaf-anchor-nodes", false,
+                            "GAF: list only the nodes the anchors fall on, with path positions in "
+                            "columns 7 to 9 (default: the full walk, with walk positions)"});
   config.options.push_back({'\0', "", false, "\nDebug Options:"});
   config.options.push_back({'\0', "dump-seed-store", true, "Dump full seed store hash table to TSV file"});
   config.options.push_back({'\0', "no-anchor-merge", false, "Disable anchor merging (for heatmap debugging)"});
@@ -254,6 +257,7 @@ int handle_map(const std::vector<std::string>& args_in) {
   }
 
   bool primary_only = !parsed.values.count("secondary");
+  const bool gaf_anchor_nodes = parsed.values.count("gaf-anchor-nodes") > 0;
   const auto& flat_graph = loaded.graph->flat();
 
   auto graph_store = std::move(loaded.graph);
@@ -343,7 +347,8 @@ int handle_map(const std::vector<std::string>& args_in) {
 
   if (output_path.empty()) {
     result_writer =
-        panomap::io::make_result_writer_stdout(flat_graph, primary_only, writer_1d, writer_cc);
+        panomap::io::make_result_writer_stdout(flat_graph, primary_only, writer_1d, writer_cc,
+                                               gaf_anchor_nodes);
   } else if (is_per_file_output) {
     // Ensure output dir exists.
     std::error_code ec;
@@ -356,14 +361,15 @@ int handle_map(const std::vector<std::string>& args_in) {
       if (out_file.back() != '/') out_file += '/';
       out_file += base + out_ext;
       auto writer = panomap::io::make_result_writer(out_file, flat_graph, primary_only,
-                                                 writer_1d, writer_cc);
+                                                 writer_1d, writer_cc, gaf_anchor_nodes);
       per_file_writer_map[f.string()] = writer.get();
       per_file_writers.push_back(std::move(writer));
       LOG_INFO("Per-file output: " + f.string() + " -> " + out_file);
     }
   } else {
     result_writer =
-        panomap::io::make_result_writer(output_path, flat_graph, primary_only, writer_1d, writer_cc);
+        panomap::io::make_result_writer(output_path, flat_graph, primary_only, writer_1d, writer_cc,
+                                        gaf_anchor_nodes);
     LOG_INFO("Writing results to: " + output_path);
   }
 

@@ -10,7 +10,9 @@
 #include "signal/commands/inspect.hpp"
 
 #include <chrono>
+#include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <ctime>
 #include <fstream>
 #include <iomanip>
@@ -22,14 +24,74 @@
 #include "core/io/index/serialization.hpp"
 #include "core/util/logging.hpp"
 
+namespace {
+
+// True if bytes [off, off + len) are the same in both files.
+bool same_bytes(const std::string& a, const std::string& b, std::uint64_t off, std::uint64_t len) {
+  std::ifstream fa(a, std::ios::binary), fb(b, std::ios::binary);
+  fa.seekg(static_cast<std::streamoff>(off));
+  fb.seekg(static_cast<std::streamoff>(off));
+  std::vector<char> ba(1 << 20), bb(1 << 20);
+  while (len > 0) {
+    const auto n = static_cast<std::streamsize>(std::min<std::uint64_t>(len, ba.size()));
+    fa.read(ba.data(), n);
+    fb.read(bb.data(), n);
+    if (fa.gcount() != n || fb.gcount() != n) return false;
+    if (std::memcmp(ba.data(), bb.data(), static_cast<std::size_t>(n)) != 0) return false;
+    len -= static_cast<std::uint64_t>(n);
+  }
+  return true;
+}
+
+// Prints identical or differs for each section of two indexes. Two 32-thread builds of
+// the same graph differ only in coords_1d: the 1D layout runs lock-free parallel SGD
+// (Hogwild, as odgi's PG-SGD), so its coordinates change slightly from run to run.
+int compare_indexes(const std::string& a, const panomap::io::index::LoadedIndex& la,
+                    const std::string& b) {
+  auto lb = panomap::io::index::load_index(b);
+  const auto& ma = la.metadata;
+  const auto& mb = lb.metadata;
+  const auto& sa = la.section_sizes;
+  const auto& sb = lb.section_sizes;
+  int differ = 0;
+  auto report = [&](const char* name, bool same, const char* note = "") {
+    std::cout << "  " << std::left << std::setw(13) << name << (same ? "identical" : "differs")
+              << note << "\n";
+    differ += same ? 0 : 1;
+  };
+  std::cout << "compare: " << a << "\n     vs: " << b << "\n";
+  report("header_meta",
+         ma.mode == mb.mode && ma.version == mb.version && ma.model_name == mb.model_name &&
+             ma.pore_k == mb.pore_k && ma.tokenizer == mb.tokenizer &&
+             sa.header_meta == sb.header_meta,
+         ma.build_timestamp != mb.build_timestamp ? " (build time not compared)" : "");
+  struct Sec { const char* name; std::uint64_t size_a, size_b; };
+  const Sec secs[] = {{"graph", sa.graph, sb.graph},
+                      {"path_steps", sa.path_steps, sb.path_steps},
+                      {"seeds", sa.seeds, sb.seeds},
+                      {"coords_1d", sa.coords_1d, sb.coords_1d},
+                      {"components", sa.components, sb.components}};
+  std::uint64_t off = sa.header_meta;
+  for (const auto& sec : secs) {
+    report(sec.name, sec.size_a == sec.size_b && sa.header_meta == sb.header_meta &&
+                         same_bytes(a, b, off, sec.size_a));
+    off += sec.size_a;
+  }
+  return differ == 0 ? 0 : 2;
+}
+
+}  // namespace
+
 int handle_inspect(const std::vector<std::string>& args) {
   panomap::cli::Parsed parsed;
   panomap::cli::ParseConfig config;
-  config.usage = "Usage: panomap inspect <index.pirx>";
+  config.usage = "Usage: panomap inspect [--compare other.pirx] <index.pirx>";
   config.positional_help = {"<index.pirx>    Index file to inspect"};
   config.options = {
       {'h', "help", false, "Show help"},
       {'\0', "dump-path-coords", true, "Dump per-path canonical coordinate mapping to TSV"},
+      {'\0', "compare", true,
+       "Compare with another index, section by section, and print identical or differs"},
   };
   config.on_error = [](const std::string&) { std::cerr << "inspect: invalid option\n"; };
 
@@ -61,6 +123,10 @@ int handle_inspect(const std::vector<std::string>& args) {
               panomap::io::index::mode_name(loaded.metadata.mode) +
               "', but panomap only loads 'signal' indexes. Use panomap-base instead.");
     return 1;
+  }
+
+  if (parsed.values.count("compare")) {
+    return compare_indexes(index_path, loaded, parsed.values.at("compare"));
   }
 
   const auto& meta = loaded.metadata;
@@ -104,7 +170,7 @@ int handle_inspect(const std::vector<std::string>& args) {
   std::cout << "  max_frequency: " << seeds.max_hash_frequency() << "\n";
   std::cout << "  freq_threshold: " << seeds.frequency_threshold() << "\n";
   std::cout << "\n";
-  std::cout << "linearization: " << loaded.linearization_coords.size() << " nodes\n";
+  std::cout << "path_steps: " << fg.pathStepOffsets().back() << "\n";
   std::cout << "1d_coordinates: " << (loaded.node_1d_coords.empty() ? "no" : "yes") << "\n";
   std::cout << "component_ids: " << (loaded.component_ids.empty() ? "no" : "yes") << "\n";
 
@@ -119,7 +185,7 @@ int handle_inspect(const std::vector<std::string>& args) {
   std::cout << "  header_meta:   " << sz.header_meta << "  (" << std::fixed << std::setprecision(1)
             << pct(sz.header_meta) << "%)\n";
   std::cout << "  graph:         " << sz.graph << "  (" << pct(sz.graph) << "%)\n";
-  std::cout << "  linearization: " << sz.linearization << "  (" << pct(sz.linearization) << "%)\n";
+  std::cout << "  path_steps:    " << sz.path_steps << "  (" << pct(sz.path_steps) << "%)\n";
   std::cout << "  seeds:         " << sz.seeds << "  (" << pct(sz.seeds) << "%)\n";
   std::cout << "  coords_1d:     " << sz.coords_1d << "  (" << pct(sz.coords_1d) << "%)\n";
   std::cout << "  components:    " << sz.components << "  (" << pct(sz.components) << "%)\n";
