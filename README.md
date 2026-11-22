@@ -80,6 +80,34 @@ names another preset. Flags given after the preset override it.
 | `r10-fast` | R10.4.1 | About 5x faster mapping at lower recall |
 | `r10-large` | R10.4.1 | Large genomes, such as human |
 
+## Output
+
+`map` writes PAF for a `.paf` output name and GAF otherwise. Both formats give the query
+length in signal samples (column 2) and the query start and end as event positions
+(columns 3 and 4). PAF gives the chosen path as the target. In GAF, column 6 lists the
+nodes the anchors fall on, and `pn:Z` names the chosen path. The index stores no path
+steps, so the nodes between anchored nodes are not filled in, and GAF columns 7 to 9
+hold the path length and the positions on the path, as in PAF, not positions on the
+column 6 walk. Unmapped reads get a line with `tp:A:U`.
+
+| Tag | Type | Meaning |
+|-----|------|---------|
+| `tp` | A | `P` primary, `S` secondary (GAF only), `U` unmapped |
+| `pn` | Z | Chosen path (GAF only; `*` if unmapped) |
+| `s1` | i | Chain score |
+| `an` | i | Anchors in the chain |
+| `se` | f | Chain score per query event |
+| `ad` | f | Anchors per reference base |
+| `ws` | f | Weighted standout of the best chain |
+| `nc` | i | Chains kept for the read |
+| `df` | A | Decision: `G` single-chain gate, `S` standout, `F` fallback, `U` unmapped |
+| `mt` | f | Map time of the read, in ms |
+| `ci` | i | Chunks processed |
+| `ls`, `le`, `lc` | f, f, i | 1D layout start, end and component (GAF, when the index has a layout) |
+
+`mt` and `ci` use the names that RawHash2 and its scripts read. Read tags (`ws` to `ci`)
+appear once per read, on the primary or unmapped line.
+
 ## Subcommands
 
 | Command | Description |
@@ -88,28 +116,6 @@ names another preset. Flags given after the preset override it.
 | `panomap map` | Map BLOW5/SLOW5 reads against index, output GAF/PAF |
 
 Run `panomap <command> --help` for full options.
-
-*Note: the node walk in the GAF output lists the nodes containing the chain's
-anchors. When there is a large gap between anchors, the nodes in between can be
-skipped, so the walk is not guaranteed to be a fully connected path.*
-
-## GAF Output Tags
-
-| Tag | Type | Description |
-|-----|------|-------------|
-| `pn:Z:` | string | Reference path name (or `*` if unmapped) |
-| `tp:A:` | char | Alignment type: `P` primary, `S` secondary, `U` unmapped |
-| `cs:i:` | int | Chain score |
-| `an:i:` | int | Anchor count in chain |
-| `se:f:` | float | Score per event span (chain_score / query_span) |
-| `ad:f:` | float | Anchor density (anchors / ref_span) |
-| `ci:f:` | float | Canonical 1D coordinate start |
-| `ce:f:` | float | Canonical 1D coordinate end |
-| `cc:i:` | int | 1D component ID |
-| `ws:f:` | float | Weighted standout score (mapping decision confidence) |
-| `nc:i:` | int | Number of competitive chains (after secondary ratio filter) |
-| `ck:i:` | int | Chunks processed before decision |
-| `dt:f:` | float | Processing time (seconds) |
 
 ## Simulation Workflow
 

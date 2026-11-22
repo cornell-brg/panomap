@@ -4,6 +4,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <fstream>
 #include <ostream>
 #include <string>
@@ -34,16 +35,11 @@ public:
 
 private:
   std::string buildPathString(const std::vector<mapping::ChainedAnchor>& anchors) const;
-  std::string getPathName(std::size_t path_id) const;
-  std::size_t getPathLength(std::size_t path_id) const;
 
   std::ofstream file_;        // owned file (when writing to file)
   std::ostream* out_;         // points to file_ or external stream (e.g. cout)
   const index::FlatGraph& graph_;
   GafWriterConfig config_;
-
-  mutable std::vector<std::size_t> path_lengths_;
-  mutable bool path_lengths_computed_{false};
 };
 
 }  // namespace panomap::io
