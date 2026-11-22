@@ -88,6 +88,8 @@ int handle_inspect(const std::vector<std::string>& args) {
   std::cout << "seed_k: " << get("k") << "\n";
   std::cout << "seed_qbits: " << get("qbits") << "\n";
   std::cout << "token_collapse: " << get("collapse") << "\n";
+  std::cout << "diff_filter: " << get("diff") << "\n";
+  std::cout << "preset: " << get("preset") << "\n";
   std::cout << "\n";
   std::cout << "graph:\n";
   std::cout << "  nodes: " << fg.nodeCount() << "\n";

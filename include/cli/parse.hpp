@@ -43,7 +43,8 @@ using PresetTable = std::map<std::string, std::vector<std::string>>;
 // with the preset's arguments, placed before all other arguments, so that an
 // explicit flag later on the command line overrides the preset value.
 // Returns false and sets *error for an unknown preset or a missing name.
+// If name is given, it receives the last preset named (empty if none).
 bool expand_preset(std::vector<std::string>& args, const PresetTable& presets,
-                   std::string* error);
+                   std::string* error, std::string* name = nullptr);
 
 }  // namespace panomap::cli

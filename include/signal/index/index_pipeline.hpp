@@ -56,6 +56,7 @@ struct IndexPipelineConfig {
   float tokenizer_landmark_max_amp{4.0f};     // Landmark: amplitude clip
   float diff_filter{0.35f};  // Skip events within diff of last emitted (0 = disabled)
   bool tokenizer_collapse{false};  // Drop repeated tokens; stored in the index
+  std::string preset;  // Preset that built the index (empty if none); stored in the index
 
   /* Seed extraction */
 

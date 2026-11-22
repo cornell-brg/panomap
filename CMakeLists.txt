@@ -183,6 +183,7 @@ endif()
 add_executable(panomap
     src/cli/signal_main.cpp
     src/cli/parse.cpp
+    src/cli/presets.cpp
 )
 target_link_libraries(panomap PRIVATE panomap_signal)
 if(PANOMAP_ENABLE_WARNINGS)

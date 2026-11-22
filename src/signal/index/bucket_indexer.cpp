@@ -351,6 +351,9 @@ BucketIndexResult bucketIndex(const FlatGraph& graph, const io::KmerModel& model
   params["lm_prominence"] = std::to_string(tok.landmark_min_prominence);
   params["lm_bits"] = std::to_string(tok.landmark_bits);
   params["lm_max_amp"] = std::to_string(tok.landmark_max_amp);
+  // Map follows these unless its command line overrides them.
+  params["diff"] = std::to_string(config.diff_filter);
+  if (!config.preset.empty()) params["preset"] = config.preset;
 
   result.seed_store =
       std::make_unique<BucketSeedStore>(std::move(finalized), bucket_bits, extractor.name(),

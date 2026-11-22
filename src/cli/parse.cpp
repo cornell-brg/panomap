@@ -40,7 +40,7 @@ std::vector<::option> build_longopts(const std::vector<Option>& opts) {
 }  // namespace
 
 bool expand_preset(std::vector<std::string>& args, const PresetTable& presets,
-                   std::string* error) {
+                   std::string* error, std::string* name_out) {
   std::vector<std::string> rest;
   std::vector<std::string> expanded;
   for (std::size_t i = 0; i < args.size(); ++i) {
@@ -70,6 +70,7 @@ bool expand_preset(std::vector<std::string>& args, const PresetTable& presets,
       return false;
     }
     expanded.insert(expanded.end(), it->second.begin(), it->second.end());
+    if (name_out) *name_out = name;
   }
   expanded.insert(expanded.end(), rest.begin(), rest.end());
   args = std::move(expanded);

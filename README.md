@@ -42,16 +42,11 @@ cd panomap && mkdir build && cd build && cmake .. && make -j8
 
 # --- with your own data ---
 
-# Index a graph
-./panomap index -m r10.4 reference.gfa -o ref.pirx
+# Index a graph with a preset (r9, r9-fast, r9-small, r10, r10-fast, r10-large)
+./panomap index -x r10 reference.gfa -o ref.pirx
 
-# Map reads (GAF to stdout by default)
+# Map reads (GAF to stdout by default). Map uses the preset the index was built with.
 ./panomap map --index ref.pirx reads.blow5 -o out.gaf
-
-# Map with viral preset params (good for small genomes)
-./panomap map --index ref.pirx reads.blow5 \
-  --chain-bw 100 --chain-max-dist 500 --chain-pen-gap 1.2 \
-  --chain-pen-skip 0.3 --max-chunks 5 -o out.gaf
 ```
 
 ## Build options
@@ -69,6 +64,21 @@ always supported. To read zstd-compressed files, install `libzstd-dev`
 (Debian/Ubuntu) or `libzstd-devel` (RHEL/Fedora) before configuring; it is then
 picked up automatically. Without it, mapping a zstd BLOW5 aborts with
 `slow5lib has not been compiled with zstd support`.
+
+## Presets
+
+A preset sets the pore model, the seeds and the map settings together. `index -x <preset>`
+stores the preset in the index, and `map` applies its map settings unless the command line
+names another preset. Flags given after the preset override it.
+
+| Preset | Chemistry | Use |
+|--------|-----------|-----|
+| `r9` | R9.4.1 | Genomes of bacterial size and up |
+| `r9-fast` | R9.4.1 | About 3x faster mapping; best when reads get 4 or more chunks |
+| `r9-small` | R9.4.1 | Small genomes, such as viruses |
+| `r10` | R10.4.1 | Genomes of bacterial size |
+| `r10-fast` | R10.4.1 | About 5x faster mapping at lower recall |
+| `r10-large` | R10.4.1 | Large genomes, such as human |
 
 ## Subcommands
 

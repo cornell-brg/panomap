@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "cli/parse.hpp"
+#include "cli/presets.hpp"
 #include "core/index/sort_1d.hpp"
 #include "core/io/index/serialization.hpp"
 #include "signal/io/reads/read_provider_factory.hpp"
@@ -58,21 +59,12 @@ panomap::signal::SeedExtractorConfig seed_config_from_store(const panomap::index
 
 }  // namespace
 
-// R10.4.1 preset, used with an index built with `index -x r10`: no raw diff filter,
-// skip limit 5, gap scale 1.2, no anchor merge, end-of-read rule at mapq 10.
-const panomap::cli::PresetTable kMapPresets = {
-    {"r10", {"--diff", "0", "--chain-max-skip", "5", "--no-anchor-merge", "--chain-pen-gap",
-             "1.2", "--map-end-mapq", "10"}},
-    // R9.4 preset, used with an index built with `index -x r9`. Chain settings tuned
-    // per dataset (gap, skip, bandwidth) still go on the command line.
-    {"r9", {"--diff", "0", "--map-fallback-floor", "70", "--map-w-threshold", "0.40",
-            "--chain-max-survivor-chains", "50", "--no-anchor-merge"}},
-};
-
 int handle_map(const std::vector<std::string>& args_in) {
   std::vector<std::string> args = args_in;
   std::string preset_error;
-  if (!panomap::cli::expand_preset(args, kMapPresets, &preset_error)) {
+  std::string preset_name;
+  if (!panomap::cli::expand_preset(args, panomap::cli::map_preset_table(), &preset_error,
+                                   &preset_name)) {
     std::cerr << "map: " << preset_error << "\n";
     return 1;
   }
@@ -89,10 +81,7 @@ int handle_map(const std::vector<std::string>& args_in) {
       {'t', "threads", true, "Worker threads (default: 1)"},
       {'p', "profile", false, "Emit timing profile (tree)"},
       {'v', "verbose", false, "Enable verbose logging (DEBUG level)"},
-      {'x', "preset", true,
-       "Preset: r10 (= --diff 0 --chain-max-skip 5 --no-anchor-merge --chain-pen-gap 1.2 "
-       "--map-end-mapq 10), r9 (= --diff 0 --map-fallback-floor 70 --map-w-threshold 0.40 "
-       "--chain-max-survivor-chains 50 --no-anchor-merge); later flags override it"},
+      {'x', "preset", true, panomap::cli::preset_help()},
       {'\0', "", false, "\nSignal Processing Options:"},
       {'\0', "chunk-size", true, "Signal chunk size in samples (default: 4000, 0 = no chunking)"},
       {'\0', "max-chunks", true, "Max chunks to process per read (default: 10, 0 = unlimited)"},
@@ -227,6 +216,30 @@ int handle_map(const std::vector<std::string>& args_in) {
   }
 
   LOG_INFO("index loaded: " + std::to_string(loaded.graph->nodeCount()) + " nodes");
+
+  // Map follows the preset the index was built with, unless the command line names one.
+  // The preset's map flags go before the user's flags, so an explicit flag still wins.
+  {
+    const auto& params = loaded.seeds->params();
+    auto it = params.find("preset");
+    const std::string index_preset = it != params.end() ? it->second : "";
+    if (preset_name.empty() && !index_preset.empty()) {
+      const auto* p = panomap::cli::find_preset(index_preset);
+      if (!p) {
+        LOG_WARN("map: index preset '" + index_preset + "' is unknown to this version; ignored");
+      } else {
+        std::vector<std::string> with_preset = p->map_args;
+        with_preset.insert(with_preset.end(), args.begin(), args.end());
+        panomap::cli::Parsed reparsed;
+        if (!panomap::cli::parse_args(with_preset, config, reparsed)) return 1;
+        parsed = std::move(reparsed);
+        LOG_INFO("map: using preset '" + index_preset + "' from the index");
+      }
+    } else if (!preset_name.empty() && !index_preset.empty() && preset_name != index_preset) {
+      LOG_WARN("map: preset '" + preset_name + "' differs from the index preset '" +
+               index_preset + "'");
+    }
+  }
   LOG_INFO("index metadata: model=" + loaded.metadata.model_name + ", tokenizer=" +
            loaded.metadata.tokenizer + ", seeds=" + loaded.seeds->extractor_name());
 
@@ -389,6 +402,9 @@ int handle_map(const std::vector<std::string>& args_in) {
   }
   if (parsed.values.count("diff")) {
     map_config.diff_filter = std::stof(parsed.values.at("diff"));
+  } else if (seed_store->params().count("diff")) {
+    // The diff filter follows the index (older indexes have no "diff" key: the map default).
+    map_config.diff_filter = std::stof(seed_store->params().at("diff"));
   }
   // Token collapse follows the index (older indexes have no "collapse" key: off).
   {

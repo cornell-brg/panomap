@@ -17,6 +17,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "core/concurrency/executor.hpp"
@@ -33,7 +34,8 @@ struct BucketIndexConfig {
   /* Seed extraction params (must match extractor config) */
   std::size_t seed_k;  // Set by IndexPipelineConfig, no default.
   /* Signal processing */
-  float diff_filter{0.0f};  // Diff filter threshold (0 = disabled)
+  float diff_filter{0.0f};  // Diff filter threshold (0 = disabled); stored in the index
+  std::string preset;       // Preset that built the index; stored in the index
 
   /* Memory: build seeds in this many passes over the buckets (1 = one pass) */
   std::size_t passes{1};

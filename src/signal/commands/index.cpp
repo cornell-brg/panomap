@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "cli/parse.hpp"
+#include "cli/presets.hpp"
 #include "signal/index/index_pipeline.hpp"
 #include "core/io/graphs/graph_loader_factory.hpp"
 #include "core/io/index/serialization.hpp"
@@ -46,21 +47,12 @@ panomap::io::ModelPtr load_model_or_file(const std::string& model_arg) {
 
 }  // namespace
 
-// R10.4.1 preset: token collapse instead of the raw diff filter, and minimizer
-// seeds (window 2).
-const panomap::cli::PresetTable kIndexPresets = {
-    {"r10", {"--diff", "0", "--collapse-tokens", "--seed-type", "minimizer",
-             "--minimizer-window", "2"}},
-    // R9.4: the same front end with the R9.4 model. Higher recall and less map
-    // time than the defaults, at slightly lower precision.
-    {"r9", {"-m", "r9.4", "--diff", "0", "--collapse-tokens", "--seed-type", "minimizer",
-            "--minimizer-window", "2"}},
-};
-
 int handle_index(const std::vector<std::string>& args_in) {
   std::vector<std::string> args = args_in;
   std::string preset_error;
-  if (!panomap::cli::expand_preset(args, kIndexPresets, &preset_error)) {
+  std::string preset_name;
+  if (!panomap::cli::expand_preset(args, panomap::cli::index_preset_table(), &preset_error,
+                                   &preset_name)) {
     std::cerr << "index: " << preset_error << "\n";
     return 1;
   }
@@ -76,9 +68,7 @@ int handle_index(const std::vector<std::string>& args_in) {
       {'o', "output", true, "Output index file (default: <graph-file>.pirx)"},
       {'t', "threads", true, "Worker threads (default: 1)"},
       {'p', "profile", false, "Emit timing profile (tree)"},
-      {'x', "preset", true,
-       "Preset: r10 (= --diff 0 --collapse-tokens --seed-type minimizer --minimizer-window 2), "
-       "r9 (= r10 with -m r9.4); later flags override it"},
+      {'x', "preset", true, panomap::cli::preset_help()},
       {'\0', "", false, "\nSignal Processing Options:"},
       {'\0', "tokenizer", true, "Tokenizer backend: rh2 (default), landmark"},
       {'\0', "landmark-prominence", true,
@@ -215,6 +205,7 @@ int handle_index(const std::vector<std::string>& args_in) {
   index_config.seed_k = seed_k;
   index_config.minimizer_window = minimizer_window;
   index_config.diff_filter = diff_filter;
+  index_config.preset = preset_name;
   index_config.tokenizer =
       parsed.values.count("tokenizer") ? parsed.values.at("tokenizer") : "rh2";
   index_config.tokenizer_collapse = parsed.values.count("collapse-tokens") > 0;
