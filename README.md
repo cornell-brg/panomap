@@ -12,10 +12,13 @@ Panomap maps raw Nanopore signal reads (SLOW5/BLOW5) to pangenome variation grap
 (GFA) without basecalling. It works on graphs built with tools such as PGGB and
 minigraph-cactus.
 
-Panomap is proof-of-concept research software. It does not support human-scale
-pangenomes yet.
+*Panomap is proof-of-concept research software. It does not support human-scale
+pangenomes yet.*
 
 ## Install
+
+Each command in this README starts with `%`, the shell prompt. To paste commands into
+a shell, run `alias %=""` first.
 
 You need:
 
@@ -28,10 +31,10 @@ You need:
 Build and test:
 
 ```bash
-git clone --recursive https://github.com/cornell-brg/panomap.git
-cd panomap && mkdir build && cd build
-cmake .. && make -j8
-make test
+% git clone --recursive https://github.com/cornell-brg/panomap.git
+% cd panomap && mkdir build && cd build
+% cmake .. && make -j8
+% make test
 ```
 
 The tests use [doctest](https://github.com/doctest/doctest), which configure fetches.
@@ -55,15 +58,15 @@ compiled with zstd support`. Install `libzstd-dev` (Debian, Ubuntu) or `libzstd-
 Run the bundled example, a SARS-CoV-2 pangenome with 20 simulated reads:
 
 ```bash
-./panomap index -m r10.4 ../examples/covid/covid-pangenome.gfa -o covid.pirx
-./panomap map --index covid.pirx ../examples/covid/reads.blow5 -o out.gaf
+% ./panomap index -m r10.4 ../examples/covid/covid-pangenome.gfa -o covid.pirx
+% ./panomap map --index covid.pirx ../examples/covid/reads.blow5 -o out.gaf
 ```
 
 For your own data, build the index with a preset. `map` then uses the same preset.
 
 ```bash
-./panomap index -x r10 graph.gfa -o graph.pirx
-./panomap map --index graph.pirx reads.blow5 -o out.paf
+% ./panomap index -x r10 graph.gfa -o graph.pirx
+% ./panomap map --index graph.pirx reads.blow5 -o out.paf
 ```
 
 ## Usage
@@ -139,11 +142,11 @@ Simulate reads with [squigulator](https://github.com/hasindu2008/squigulator), t
 them:
 
 ```bash
-squigulator reference.fa -x dna-r9-min -o reads.blow5 -n 20 -r 8000 \
-  --sample-rate 4000 -q reads.fasta -c reads.paf --seed 123
+% squigulator reference.fa -x dna-r9-min -o reads.blow5 -n 20 -r 8000 \
+    --sample-rate 4000 -q reads.fasta -c reads.paf --seed 123
 
-./panomap index -x r9 reference.gfa -o ref.pirx
-./panomap map --index ref.pirx reads.blow5 -o out.paf
+% ./panomap index -x r9 reference.gfa -o ref.pirx
+% ./panomap map --index ref.pirx reads.blow5 -o out.paf
 ```
 
 ## Reproducing paper results
