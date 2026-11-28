@@ -35,7 +35,10 @@ const std::vector<Preset>& presets() {
       {"r10", kR10Index, kR10Map, "R10.4.1, genomes of bacterial size"},
       {"r10-fast", cat(kR10Index, {"--seed-k", "10"}), kR10Map,
        "R10.4.1, about 5x faster at lower recall"},
-      {"r10-large", cat(kR10Index, {"--seed-k", "12"}), cat(kR10Map, {"--seed-freq-cap", "5000"}),
+      // Large genomes: a fixed seed cap keeps the true seeds that the p0.99 default drops,
+      // and a stricter end-of-read rule keeps reads from other species from being called.
+      {"r10-large", cat(kR10Index, {"--seed-k", "12"}),
+       cat(kR10Map, {"--seed-freq-cap", "5000", "--map-end-mapq", "20"}),
        "R10.4.1, large genomes such as human"},
   };
   return kPresets;
